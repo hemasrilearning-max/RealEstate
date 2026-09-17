@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import { DataProvider } from "./context/DataContext";
+
 import Navbar from "./components/Navbar";
 
 // Public pages
@@ -17,7 +18,7 @@ import DashboardLayout from "./pages/agent/DashboardLayout";
 import Overview from "./pages/agent/Overview";
 import AgentProperties from "./pages/agent/Properties";
 import Clients from "./pages/agent/Clients";
-import Leads from "./pages/agent/Leads";
+import AgentLeads from "./pages/agent/Leads"; // ✅ Renamed to avoid name clash
 import Messages from "./pages/agent/Messages";
 import Tours from "./pages/agent/Tours";
 import Transactions from "./pages/agent/Transactions";
@@ -25,10 +26,33 @@ import Reviews from "./pages/agent/Reviews";
 import Analytics from "./pages/agent/Analytics";
 import Profile from "./pages/agent/Profile";
 
+// Owner pages
+import OwnerDashboardLayout from "./pages/owner/Dashboard";
+import OwnerProperties from "./pages/owner/Properties";  
+import AddProperty from "./pages/owner/AddProperty";
+import OwnerLeads from "./pages/owner/Leads"; // ✅ Renamed to avoid name clash
+import OwnerMessages from "./pages/owner/Messages";
+import OwnerTours from "./pages/owner/Tours";
+import OwnerPayments from "./pages/owner/Payments";
+import OwnerReviews from "./pages/owner/Reviews";
+import OwnerAnalytics from "./pages/owner/Analytics";
+import OwnerProfile from "./pages/owner/Profile";
+
 // Other role dashboards (placeholders)
 import AdminDashboard from "./pages/admin/Dashboard";
-import OwnerDashboard from "./pages/owner/Dashboard";
+
+// Buyer pages
 import BuyerDashboard from "./pages/buyer/Dashboard";
+import BuyerProfile from "./pages/buyer/Profile";
+import BuyerFavorites from "./pages/buyer/Favorites";
+import BuyerTours from "./pages/buyer/Tours";
+import BuyerSavedSearches from "./pages/buyer/SavedSearches";
+import BuyerViewedProperties from "./pages/buyer/ViewedProperties";
+import BuyerMessages from "./pages/buyer/Messages";
+import BuyerPayments from "./pages/buyer/Payments";
+import BuyerReviews from "./pages/buyer/Reviews";
+import BuyerNotifications from "./pages/buyer/Notifications";
+import BuyerRecommendations from "./pages/buyer/Recommendations";
 
 function PublicLayout({ children }) {
   return (
@@ -49,7 +73,17 @@ function PublicLayout({ children }) {
     </>
   );
 }
-
+// Simple temporary layout subpage component placeholder to prevent navigation white screens
+function ModulePlaceholder({ title }) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-16 text-center shadow-sm">
+      <h3 className="text-lg font-bold text-gray-900">Module Portal: {title}</h3>
+      <p className="text-sm text-gray-500 mt-1 max-w-sm mx-auto">
+        This sub-view panel tracks operational workflows mapped inside your HomeSpace ecosystem.
+      </p>
+    </div>
+  );
+}
 export default function App() {
   return (
     <AuthProvider>
@@ -97,7 +131,6 @@ export default function App() {
                 </PublicLayout>
               }
             />
-
             {/* Backward-compatible agent login redirect */}
             <Route
               path="/agent/login"
@@ -107,13 +140,12 @@ export default function App() {
                 </PublicLayout>
               }
             />
-
-            {/* Agent Dashboard */}
+            {/* Agent Dashboard Section */}
             <Route path="/agent" element={<DashboardLayout />}>
               <Route path="dashboard" element={<Overview />} />
               <Route path="properties" element={<AgentProperties />} />
               <Route path="clients" element={<Clients />} />
-              <Route path="leads" element={<Leads />} />
+              <Route path="leads" element={<AgentLeads />} />
               <Route path="messages" element={<Messages />} />
               <Route path="tours" element={<Tours />} />
               <Route path="transactions" element={<Transactions />} />
@@ -122,10 +154,44 @@ export default function App() {
               <Route path="profile" element={<Profile />} />
             </Route>
 
-            {/* Admin / Owner / Buyer dashboards */}
+            {/* Owner Ecosystem Dashboard Section */}
+            <Route path="/owner" element={<OwnerDashboardLayout />}>
+              <Route index element={null} />
+              <Route path="dashboard" element={null} />
+              <Route path="properties" element={<OwnerProperties />} />
+              <Route path="add-property" element={<AddProperty />} />
+              <Route path="leads" element={<OwnerLeads />} />
+              <Route path="messages" element={<OwnerMessages />} />
+              <Route path="tours" element={<OwnerTours />} />
+              <Route path="payments" element={<OwnerPayments />} />
+              <Route path="reviews" element={<OwnerReviews />} />
+              <Route path="analytics" element={<OwnerAnalytics />} />
+              <Route path="profile" element={<OwnerProfile />} />
+            </Route>
+
+            {/* Admin dashboards */}
             <Route path="/admin/dashboard" element={<AdminDashboard />} />
-            <Route path="/owner/dashboard" element={<OwnerDashboard />} />
-            <Route path="/buyer/dashboard" element={<BuyerDashboard />} />
+            
+            {/* BUYER dashboards   */}
+            
+            <Route path="/buyer" element={<BuyerDashboard />}>
+              {/* Renders the primary dashboard analytics overview workspace elements */}
+              <Route index element={null} />
+              <Route path="dashboard" element={null} />
+
+              {/* Module subpages matching requested checklist options */}
+              <Route path="profile" element={<BuyerProfile />} />
+              <Route path="favorites" element={<BuyerFavorites />} />
+              <Route path="saved-searches" element={<BuyerSavedSearches />} />
+              <Route path="viewed-properties" element={<BuyerViewedProperties />} />
+              <Route path="messages" element={<BuyerMessages />} />
+              <Route path="tours" element={<BuyerTours />} />
+              <Route path="payments" element={<BuyerPayments />} />
+              <Route path="reviews" element={<BuyerReviews />} />
+              <Route path="notifications" element={<BuyerNotifications />} />
+              <Route path="recommendations" element={<BuyerRecommendations />} />
+              
+            </Route>
           </Routes>
         </BrowserRouter>
       </DataProvider>
