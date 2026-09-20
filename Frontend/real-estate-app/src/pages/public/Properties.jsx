@@ -66,9 +66,12 @@ export default function Properties() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
+      {/* Header – matching Login purple */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">All Properties</h1>
-        <p className="text-gray-500 mt-1">
+        <h1 className="text-2xl font-bold text-purple-700 tracking-tight">
+          All Properties
+        </h1>
+        <p className="text-gray-500 mt-1.5">
           {filtered.length} propert{filtered.length === 1 ? "y" : "ies"} found
         </p>
       </div>
@@ -83,7 +86,9 @@ export default function Properties() {
 
       {filtered.length === 0 ? (
         <div className="text-center py-20">
-          <p className="text-gray-500 text-lg">No properties match your filters.</p>
+          <p className="text-gray-500 text-lg">
+            No properties match your filters.
+          </p>
           <button
             onClick={() => {
               const empty = {
@@ -99,7 +104,7 @@ export default function Properties() {
               setFilters(empty);
               setApplied(empty);
             }}
-            className="mt-4 text-red-600 font-medium hover:underline"
+            className="mt-4 text-purple-600 font-medium hover:text-purple-700 hover:underline transition"
           >
             Clear all filters
           </button>

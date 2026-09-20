@@ -24,17 +24,17 @@ export default function Home() {
   return (
     <div>
       {/* Hero */}
-      <section className="relative bg-gradient-to-br from-red-600 via-red-700 to-red-900 text-white">
+      <section className="relative bg-gradient-to-br from-purple-600 via-purple-700 to-purple-900 text-white">
         <div className="absolute inset-0 bg-black/20" />
         <div className="relative max-w-7xl mx-auto px-4 py-20 sm:py-28">
           <div className="text-center max-w-3xl mx-auto">
             <h1 className="text-4xl sm:text-5xl font-bold mb-4 leading-tight">
               Find Your Dream Home
               <br />
-              <span className="text-red-200">With Brokerage</span>
+              <span className="text-purple-200">With HomeSpace</span>
             </h1>
-            <p className="text-lg text-red-100 mb-8">
-              Buy, Sell or Rent Properties with Brokerage. Trusted by thousands.
+            <p className="text-lg text-purple-100 mb-8">
+              Buy, Sell or Rent Properties with ease. Trusted by thousands.
             </p>
 
             {/* Search box */}
@@ -50,7 +50,7 @@ export default function Home() {
                     onClick={() => setListingType(t)}
                     className={`px-5 py-3 text-sm font-semibold transition ${
                       listingType === t
-                        ? "bg-red-600 text-white"
+                        ? "bg-purple-600 text-white"
                         : "bg-gray-50 text-gray-600 hover:bg-gray-100"
                     }`}
                   >
@@ -70,7 +70,7 @@ export default function Home() {
               </div>
               <button
                 type="submit"
-                className="bg-red-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-red-700 transition"
+                className="bg-purple-600 text-white px-8 py-3 rounded-xl font-semibold hover:bg-purple-700 transition"
               >
                 Search
               </button>
@@ -117,7 +117,7 @@ export default function Home() {
           </div>
           <Link
             to="/properties"
-            className="text-red-600 font-medium hover:underline text-sm"
+            className="text-purple-600 font-medium hover:underline text-sm"
           >
             View all →
           </Link>
@@ -136,11 +136,12 @@ export default function Home() {
             Join as Agent, Owner or Buyer
           </h2>
           <p className="text-gray-600 mb-6 max-w-lg mx-auto">
-            Register as an agent to list properties and manage leads, or as owner/buyer. Login routes you to the right dashboard.
+            Register as an agent to list properties and manage leads, or as owner/buyer.
+            Login routes you to the right dashboard.
           </p>
           <Link
             to="/login"
-            className="inline-flex items-center gap-2 bg-red-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-red-700 transition"
+            className="inline-flex items-center gap-2 bg-purple-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-purple-700 transition shadow-sm"
           >
             Login / Register
           </Link>

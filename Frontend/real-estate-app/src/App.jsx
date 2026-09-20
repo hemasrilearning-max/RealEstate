@@ -1,8 +1,11 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link} from "react-router-dom";
+//import { Home, Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin } from "lucide-react";
 import { AuthProvider } from "./context/AuthContext";
 import { DataProvider } from "./context/DataContext";
 
 import Navbar from "./components/Navbar";
+
 
 // Public pages
 import Home from "./pages/public/Home";
@@ -59,7 +62,7 @@ function PublicLayout({ children }) {
     <>
       <Navbar />
       <main className="min-h-[calc(100vh-4rem)]">{children}</main>
-      <footer className="bg-gray-900 text-gray-400 py-8 mt-auto">
+      {/* <footer className="bg-gray-900 text-gray-400 py-8 mt-auto">
         <div className="max-w-7xl mx-auto px-4 text-center text-sm">
           <p>
             © {new Date().getFullYear()} RealEstate Realty — Brokerage Real
@@ -69,7 +72,75 @@ function PublicLayout({ children }) {
             Multi-role demo: Agent · Admin · Owner · Buyer
           </p>
         </div>
-      </footer>
+      </footer> */}
+
+     
+
+    <footer className="bg-slate-900 text-gray-300">
+      <div className="max-w-7xl mx-auto px-4 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+          {/* Brand */}
+          <div className="md:col-span-1">
+            <div className="flex items-center gap-2 mb-4">
+              {/* <Home className="w-6 h-6 text-purple-400" /> */}
+              <span className="text-xl font-bold text-white">HomeSpace</span>
+            </div>
+            <p className="text-sm text-gray-400 leading-relaxed">
+              Your trusted partner in finding the perfect home. Buy, rent or sell with confidence.
+            </p>
+          </div>
+
+          {/* Quick Links */}
+          <div>
+            <h4 className="text-white font-semibold mb-4">Explore</h4>
+            <ul className="space-y-2 text-sm">
+              <li><Link to="/properties" className="hover:text-purple-400 transition">All Properties</Link></li>
+              <li><Link to="/properties?listingType=Sale" className="hover:text-purple-400 transition">Buy Property</Link></li>
+              <li><Link to="/properties?listingType=Rent" className="hover:text-purple-400 transition">Rent Property</Link></li>
+              <li><Link to="/about" className="hover:text-purple-400 transition">About Us</Link></li>
+            </ul>
+          </div>
+
+          {/* Support */}
+          <div>
+            <h4 className="text-white font-semibold mb-4">Support</h4>
+            <ul className="space-y-2 text-sm">
+              <li><Link to="/contact" className="hover:text-purple-400 transition">Contact Us</Link></li>
+              <li><Link to="/faq" className="hover:text-purple-400 transition">FAQs</Link></li>
+              <li><Link to="/privacy" className="hover:text-purple-400 transition">Privacy Policy</Link></li>
+              <li><Link to="/terms" className="hover:text-purple-400 transition">Terms of Service</Link></li>
+            </ul>
+          </div>
+
+          {/* Contact */}
+          <div>
+            <h4 className="text-white font-semibold mb-4">Get in Touch</h4>
+            <ul className="space-y-3 text-sm">
+              <li className="flex items-center gap-2">
+                <Phone className="w-4 h-4 text-purple-400" />
+                +91 98765 43210
+              </li>
+              <li className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-purple-400" />
+                hello@homespace.in
+              </li>
+              <li className="flex items-start gap-2">
+                <MapPin className="w-4 h-4 text-purple-400 mt-0.5" />
+                Bangalore, Karnataka
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Bottom bar */}
+        <div className="border-t border-slate-700 mt-10 pt-6 flex flex-col sm:flex-row justify-between items-center gap-3 text-sm text-gray-500">
+          <p>© 2026 HomeSpace. All rights reserved.</p>
+          <p>Made with ❤️ for home seekers</p>
+        </div>
+      </div>
+    </footer>
+  
+
     </>
   );
 }

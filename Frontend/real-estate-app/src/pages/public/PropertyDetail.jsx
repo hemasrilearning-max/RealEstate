@@ -38,7 +38,7 @@ export default function PropertyDetail() {
     return (
       <div className="max-w-7xl mx-auto px-4 py-20 text-center">
         <h2 className="text-xl font-semibold text-gray-700">Property not found</h2>
-        <Link to="/properties" className="text-red-600 mt-4 inline-block">
+        <Link to="/properties" className="text-purple-600 mt-4 inline-block hover:text-purple-700">
           ← Back to listings
         </Link>
       </div>
@@ -82,7 +82,7 @@ export default function PropertyDetail() {
     <div className="max-w-7xl mx-auto px-4 py-8">
       <Link
         to="/properties"
-        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-red-600 mb-4"
+        className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-purple-600 mb-4 transition"
       >
         <ChevronLeft className="w-4 h-4" /> Back to listings
       </Link>
@@ -124,6 +124,7 @@ export default function PropertyDetail() {
                 </div>
               </>
             )}
+            {/* Badge – Buy/Sale stays RED */}
             <div className="absolute top-3 left-3 flex gap-2">
               <span
                 className={`px-3 py-1 text-sm font-semibold rounded-full ${
@@ -146,7 +147,7 @@ export default function PropertyDetail() {
               <MapPin className="w-4 h-4" />
               {property.location}
             </div>
-            <div className="mt-3 text-3xl font-bold text-red-600">
+            <div className="mt-3 text-3xl font-bold text-purple-600">
               {formatPrice(property.price, property.listingType)}
               {property.pricePerSqft && (
                 <span className="text-base font-normal text-gray-500 ml-3">
@@ -276,7 +277,7 @@ export default function PropertyDetail() {
                   onChange={(e) =>
                     setLeadForm({ ...leadForm, name: e.target.value })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none"
                 />
                 <input
                   required
@@ -286,7 +287,7 @@ export default function PropertyDetail() {
                   onChange={(e) =>
                     setLeadForm({ ...leadForm, email: e.target.value })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none"
                 />
                 <input
                   required
@@ -296,7 +297,7 @@ export default function PropertyDetail() {
                   onChange={(e) =>
                     setLeadForm({ ...leadForm, phone: e.target.value })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none"
                 />
                 <textarea
                   placeholder="Message (optional)"
@@ -305,11 +306,11 @@ export default function PropertyDetail() {
                   onChange={(e) =>
                     setLeadForm({ ...leadForm, message: e.target.value })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-red-500 focus:outline-none resize-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none resize-none"
                 />
                 <button
                   type="submit"
-                  className="w-full bg-red-600 text-white py-2.5 rounded-lg font-semibold hover:bg-red-700 transition"
+                  className="w-full bg-purple-600 text-white py-2.5 rounded-lg font-semibold hover:bg-purple-700 transition"
                 >
                   Submit Interest
                 </button>
@@ -325,14 +326,14 @@ export default function PropertyDetail() {
               <div className="space-y-3">
                 <button
                   onClick={() => setShowLeadForm(true)}
-                  className="w-full bg-red-600 text-white py-2.5 rounded-lg font-semibold hover:bg-red-700 transition flex items-center justify-center gap-2"
+                  className="w-full bg-purple-600 text-white py-2.5 rounded-lg font-semibold hover:bg-purple-700 transition flex items-center justify-center gap-2"
                 >
                   <Phone className="w-4 h-4" />
                   I'm Interested
                 </button>
                 <button
                   onClick={handleTourRequest}
-                  className="w-full border border-red-600 text-red-600 py-2.5 rounded-lg font-semibold hover:bg-red-50 transition flex items-center justify-center gap-2"
+                  className="w-full border border-purple-600 text-purple-600 py-2.5 rounded-lg font-semibold hover:bg-purple-50 transition flex items-center justify-center gap-2"
                 >
                   <Calendar className="w-4 h-4" />
                   Request Tour

@@ -1,6 +1,15 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { Home, LogIn, LayoutDashboard, LogOut, Menu, X, UserPlus } from "lucide-react";
+import {
+  LogIn,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  X,
+  UserPlus,
+  Building2,
+  Home,
+} from "lucide-react";
 import { useState } from "react";
 import { ROLE_DASHBOARD } from "../data/users";
 
@@ -21,38 +30,45 @@ export default function Navbar() {
     <nav className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
+          {/* Logo */}
           <Link to="/" className="flex items-center gap-2">
-            <img src="../../images/hspacelogo.png" className="header-logo" title="" width="120px" height="auto"/>
-            {/* <div className="w-9 h-9 bg-red-600 rounded-lg flex items-center justify-center">
-              <Home className="w-5 h-5 text-white" />
-            </div> */}
-            {/* <span className="text-xl font-bold text-gray-900">
-              Real<span className="text-red-600">Estate</span>
-            </span> */}
+            {/* <img
+              src="../../images/hspacelogo.png"
+              alt="HomeSpace"  width="120px"
+              className="h-10 w-auto"
+            /> */}
+            <img
+              src="../../images/hspacelogo.png"
+              alt="HomeSpace"  width="120px"
+            />
           </Link>
 
           {/* Desktop */}
-          <div className="hidden md:flex items-center gap-6">
+          <div className="hidden md:flex items-center gap-5">
+            {/* Properties */}
             <Link
               to="/properties"
-              className="text-gray-600 hover:text-red-600 font-medium transition"
+              className="flex items-center gap-1.5 text-gray-600 hover:text-purple-600 font-medium transition group"
             >
-              Properties
+              <Building2 className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition" />
+              <span>Properties</span>
             </Link>
+
             {isAuthenticated ? (
               <>
                 <Link
                   to={dashboardPath}
-                  className="flex items-center gap-1.5 text-gray-600 hover:text-red-600 font-medium transition"
+                  className="flex items-center gap-1.5 text-gray-600 hover:text-purple-600 font-medium transition"
                 >
                   <LayoutDashboard className="w-4 h-4" />
                   Dashboard
                 </Link>
+
                 <div className="flex items-center gap-3">
                   <img
                     src={user.avatar}
                     alt={user.name}
-                    className="w-8 h-8 rounded-full object-cover"
+                    className="w-8 h-8 rounded-full object-cover ring-2 ring-purple-100"
                   />
                   <div className="text-sm">
                     <span className="font-medium text-gray-700">{user.name}</span>
@@ -62,7 +78,7 @@ export default function Navbar() {
                   </div>
                   <button
                     onClick={handleLogout}
-                    className="flex items-center gap-1 text-sm text-gray-500 hover:text-red-600"
+                    className="flex items-center gap-1 text-sm text-gray-500 hover:text-purple-600 transition"
                   >
                     <LogOut className="w-4 h-4" />
                     Logout
@@ -71,16 +87,19 @@ export default function Navbar() {
               </>
             ) : (
               <div className="flex items-center gap-3">
+                {/* Login – house icon + dark border */}
                 <Link
                   to="/login"
-                  className="flex items-center gap-1.5 text-gray-700 font-medium hover:text-red-600 transition"
+                  className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-gray-700 font-medium border border-gray-500 hover:border-purple-600 hover:text-purple-600 hover:bg-purple-50 transition"
                 >
-                  <LogIn className="w-4 h-4" />
+                  <Home className="w-4 h-4" />
                   Login
                 </Link>
+
+                {/* Register */}
                 <Link
                   to="/register"
-                  className="flex items-center gap-1.5 bg-red-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-red-700 transition"
+                  className="flex items-center gap-1.5 bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition shadow-sm"
                 >
                   <UserPlus className="w-4 h-4" />
                   Register
@@ -90,34 +109,41 @@ export default function Navbar() {
           </div>
 
           {/* Mobile toggle */}
-          <button className="md:hidden p-2" onClick={() => setOpen(!open)}>
+          <button
+            className="md:hidden p-2 text-gray-600 hover:text-purple-600"
+            onClick={() => setOpen(!open)}
+          >
             {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
           </button>
         </div>
 
         {/* Mobile menu */}
         {open && (
-          <div className="md:hidden pb-4 space-y-2 border-t pt-3">
+          <div className="md:hidden pb-4 space-y-2 border-t border-gray-100 pt-3">
             <Link
               to="/properties"
               onClick={() => setOpen(false)}
-              className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded"
+              className="flex items-center gap-2 px-3 py-2.5 text-gray-700 hover:bg-purple-50 hover:text-purple-700 rounded-lg transition"
             >
+              <Building2 className="w-4 h-4" />
               Properties
             </Link>
+
             {isAuthenticated ? (
               <>
                 <Link
                   to={dashboardPath}
                   onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded"
+                  className="flex items-center gap-2 px-3 py-2.5 text-gray-700 hover:bg-purple-50 hover:text-purple-700 rounded-lg transition"
                 >
+                  <LayoutDashboard className="w-4 h-4" />
                   Dashboard ({role})
                 </Link>
                 <button
                   onClick={handleLogout}
-                  className="w-full text-left px-3 py-2 text-red-600 hover:bg-red-50 rounded"
+                  className="w-full flex items-center gap-2 text-left px-3 py-2.5 text-purple-600 hover:bg-purple-50 rounded-lg transition"
                 >
+                  <LogOut className="w-4 h-4" />
                   Logout
                 </button>
               </>
@@ -126,15 +152,17 @@ export default function Navbar() {
                 <Link
                   to="/login"
                   onClick={() => setOpen(false)}
-                  className="block px-3 py-2 text-gray-700 hover:bg-gray-50 rounded"
+                  className="flex items-center gap-2 px-3 py-2.5 text-gray-700 border border-gray-500 rounded-lg hover:bg-purple-50 hover:text-purple-700 hover:border-purple-600 transition"
                 >
+                  <Home className="w-4 h-4" />
                   Login
                 </Link>
                 <Link
                   to="/register"
                   onClick={() => setOpen(false)}
-                  className="block px-3 py-2 bg-red-600 text-white rounded text-center"
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition"
                 >
+                  <UserPlus className="w-4 h-4" />
                   Register
                 </Link>
               </>

@@ -36,7 +36,7 @@ export default function FilterBar({ filters, setFilters, onSearch }) {
             placeholder="Location, title..."
             value={filters.search}
             onChange={(e) => update("search", e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
           />
         </div>
 
@@ -48,7 +48,7 @@ export default function FilterBar({ filters, setFilters, onSearch }) {
           <select
             value={filters.listingType}
             onChange={(e) => update("listingType", e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
           >
             <option value="">All</option>
             {LISTING_TYPES.map((t) => (
@@ -67,7 +67,7 @@ export default function FilterBar({ filters, setFilters, onSearch }) {
           <select
             value={filters.propertyType}
             onChange={(e) => update("propertyType", e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
           >
             <option value="">All Types</option>
             {PROPERTY_TYPES.map((t) => (
@@ -86,7 +86,7 @@ export default function FilterBar({ filters, setFilters, onSearch }) {
           <select
             value={filters.bhk}
             onChange={(e) => update("bhk", e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
           >
             <option value="">Any</option>
             {BHK_OPTIONS.map((t) => (
@@ -105,7 +105,7 @@ export default function FilterBar({ filters, setFilters, onSearch }) {
           <select
             value={filters.status}
             onChange={(e) => update("status", e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
           >
             <option value="">Any</option>
             {STATUS_OPTIONS.map((t) => (
@@ -126,7 +126,7 @@ export default function FilterBar({ filters, setFilters, onSearch }) {
             placeholder="Min"
             value={filters.minPrice}
             onChange={(e) => update("minPrice", e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
           />
         </div>
 
@@ -140,7 +140,7 @@ export default function FilterBar({ filters, setFilters, onSearch }) {
             placeholder="Max"
             value={filters.maxPrice}
             onChange={(e) => update("maxPrice", e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
           />
         </div>
 
@@ -154,7 +154,7 @@ export default function FilterBar({ filters, setFilters, onSearch }) {
             placeholder="e.g. Bangalore"
             value={filters.city}
             onChange={(e) => update("city", e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-600 focus:border-purple-600"
           />
         </div>
 
@@ -162,7 +162,7 @@ export default function FilterBar({ filters, setFilters, onSearch }) {
         <div className="flex items-end gap-2 sm:col-span-2">
           <button
             onClick={onSearch}
-            className="flex-1 bg-red-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-red-700 transition text-sm"
+            className="flex-1 bg-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-purple-700 transition text-sm"
           >
             Search
           </button>
