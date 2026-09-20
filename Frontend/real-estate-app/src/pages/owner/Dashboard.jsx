@@ -28,7 +28,7 @@ export default function DashboardLayout() {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const { agent, owner, buyer, user } = useAuth();
+  const { agent, owner, buyer, user, logout } = useAuth();
   const profile = agent || owner || buyer || user;
   const rawRole = profile?.role?.toLowerCase() || "owner";
 
@@ -107,7 +107,10 @@ export default function DashboardLayout() {
           .slice(0, 2)
       : "U";
 
-  const handleLogout = () => navigate("/");
+const handleLogout = () => {
+  logout();
+  navigate("/login");
+};
 
   const SidebarContent = () => {
     const avatarFallback =

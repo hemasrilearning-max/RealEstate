@@ -12,7 +12,7 @@ export default function BuyerDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { buyer, user } = useAuth();
+const { buyer, user, logout } = useAuth();
   const profile = buyer || user;
 
   const sidebarItems = [
@@ -58,7 +58,10 @@ export default function BuyerDashboard() {
       ? name.split(" ").map(word => word[0]).join("").toUpperCase().slice(0, 2)
       : "B";
 
-  const handleLogout = () => navigate("/");
+const handleLogout = () => {
+  logout();
+  navigate("/login");
+};
 
   const isDashboardHome =
     location.pathname === "/buyer" ||
