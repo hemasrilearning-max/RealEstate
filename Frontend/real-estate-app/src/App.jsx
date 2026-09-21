@@ -42,7 +42,27 @@ import OwnerAnalytics from "./pages/owner/Analytics";
 import OwnerProfile from "./pages/owner/Profile";
 
 // Other role dashboards (placeholders)
+//import AdminDashboard from "./pages/admin/Dashboard";
+// Admin pages
 import AdminDashboard from "./pages/admin/Dashboard";
+import Users from "./pages/admin/Users";
+import AdminProperties from "./pages/admin/Properties";
+import AdminAgents from "./pages/admin/Agents.jsx";
+import AdminOwners from "./pages/admin/Owners.jsx";
+import AdminBuyersRenters from "./pages/admin/BuyersRenters.jsx";
+import AdminTransactions from "./pages/admin/Transactions.jsx";
+import AdminPayments from "./pages/admin/Payments.jsx";
+import AdminLayout from "./pages/admin/AdminLayout";
+import AdminReviews from "./pages/admin/Reviews";
+import AdminReports from "./pages/admin/Reports";
+import AdminDisputes from "./pages/admin/Disputes";
+  import AdminFraud from "./pages/admin/Fraud";
+import AdminNotifications from "./pages/admin/Notifications";
+import AdminAnalytics from "./pages/admin/Analytics";
+import AdminSettings from "./pages/admin/Settings";
+
+
+
 
 // Buyer pages
 import BuyerDashboard from "./pages/buyer/Dashboard";
@@ -240,8 +260,59 @@ export default function App() {
               <Route path="profile" element={<OwnerProfile />} />
             </Route>
 
-            {/* Admin dashboards */}
-            <Route path="/admin/dashboard" element={<AdminDashboard />} />
+           // {/* Admin dashboards */}
+ {/* ================= ADMIN ================= */}
+
+<Route path="/admin" element={<AdminLayout />}>
+
+  {/* Dashboard */}
+  <Route index element={<AdminDashboard />} />
+
+  {/* Admin Pages */}
+  <Route path="dashboard" element={<AdminDashboard />} />
+
+  <Route path="users" element={<Users />} />
+
+  <Route path="properties" element={<AdminProperties />} />
+
+  <Route path="agents" element={<AdminAgents />} />
+
+  <Route path="owners" element={<AdminOwners />} />
+
+  <Route
+    path="buyers-renters"
+    element={<AdminBuyersRenters />}
+  />
+
+  <Route
+    path="transactions"
+    element={<AdminTransactions />}
+  />
+
+  <Route
+    path="payments"
+    element={<AdminPayments />}
+  />
+
+  <Route path="reviews" element={<AdminReviews />} />
+  <Route path="reports" element={<AdminReports />} />
+  <Route path="disputes" element={<AdminDisputes />} />
+  <Route path="fraud" element={<AdminFraud />} />
+  <Route
+  path="notifications"
+  element={<AdminNotifications />}
+/>
+<Route
+  path="analytics"
+  element={<AdminAnalytics />}
+/>
+<Route
+  path="settings"
+  element={<AdminSettings />}
+/>
+
+
+</Route>
             
             {/* BUYER dashboards   */}
             
