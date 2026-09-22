@@ -56,50 +56,49 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center px-4 py-12">
-      {/* Real estate background image */}
+    <div className="min-h-screen relative flex items-center justify-center px-4 py-12 bg-gray-50">
+      {/* Background Soft Image */}
       <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30"
         style={{
           backgroundImage: "url('/images/login-bg-soft.jpg')",
         }}
       />
-      {/* Soft light overlay */}
-      <div className="absolute inset-0 bg-white/70" />
 
-      <div className="relative z-10 w-full max-w-[420px]">
-        {/* Logo only */}
-        <div className="text-center mb-6">
-          <Link to="/" className="inline-block">
+      {/* Main Login Card */}
+      <div className="relative z-10 w-full max-w-[480px] bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+        
+        {/* Top Header Banner with Center Hut Logo */}
+        <div className="relative h-44 w-full overflow-hidden">
+          {/* Header Banner Image */}
             <img
-              src="../../../images/hspacelogo.png"
-              alt="HomeSpace"
-              className="h-12 w-auto mx-auto"
+              src="../../../images/login_reg.png"
+              alt="Real Estate Header"
+              className="w-full h-full object-cover"
             />
-          </Link>
         </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] border border-gray-100/80 p-8">
-          <div className="text-center mb-7">
-            <h1 className="text-2xl font-bold text-purple-700 tracking-tight">
+        {/* Form Container */}
+        <div className="p-8 pt-6">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-purple-900 tracking-tight">
               Welcome back
             </h1>
-            <p className="text-sm text-gray-500 mt-1.5">
+            <p className="text-sm text-gray-500 mt-1">
               Sign in as Agent, Admin, Owner or Buyer
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {error && (
               <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl border border-red-100">
                 {error}
               </div>
             )}
 
-            {/* Email */}
+            {/* Email Field */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Email address
               </label>
               <input
@@ -107,7 +106,7 @@ export default function Login() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 onBlur={() => setTouched((t) => ({ ...t, email: true }))}
-                className={`w-full rounded-xl px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition border ${
+                className={`w-full rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition border ${
                   emailError
                     ? "border-red-500 ring-2 ring-red-500/20 bg-red-50/50"
                     : "border-gray-300 focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20"
@@ -115,21 +114,21 @@ export default function Login() {
                 placeholder="you@example.com"
               />
               {emailError && (
-                <p className="mt-1.5 text-xs text-red-500">
+                <p className="mt-1 text-xs text-red-500">
                   Please enter your email
                 </p>
               )}
             </div>
 
-            {/* Password */}
+            {/* Password Field */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-1">
                 <label className="block text-sm font-medium text-gray-700">
                   Password
                 </label>
                 <button
                   type="button"
-                  className="text-sm font-medium text-purple-600 hover:underline"
+                  className="text-xs font-semibold text-purple-600 hover:underline"
                 >
                   Forgot password?
                 </button>
@@ -140,7 +139,7 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   onBlur={() => setTouched((t) => ({ ...t, password: true }))}
-                  className={`w-full rounded-xl px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition border pr-11 ${
+                  className={`w-full rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition border pr-10 ${
                     passwordError
                       ? "border-red-500 ring-2 ring-red-500/20 bg-red-50/50"
                       : "border-gray-300 focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20"
@@ -150,34 +149,34 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
                   {showPass ? (
-                    <EyeOff className="w-4.5 h-4.5" />
+                    <EyeOff className="w-4 h-4" />
                   ) : (
-                    <Eye className="w-4.5 h-4.5" />
+                    <Eye className="w-4 h-4" />
                   )}
                 </button>
               </div>
               {passwordError && (
-                <p className="mt-1.5 text-xs text-red-500">
+                <p className="mt-1 text-xs text-red-500">
                   Please enter your password
                 </p>
               )}
             </div>
 
-            {/* Submit */}
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-semibold text-[15px] transition disabled:opacity-60 shadow-sm"
+              className="w-full bg-purple-700 hover:bg-purple-800 text-white py-3 rounded-xl font-semibold text-sm transition disabled:opacity-60 shadow-sm mt-2"
             >
               {loading ? "Signing in..." : "Continue"}
             </button>
           </form>
 
           {/* Divider */}
-          <div className="relative my-6">
+          <div className="relative my-5">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-200" />
             </div>
@@ -212,7 +211,7 @@ export default function Login() {
             Continue with Google
           </button>
 
-          <p className="mt-6 text-center text-sm text-gray-600">
+          <p className="mt-5 text-center text-xs text-gray-600">
             New here?{" "}
             <Link
               to="/register"
@@ -222,17 +221,16 @@ export default function Login() {
             </Link>
           </p>
 
-          {/* Demo accounts – one per row */}
-          <div className="mt-6 pt-5 border-t border-gray-100">
-            <p className="text-xs font-medium text-gray-500 mb-3">
+          {/* Quick Demo Login */}
+          <div className="mt-5 pt-4 border-t border-gray-100">
+            <p className="text-xs font-medium text-gray-500 mb-2">
               Quick demo login (click to fill):
             </p>
-            <div className="space-y-2">
-              {/* Agent – color changed to indigo */}
+            <div className="space-y-1.5">
               <button
                 type="button"
                 onClick={() => fillDemo("agent@realestate.com", "agent123")}
-                className="w-full text-left text-xs px-3 py-2.5 rounded-lg bg-gray-50 hover:bg-indigo-50 border border-gray-100 hover:border-indigo-200 transition"
+                className="w-full text-left text-xs px-3 py-2 rounded-lg bg-gray-50 hover:bg-indigo-50 border border-gray-100 transition"
               >
                 <span className="font-semibold text-indigo-600">Agent</span>
                 <span className="text-gray-500 ml-2">
@@ -240,11 +238,10 @@ export default function Login() {
                 </span>
               </button>
 
-              {/* Admin – same as before */}
               <button
                 type="button"
                 onClick={() => fillDemo("admin@realestate.com", "admin123")}
-                className="w-full text-left text-xs px-3 py-2.5 rounded-lg bg-gray-50 hover:bg-purple-50 border border-gray-100 hover:border-purple-200 transition"
+                className="w-full text-left text-xs px-3 py-2 rounded-lg bg-gray-50 hover:bg-purple-50 border border-gray-100 transition"
               >
                 <span className="font-semibold text-purple-700">Admin</span>
                 <span className="text-gray-500 ml-2">
@@ -252,11 +249,10 @@ export default function Login() {
                 </span>
               </button>
 
-              {/* Owner – same as before */}
               <button
                 type="button"
                 onClick={() => fillDemo("owner@gmail.com", "owner123")}
-                className="w-full text-left text-xs px-3 py-2.5 rounded-lg bg-gray-50 hover:bg-emerald-50 border border-gray-100 hover:border-emerald-200 transition"
+                className="w-full text-left text-xs px-3 py-2 rounded-lg bg-gray-50 hover:bg-emerald-50 border border-gray-100 transition"
               >
                 <span className="font-semibold text-emerald-600">Owner</span>
                 <span className="text-gray-500 ml-2">
@@ -264,11 +260,10 @@ export default function Login() {
                 </span>
               </button>
 
-              {/* Buyer – same as before */}
               <button
                 type="button"
                 onClick={() => fillDemo("buyer@gmail.com", "buyer123")}
-                className="w-full text-left text-xs px-3 py-2.5 rounded-lg bg-gray-50 hover:bg-blue-50 border border-gray-100 hover:border-blue-200 transition"
+                className="w-full text-left text-xs px-3 py-2 rounded-lg bg-gray-50 hover:bg-orange-50 border border-gray-100 transition"
               >
                 <span className="font-semibold text-orange-600">Buyer</span>
                 <span className="text-gray-500 ml-2">

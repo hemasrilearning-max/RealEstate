@@ -78,7 +78,6 @@ export default function Register() {
       if (!isValidEmail(value)) return "Please enter a valid email id";
     }
 
-    // PHONE IS REQUIRED
     if (key === "phone") {
       if (!value.trim()) return "Please enter your phone number";
       if (!isValidPhone(value))
@@ -117,7 +116,6 @@ export default function Register() {
 
     setFieldErrors(newErrors);
 
-    // Stop if any field has error (including phone)
     if (Object.values(newErrors).some((msg) => msg)) {
       return;
     }
@@ -141,44 +139,46 @@ export default function Register() {
   };
 
   const inputClass = (key) =>
-    `w-full rounded-xl px-4 py-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition border ${
+    `w-full rounded-xl px-4 py-2.5 text-sm text-gray-900 placeholder:text-gray-400 outline-none transition border ${
       fieldErrors[key]
         ? "border-red-500 ring-2 ring-red-500/20 bg-red-50/50"
         : "border-gray-300 focus:border-purple-600 focus:ring-2 focus:ring-purple-600/20"
     }`;
 
   return (
-    <div className="min-h-screen relative flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen relative flex items-center justify-center px-4 py-12 bg-gray-50">
+      {/* Background Soft Image */}
       <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-30"
         style={{
-          backgroundImage: "url('/images/login-bg-fresh.jpg')",
+          backgroundImage: "url('/images/login-bg-soft.jpg')",
         }}
       />
-      <div className="absolute inset-0 bg-white/70" />
 
-      <div className="relative z-10 w-full max-w-[480px]">
-        <div className="text-center mb-6">
-          <Link to="/" className="inline-block">
-            <img
-              src="../../../images/hspacelogo.png"
-              alt="HomeSpace"
-              className="h-12 w-auto mx-auto"
-            />
-          </Link>
+      {/* Main Register Card */}
+      <div className="relative z-10 w-full max-w-[480px] bg-white rounded-2xl shadow-xl overflow-hidden border border-gray-100">
+        
+        {/* Top Header Banner (same as Login) */}
+        <div className="relative h-44 w-full overflow-hidden">
+          <img
+            src="../../../images/login_reg.png"
+            alt="Real Estate Header"
+            className="w-full h-full object-cover"
+          />
         </div>
 
-        <div className="bg-white rounded-2xl shadow-[0_8px_30px_rgba(0,0,0,0.08)] border border-gray-100/80 p-8">
-          <div className="text-center mb-7">
-            <h1 className="text-2xl font-bold text-purple-700 tracking-tight">
+        {/* Form Container */}
+        <div className="p-8 pt-6">
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-purple-900 tracking-tight">
               Create your account
             </h1>
-            <p className="text-sm text-gray-500 mt-1.5">
+            <p className="text-sm text-gray-500 mt-1">
               Register as Agent, Owner or Buyer
             </p>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             {error && (
               <div className="bg-red-50 text-red-600 text-sm px-4 py-3 rounded-xl border border-red-100">
                 {error}
@@ -216,7 +216,7 @@ export default function Register() {
 
             {/* Full Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Full Name *
               </label>
               <input
@@ -227,13 +227,13 @@ export default function Register() {
                 placeholder="Your full name"
               />
               {fieldErrors.name && (
-                <p className="mt-1.5 text-xs text-red-500">{fieldErrors.name}</p>
+                <p className="mt-1 text-xs text-red-500">{fieldErrors.name}</p>
               )}
             </div>
 
             {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Email *
               </label>
               <input
@@ -245,13 +245,13 @@ export default function Register() {
                 placeholder="you@example.com"
               />
               {fieldErrors.email && (
-                <p className="mt-1.5 text-xs text-red-500">{fieldErrors.email}</p>
+                <p className="mt-1 text-xs text-red-500">{fieldErrors.email}</p>
               )}
             </div>
 
-            {/* Phone – REQUIRED */}
+            {/* Phone */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Phone *
               </label>
               <input
@@ -268,13 +268,13 @@ export default function Register() {
                 maxLength={15}
               />
               {fieldErrors.phone && (
-                <p className="mt-1.5 text-xs text-red-500">{fieldErrors.phone}</p>
+                <p className="mt-1 text-xs text-red-500">{fieldErrors.phone}</p>
               )}
             </div>
 
             {/* Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Password *
               </label>
               <div className="relative">
@@ -283,23 +283,23 @@ export default function Register() {
                   value={form.password}
                   onChange={(e) => update("password", e.target.value)}
                   onBlur={() => handleBlur("password")}
-                  className={`${inputClass("password")} pr-11`}
+                  className={`${inputClass("password")} pr-10`}
                   placeholder="Min 8 chars, upper, lower, number, special"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                 >
                   {showPass ? (
-                    <EyeOff className="w-4.5 h-4.5" />
+                    <EyeOff className="w-4 h-4" />
                   ) : (
-                    <Eye className="w-4.5 h-4.5" />
+                    <Eye className="w-4 h-4" />
                   )}
                 </button>
               </div>
               {fieldErrors.password && (
-                <p className="mt-1.5 text-xs text-red-500">
+                <p className="mt-1 text-xs text-red-500">
                   {fieldErrors.password}
                 </p>
               )}
@@ -307,7 +307,7 @@ export default function Register() {
 
             {/* Confirm Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Confirm Password *
               </label>
               <input
@@ -319,23 +319,25 @@ export default function Register() {
                 placeholder="Re-enter password"
               />
               {fieldErrors.confirmPassword && (
-                <p className="mt-1.5 text-xs text-red-500">
+                <p className="mt-1 text-xs text-red-500">
                   {fieldErrors.confirmPassword}
                 </p>
               )}
             </div>
 
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-semibold text-[15px] transition disabled:opacity-60 shadow-sm flex items-center justify-center gap-2"
+              className="w-full bg-purple-700 hover:bg-purple-800 text-white py-3 rounded-xl font-semibold text-sm transition disabled:opacity-60 shadow-sm mt-2 flex items-center justify-center gap-2"
             >
-              <UserPlus className="w-4.5 h-4.5" />
+              <UserPlus className="w-4 h-4" />
               {loading ? "Creating account..." : "Create Account"}
             </button>
           </form>
 
-          <div className="relative my-6">
+          {/* Divider */}
+          <div className="relative my-5">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-200" />
             </div>
@@ -344,6 +346,7 @@ export default function Register() {
             </div>
           </div>
 
+          {/* Google Login */}
           <button
             type="button"
             className="w-full flex items-center justify-center gap-2.5 border border-gray-300 rounded-xl py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
@@ -369,7 +372,7 @@ export default function Register() {
             Continue with Google
           </button>
 
-          <p className="mt-6 text-center text-sm text-gray-600">
+          <p className="mt-5 text-center text-xs text-gray-600">
             Already have an account?{" "}
             <Link
               to="/login"
