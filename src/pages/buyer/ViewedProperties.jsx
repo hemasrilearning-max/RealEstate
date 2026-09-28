@@ -1,96 +1,263 @@
-import React, { useState } from 'react';
-import { Eye, MapPin, Calendar, Clock, ArrowRight, Heart } from 'lucide-react';
+import { Eye, MapPin, ArrowRight, Heart, Home } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 
-export default function BuyerViewedProperties() {
-  // Mock data representing the buyer's recent browsing history tracking log
-  const [history, setHistory] = useState([
-    { id: 1, title: 'Modern 3 BHK Apartment', loc: 'Whitefield, Bangalore', price: '₹1.20 Cr', visitedDate: 'Today', viewedTime: '2 hours ago', tag: 'Buy', isFavorite: true },
-    { id: 2, title: '3 BHK Independent House', loc: 'HSR Layout, Bangalore', price: '₹2.10 Cr', visitedDate: 'Yesterday', viewedTime: '6:15 PM', tag: 'Buy', isFavorite: false },
-    { id: 3, title: 'Luxury 4 BHK Villa', loc: 'Sarjapur Road, Bangalore', price: '₹3.50 Cr', visitedDate: 'Sep 12, 2026', viewedTime: '3 days ago', tag: 'Buy', isFavorite: true },
-    { id: 4, title: '2 BHK Fully Furnished Flat', loc: 'Koramangala, Bangalore', price: '₹35,000 /mo', visitedDate: 'Sep 10, 2026', viewedTime: '5 days ago', tag: 'Rent', isFavorite: false },
-  ]);
+import { useData } from "../../context/DataContext";
+import { useAuth } from "../../context/AuthContext";
+import { formatPrice } from "../../data/mockData";
 
-  const handleToggleFavorite = (id) => {
-    setHistory(prev => prev.map(item => 
-      item.id === id ? { ...item, isFavorite: !item.isFavorite } : item
-    ));
+export default function ViewedProperties() {
+  const navigate = useNavigate();
+
+  const {
+    properties,
+    viewedPropertyIds,
+    isFavorite,
+    toggleFavorite,
+  } = useData();
+
+  const { isAuthenticated } = useAuth();
+
+  /*
+   * viewedPropertyIds is stored with the newest property first.
+   *
+   * We map those IDs back to the real properties from DataContext.
+   */
+  const viewedProperties = viewedPropertyIds
+    .map((id) =>
+      properties.find(
+        (property) => String(property.id) === String(id)
+      )
+    )
+    .filter(Boolean);
+
+  const handleFavorite = (propertyId) => {
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    toggleFavorite(propertyId);
   };
 
   return (
-    <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm font-sans animate-fadeIn">
-      {/* Module Title Section Header */}
-      <div className="pb-5 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div>
-          <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Eye className="h-5 w-5 text-emerald-600" /> Viewed Properties
-          </h2>
-          <p className="text-xs text-gray-500 mt-0.5">Review a history log of all property listings you have browsed.</p>
+    <div className="max-w-7xl mx-auto px-4 py-8">
+
+      {/* =========================================================
+          PAGE HEADER
+      ========================================================= */}
+      <div className="mb-8">
+
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+
+          <div>
+            <div className="flex items-center gap-2">
+              <Eye className="w-6 h-6 text-emerald-600" />
+
+              <h1 className="text-2xl font-bold text-gray-900">
+                Viewed Properties
+              </h1>
+            </div>
+
+            <p className="text-gray-500 mt-1">
+              Properties you recently viewed on HomeSpace.
+            </p>
+          </div>
+
+          {viewedProperties.length > 0 && (
+            <span className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-semibold">
+              <Eye className="w-4 h-4" />
+              {viewedProperties.length}{" "}
+              {viewedProperties.length === 1
+                ? "Property"
+                : "Properties"}
+            </span>
+          )}
+
         </div>
-        <span className="text-xs font-semibold bg-gray-50 text-gray-500 border border-gray-200 px-3 py-1 rounded-xl self-start sm:self-center">
-          {history.length} Listings Logged
-        </span>
       </div>
 
-      {/* Grid Row Feed Stream List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-        {history.map((item) => (
-          <div key={item.id} className="border border-gray-100 rounded-xl p-4 bg-gray-50/30 flex flex-col justify-between hover:bg-white hover:shadow-md transition-all group">
-            
-            <div className="flex justify-between items-start gap-4">
-              <div className="space-y-1 min-w-0">
-                {/* Intent Badges */}
-                <span className={`inline-block text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded border mb-1.5 ${
-                  item.tag === 'Buy' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100'
-                }`}>
-                  For {item.tag}
-                </span>
-                
-                <h4 className="font-bold text-gray-900 text-sm truncate">{item.title}</h4>
-                <p className="text-xs text-gray-400 flex items-center gap-1 truncate">
-                  <MapPin className="h-3 w-3 shrink-0" /> {item.loc}
-                </p>
-                
-                {/* Viewing Timestamp Badge Indicators */}
-                <div className="flex items-center gap-3 pt-2 text-[10px] text-gray-400 font-medium">
-                  <span className="flex items-center gap-1 bg-white border border-gray-100 px-2 py-0.5 rounded-md">
-                    <Calendar className="h-3 w-3 text-gray-400" /> {item.visitedDate}
+      {/* =========================================================
+          EMPTY STATE
+      ========================================================= */}
+      {viewedProperties.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-2xl py-20 px-6 text-center shadow-sm">
+
+          <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 flex items-center justify-center mb-5">
+            <Eye className="w-8 h-8 text-emerald-500" />
+          </div>
+
+          <h2 className="text-xl font-semibold text-gray-900">
+            No viewed properties yet
+          </h2>
+
+          <p className="text-gray-500 mt-2 max-w-md mx-auto">
+            Properties you open while browsing HomeSpace will
+            automatically appear here.
+          </p>
+
+          <Link
+            to="/properties"
+            className="inline-flex items-center gap-2 mt-6 bg-purple-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-purple-700 transition"
+          >
+            Browse Properties
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+
+        </div>
+      ) : (
+        /* =======================================================
+           PROPERTY GRID
+        ======================================================= */
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+
+          {viewedProperties.map((property) => {
+
+            const favorite = isFavorite(property.id);
+
+            const image =
+              property.images?.[0] ||
+              "https://via.placeholder.com/800x500";
+
+            return (
+              <div
+                key={property.id}
+                className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
+              >
+
+                {/* =================================================
+                    IMAGE
+                ================================================= */}
+                <div className="relative aspect-[16/10] bg-gray-100">
+
+                  <img
+                    src={image}
+                    alt={property.title}
+                    className="w-full h-full object-cover"
+                  />
+
+                  {/* Listing type */}
+                  <span
+                    className={`absolute top-3 left-3 px-3 py-1 text-xs font-semibold rounded-full ${
+                      property.listingType === "Rent"
+                        ? "bg-blue-600 text-white"
+                        : "bg-red-600 text-white"
+                    }`}
+                  >
+                    For {property.listingType}
                   </span>
-                  <span className="flex items-center gap-1 bg-white border border-gray-100 px-2 py-0.5 rounded-md">
-                    <Clock className="h-3 w-3 text-gray-400" /> {item.viewedTime}
-                  </span>
+
+                  {/* Favorite */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleFavorite(property.id)
+                    }
+                    aria-label={
+                      favorite
+                        ? "Remove from favorites"
+                        : "Add to favorites"
+                    }
+                    className="absolute top-3 right-3 w-10 h-10 rounded-full bg-white/95 shadow-md flex items-center justify-center hover:bg-white transition"
+                  >
+                    <Heart
+                      className={`w-5 h-5 ${
+                        favorite
+                          ? "text-red-500 fill-red-500"
+                          : "text-gray-600"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {/* =================================================
+                    PROPERTY INFORMATION
+                ================================================= */}
+                <div className="p-5">
+
+                  <h2 className="font-bold text-gray-900 text-lg line-clamp-1">
+                    {property.title}
+                  </h2>
+
+                  <div className="flex items-center gap-1 mt-2 text-sm text-gray-500">
+                    <MapPin className="w-4 h-4 shrink-0" />
+
+                    <span className="truncate">
+                      {property.location}
+                    </span>
+                  </div>
+
+                  {/* Price */}
+                  <div className="mt-3 text-xl font-bold text-purple-600">
+                    {formatPrice(
+                      property.price,
+                      property.listingType
+                    )}
+                  </div>
+
+                  {/* Specifications */}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 text-xs text-gray-500">
+
+                    {property.bhk && (
+                      <span>
+                        {property.bhk} Bedrooms
+                      </span>
+                    )}
+
+                    {property.bathrooms && (
+                      <span>
+                        {property.bathrooms} Bathrooms
+                      </span>
+                    )}
+
+                    {property.area && (
+                      <span>
+                        {property.area}{" "}
+                        {property.areaUnit || "sqft"}
+                      </span>
+                    )}
+
+                  </div>
+
+                  {/* Divider */}
+                  <div className="border-t border-gray-100 mt-5 pt-4">
+
+                    <Link
+                      to={`/properties/${property.id}`}
+                      className="w-full inline-flex items-center justify-center gap-2 bg-gray-900 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-800 transition"
+                    >
+                      Open Listing
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+
+                  </div>
+
                 </div>
               </div>
+            );
+          })}
 
-              {/* Heart Shortlist Action Button */}
-              <button 
-                onClick={() => handleToggleFavorite(item.id)}
-                className={`p-2 rounded-lg border transition-all shrink-0 ${
-                  item.isFavorite 
-                    ? 'bg-rose-50 border-rose-100 text-rose-500' 
-                    : 'bg-white border-gray-200 text-gray-400 hover:text-rose-500 hover:bg-rose-50/50'
-                }`}
-              >
-                <Heart className={`h-3.5 w-3.5 ${item.isFavorite ? 'fill-current' : ''}`} />
-              </button>
-            </div>
+        </div>
+      )}
 
-            {/* Bottom Panel Actions */}
-            <div className="mt-5 pt-3 border-t border-gray-100 flex justify-between items-center">
-              <span className="text-md font-black text-emerald-600">{item.price}</span>
-              <button className="text-[10px] font-bold bg-gray-900 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 hover:bg-gray-800 transition-colors shadow-2xs">
-                Open Listing <ArrowRight className="h-3 w-3" />
-              </button>
-            </div>
+      {/* =========================================================
+          BOTTOM BROWSE LINK
+      ========================================================= */}
+      {viewedProperties.length > 0 && (
+        <div className="mt-10 text-center">
 
-          </div>
-        ))}
+          <Link
+            to="/properties"
+            className="inline-flex items-center gap-2 text-purple-600 font-semibold hover:text-purple-700 transition"
+          >
+            <Home className="w-4 h-4" />
+            Continue Browsing Properties
+            <ArrowRight className="w-4 h-4" />
+          </Link>
 
-        {history.length === 0 && (
-          <div className="col-span-2 text-center py-12 text-gray-400 text-sm font-medium">
-            👁️ Your browsing history timeline logs are empty.
-          </div>
-        )}
-      </div>
+        </div>
+      )}
+
     </div>
   );
 }
+

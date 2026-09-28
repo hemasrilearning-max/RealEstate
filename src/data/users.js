@@ -19,7 +19,7 @@ export const ROLE_DASHBOARD = {
   agent: "/agent/dashboard",
   admin: "/admin/dashboard",
   owner: "/owner/dashboard",
-  buyer: "/buyer/dashboard",
+  buyer: "/",
 };
 
 // Default seeded users (passwords plain for demo only)

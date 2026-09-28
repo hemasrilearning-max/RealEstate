@@ -1,19 +1,52 @@
-import { Link } from "react-router-dom";
-import { MapPin, Bed, Bath, Maximize, Eye } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  MapPin,
+  Bed,
+  Bath,
+  Maximize,
+  Eye,
+  Heart,
+} from "lucide-react";
 import { formatPrice } from "../data/mockData";
+import { useData } from "../context/DataContext";
+import { useAuth } from "../context/AuthContext";
 
 export default function PropertyCard({ property }) {
+  const navigate = useNavigate();
+
+  const { isFavorite, toggleFavorite } = useData();
+  const { isAuthenticated } = useAuth();
+
+  const favorite = isFavorite(property.id);
+
+  const handleFavorite = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    toggleFavorite(property.id);
+  };
+
   return (
     <Link
       to={`/properties/${property.id}`}
-      className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300"
+      className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 block"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
         <img
-          src={property.images?.[0] || "https://via.placeholder.com/400x300"}
+          src={
+            property.images?.[0] ||
+            "https://via.placeholder.com/400x300"
+          }
           alt={property.title}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
         />
+
+        {/* Listing badges */}
         <div className="absolute top-3 left-3 flex gap-2">
           <span
             className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
@@ -24,24 +57,62 @@ export default function PropertyCard({ property }) {
           >
             {property.listingType}
           </span>
+
           {property.isFeatured && (
             <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-500 text-white">
               Featured
             </span>
           )}
         </div>
+
+        {/* Favorite button */}
+        <button
+          type="button"
+          onClick={handleFavorite}
+          aria-label={
+            favorite
+              ? "Remove from favorites"
+              : "Add to favorites"
+          }
+          title={
+            favorite
+              ? "Remove from favorites"
+              : "Add to favorites"
+          }
+          className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center shadow-md transition-all duration-200 ${
+            favorite
+              ? "bg-white text-red-500"
+              : "bg-white/90 text-gray-600 hover:bg-white hover:text-red-500"
+          }`}
+        >
+          <Heart
+            className={`w-5 h-5 ${
+              favorite ? "fill-red-500" : ""
+            }`}
+          />
+        </button>
+
+        {/* Views */}
         <div className="absolute bottom-3 right-3 bg-black/60 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
           <Eye className="w-3 h-3" />
-          {property.views}
+          {property.views || 0}
         </div>
       </div>
 
       <div className="p-4">
         <div className="text-xl font-bold text-gray-900 mb-1">
-          {formatPrice(property.price, property.listingType)}
+          {formatPrice(
+            property.price,
+            property.listingType
+          )}
+
           {property.pricePerSqft && (
             <span className="text-sm font-normal text-gray-500 ml-2">
-              ₹{property.pricePerSqft.toLocaleString("en-IN")}/sqft
+              ₹
+              {property.pricePerSqft.toLocaleString(
+                "en-IN"
+              )}
+              /sqft
             </span>
           )}
         </div>
@@ -52,7 +123,9 @@ export default function PropertyCard({ property }) {
 
         <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
           <MapPin className="w-3.5 h-3.5 shrink-0" />
-          <span className="line-clamp-1">{property.location}</span>
+          <span className="line-clamp-1">
+            {property.location}
+          </span>
         </div>
 
         <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100 text-sm text-gray-600">
@@ -62,12 +135,14 @@ export default function PropertyCard({ property }) {
               {property.bhk}
             </span>
           )}
+
           {property.bathrooms && (
             <span className="flex items-center gap-1">
               <Bath className="w-4 h-4" />
               {property.bathrooms} Bath
             </span>
           )}
+
           <span className="flex items-center gap-1">
             <Maximize className="w-4 h-4" />
             {property.area} {property.areaUnit}
@@ -78,9 +153,11 @@ export default function PropertyCard({ property }) {
           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
             {property.propertyType}
           </span>
+
           <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
             {property.status}
           </span>
+
           {property.furnishing && (
             <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
               {property.furnishing}
@@ -91,3 +168,4 @@ export default function PropertyCard({ property }) {
     </Link>
   );
 }
+

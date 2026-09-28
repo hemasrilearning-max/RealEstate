@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
@@ -14,18 +15,25 @@ import {
 } from "lucide-react";
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
 
-  // Check admin login
-  if (!user || user.role !== "admin") {
-    navigate("/login", { replace: true });
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user) {
+      navigate("/login", { replace: true });
+      return;
+    }
+
+    if (user.role !== "admin") {
+      navigate("/", { replace: true });
+    }
+  }, [user, loading, navigate]);
+
+  if (loading || !user || user.role !== "admin") {
     return null;
   }
-
-  // =========================
-  // MOCK DASHBOARD DATA
-  // =========================
 
   const stats = [
     {
@@ -113,18 +121,14 @@ export default function AdminDashboard() {
   return (
     <div className="w-full">
 
-      {/* =========================
-          PAGE CONTENT
-      ========================= */}
-
-      {/* Welcome Section */}
+      {/* Header */}
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">
           Admin Dashboard
         </h1>
 
         <p className="text-sm text-gray-500 mt-1">
-          Welcome back, {user.name}
+          Welcome back, {user.name || "Administrator"}
         </p>
       </div>
 
@@ -139,10 +143,7 @@ export default function AdminDashboard() {
         </p>
       </div>
 
-      {/* =========================
-          STAT CARDS
-      ========================= */}
-
+      {/* Statistics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
 
         {stats.map((stat) => {
@@ -174,10 +175,7 @@ export default function AdminDashboard() {
 
       </div>
 
-      {/* =========================
-          RECENT ACTIVITY + PENDING
-      ========================= */}
-
+      {/* Activity + Pending Properties */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-8">
 
         {/* Recent Activity */}
@@ -196,7 +194,6 @@ export default function AdminDashboard() {
             </div>
 
             <Bell className="w-5 h-5 text-gray-400" />
-
           </div>
 
           <div className="divide-y divide-gray-100">
@@ -248,7 +245,6 @@ export default function AdminDashboard() {
             </div>
 
             <Clock className="w-5 h-5 text-orange-500" />
-
           </div>
 
           <div className="divide-y divide-gray-100">
@@ -280,6 +276,7 @@ export default function AdminDashboard() {
                 <div className="flex gap-2 mt-4">
 
                   <button
+                    type="button"
                     className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-600 rounded-lg text-xs hover:bg-green-100"
                   >
                     <CheckCircle className="w-4 h-4" />
@@ -287,6 +284,7 @@ export default function AdminDashboard() {
                   </button>
 
                   <button
+                    type="button"
                     className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs hover:bg-red-100"
                   >
                     <XCircle className="w-4 h-4" />

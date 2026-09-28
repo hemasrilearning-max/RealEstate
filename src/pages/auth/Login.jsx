@@ -18,7 +18,7 @@ export default function Login() {
       agent: "/agent/dashboard",
       admin: "/admin/dashboard",
       owner: "/owner/dashboard",
-      buyer: "/buyer/dashboard",
+      buyer: "/",
     };
     navigate(map[role] || "/", { replace: true });
     return null;
