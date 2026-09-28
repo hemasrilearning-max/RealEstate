@@ -1,6 +1,8 @@
 package com.realestate.modules.user.service.impl;
 
 import com.realestate.common.exception.ResourceNotFoundException;
+
+import org.springframework.security.crypto.password.PasswordEncoder;
 import com.realestate.modules.user.dto.request.ChangeUserStatusRequest;
 import com.realestate.modules.user.dto.request.CreateUserRequest;
 import com.realestate.modules.user.dto.request.UpdateUserRequest;
@@ -25,30 +27,42 @@ public class UserServiceImpl implements UserService {
   private final UserRepository userRepository;
   private final RoleRepository roleRepository;
   private final UserMapper userMapper;
+  private final PasswordEncoder passwordEncoder;
 
   // =========================
   // CREATE USER
   // =========================
 
   @Override
-  @Transactional
   public UserResponse createUser(CreateUserRequest request) {
 
-    if (userRepository.existsByEmail(request.getEmail())) {
-      throw new RuntimeException("Email already exists");
-    }
+      if (userRepository.existsByUsername(request.getUsername())) {
+          throw new RuntimeException("Username already exists");
+      }
 
-    RoleType roleType = request.getRole();
+      if (userRepository.existsByEmail(request.getEmail())) {
+          throw new RuntimeException("Email already exists");
+      }
 
-    Role role = roleRepository.findByName(roleType)
-        .orElseThrow(() -> new ResourceNotFoundException(
-            "Role not found: " + roleType));
+      RoleType roleType = request.getRole();
 
-    User user = userMapper.toEntity(request, role);
+      Role role = roleRepository.findByName(roleType)
+              .orElseThrow(() ->
+                      new RuntimeException(
+                              "Role not found: " + roleType
+                      )
+              );
 
-    User savedUser = userRepository.save(user);
+      User user = userMapper.toEntity(request, role);
 
-    return userMapper.toResponse(savedUser);
+      // Encode password before storing it
+      user.setPassword(
+              passwordEncoder.encode(request.getPassword())
+      );
+
+      User savedUser = userRepository.save(user);
+
+      return userMapper.toResponse(savedUser);
   }
 
   // =========================

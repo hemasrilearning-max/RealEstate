@@ -1,4 +1,4 @@
-package com.realestate.config;
+package com.realestate.security;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
