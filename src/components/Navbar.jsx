@@ -182,7 +182,7 @@ export default function Navbar() {
                       {/* =================================================
                           BUYER WEBSITE FUNCTIONALITY
                       ================================================== */}
-                      <div className="py-2 max-h-[70vh] overflow-y-auto">
+                      <div className="py-2 max-h-[200px] overflow-y-auto">
 
                         {/* Profile */}
                         <Link

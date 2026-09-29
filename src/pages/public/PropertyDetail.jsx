@@ -13,6 +13,7 @@ import {
   ChevronRight,
   CheckCircle2,
   Heart,
+  X,
 } from "lucide-react";
 
 import { useData } from "../../context/DataContext";
@@ -55,11 +56,6 @@ export default function PropertyDetail() {
    * ============================================================
    * RECORD VIEWED PROPERTY
    * ============================================================
-   *
-   * Whenever a logged-in buyer opens a property, its ID is
-   * stored in DataContext and localStorage.
-   *
-   * The same property is not duplicated.
    */
   useEffect(() => {
     if (!property || !isAuthenticated) {
@@ -71,7 +67,7 @@ export default function PropertyDetail() {
 
   /*
    * ============================================================
-   * LOAD USER INFORMATION INTO CONTACT FORM
+   * LOAD USER INFORMATION INTO FORM
    * ============================================================
    */
   useEffect(() => {
@@ -81,9 +77,9 @@ export default function PropertyDetail() {
 
     setLeadForm((prev) => ({
       ...prev,
-      name: prev.name || user.name || "",
-      email: prev.email || user.email || "",
-      phone: prev.phone || user.phone || "",
+      name: user.name || prev.name || "",
+      email: user.email || prev.email || "",
+      phone: user.phone || prev.phone || "",
     }));
   }, [user]);
 
@@ -151,6 +147,29 @@ export default function PropertyDetail() {
 
   /*
    * ============================================================
+   * OPEN INTEREST FORM
+   * ============================================================
+   *
+   * IMPORTANT:
+   * No login redirect here.
+   *
+   * Both logged-in users and guests can submit the form.
+   */
+  const handleInterested = () => {
+    setSubmitted(false);
+
+    setLeadForm((prev) => ({
+      ...prev,
+      name: user?.name || prev.name || "",
+      email: user?.email || prev.email || "",
+      phone: user?.phone || prev.phone || "",
+    }));
+
+    setShowLeadForm(true);
+  };
+
+  /*
+   * ============================================================
    * LEAD SUBMISSION
    * ============================================================
    */
@@ -162,6 +181,8 @@ export default function PropertyDetail() {
       propertyId: property.id,
       agentId: property.agentId || 1,
       source: "Website",
+      userId: user?.id || user?.userId || null,
+      status: "NEW",
     });
 
     setSubmitted(true);
@@ -172,6 +193,9 @@ export default function PropertyDetail() {
    * ============================================================
    * TOUR REQUEST
    * ============================================================
+   *
+   * Tour still requires the user to be logged in because it
+   * belongs to the buyer's tour-booking history.
    */
   const handleTourRequest = () => {
     if (!isAuthenticated) {
@@ -243,7 +267,7 @@ export default function PropertyDetail() {
               className="w-full h-full object-cover"
             />
 
-            {/* FAVORITE BUTTON */}
+            {/* FAVORITE */}
             <button
               type="button"
               onClick={handleFavorite}
@@ -303,7 +327,7 @@ export default function PropertyDetail() {
             )}
 
             {/* BUY / RENT BADGE */}
-            <div className="absolute top-3 left-3 flex gap-2">
+            <div className="absolute top-3 left-3">
               <span
                 className={`px-3 py-1 text-sm font-semibold rounded-full ${
                   property.listingType === "Rent"
@@ -320,24 +344,25 @@ export default function PropertyDetail() {
               TITLE & PRICE
           ==================================================== */}
           <div>
-
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               {property.title}
             </h1>
 
             <div className="flex items-center gap-1 text-gray-500 mt-2">
-              <MapPin className="w-4 h-4" />
-              {property.location}
+              <MapPin className="w-4 h-4 shrink-0" />
+              <span>{property.location}</span>
             </div>
 
-            <div className="mt-3 text-3xl font-bold text-purple-600">
-              {formatPrice(
-                property.price,
-                property.listingType
-              )}
+            <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span className="text-3xl font-bold text-purple-600">
+                {formatPrice(
+                  property.price,
+                  property.listingType
+                )}
+              </span>
 
               {property.pricePerSqft && (
-                <span className="text-base font-normal text-gray-500 ml-3">
+                <span className="text-base font-normal text-gray-500">
                   ₹
                   {property.pricePerSqft.toLocaleString(
                     "en-IN"
@@ -346,7 +371,6 @@ export default function PropertyDetail() {
                 </span>
               )}
             </div>
-
           </div>
 
           {/* ====================================================
@@ -427,7 +451,6 @@ export default function PropertyDetail() {
               PROPERTY DETAILS
           ==================================================== */}
           <div>
-
             <h2 className="text-lg font-semibold mb-3">
               Property Details
             </h2>
@@ -505,13 +528,11 @@ export default function PropertyDetail() {
           ==================================================== */}
           {property.amenities?.length > 0 && (
             <div>
-
               <h2 className="text-lg font-semibold mb-3">
                 Amenities
               </h2>
 
               <div className="flex flex-wrap gap-2">
-
                 {property.amenities.map((amenity) => (
                   <span
                     key={amenity}
@@ -521,9 +542,7 @@ export default function PropertyDetail() {
                     {amenity}
                   </span>
                 ))}
-
               </div>
-
             </div>
           )}
 
@@ -557,17 +576,54 @@ export default function PropertyDetail() {
                   The agent will contact you shortly.
                 </p>
 
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSubmitted(false);
+                    setLeadForm({
+                      name: user?.name || "",
+                      email: user?.email || "",
+                      phone: user?.phone || "",
+                      message: "",
+                    });
+                  }}
+                  className="mt-4 text-sm text-purple-600 hover:text-purple-700 font-medium"
+                >
+                  Submit another enquiry
+                </button>
+
               </div>
 
             ) : showLeadForm ? (
 
               /* ==================================================
-                 LEAD FORM
+                 INDIVIDUAL INTEREST FORM
               ================================================== */
               <form
                 onSubmit={handleLeadSubmit}
                 className="space-y-3"
               >
+
+                <div className="flex items-center justify-between mb-1">
+                  <div>
+                    <h4 className="font-semibold text-gray-900">
+                      I'm Interested
+                    </h4>
+
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Share your details with the seller.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowLeadForm(false)}
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500"
+                    aria-label="Close interest form"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
 
                 <input
                   required
@@ -579,7 +635,7 @@ export default function PropertyDetail() {
                       name: e.target.value,
                     })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none"
                 />
 
                 <input
@@ -593,7 +649,7 @@ export default function PropertyDetail() {
                       email: e.target.value,
                     })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none"
                 />
 
                 <input
@@ -607,7 +663,7 @@ export default function PropertyDetail() {
                       phone: e.target.value,
                     })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none"
                 />
 
                 <textarea
@@ -620,7 +676,7 @@ export default function PropertyDetail() {
                       message: e.target.value,
                     })
                   }
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none resize-none"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none resize-none"
                 />
 
                 <button
@@ -633,7 +689,7 @@ export default function PropertyDetail() {
                 <button
                   type="button"
                   onClick={() => setShowLeadForm(false)}
-                  className="w-full text-sm text-gray-500 hover:text-gray-700"
+                  className="w-full text-sm text-gray-500 hover:text-gray-700 py-1"
                 >
                   Cancel
                 </button>
@@ -647,22 +703,21 @@ export default function PropertyDetail() {
               ================================================== */
               <div className="space-y-3">
 
+                {/* =================================================
+                    I'M INTERESTED
+                ================================================== */}
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!isAuthenticated) {
-                      navigate("/login");
-                      return;
-                    }
-
-                    setShowLeadForm(true);
-                  }}
+                  onClick={handleInterested}
                   className="w-full bg-purple-600 text-white py-2.5 rounded-lg font-semibold hover:bg-purple-700 transition flex items-center justify-center gap-2"
                 >
                   <Phone className="w-4 h-4" />
                   I'm Interested
                 </button>
 
+                {/* =================================================
+                    REQUEST TOUR
+                ================================================== */}
                 <button
                   type="button"
                   onClick={handleTourRequest}
@@ -713,7 +768,6 @@ export default function PropertyDetail() {
             )}
 
           </div>
-
         </div>
       </div>
     </div>
