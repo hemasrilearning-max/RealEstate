@@ -9,25 +9,25 @@ import java.util.List;
 
 public interface ReviewService {
 
-  ReviewResponse createReview(CreateReviewRequest request);
+    ReviewResponse createReview(CreateReviewRequest request);
 
-  ReviewResponse getReviewById(Long reviewId);
+    ReviewResponse getReviewById(Long reviewId);
 
-  List<ReviewResponse> getReviewsByProperty(Long propertyId);
+    List<ReviewResponse> getReviewsByProperty(Long propertyId);
 
-  List<ReviewResponse> getReviewsByUser(Long userId);
+    List<ReviewResponse> getMyReviews();
 
-  List<ReviewResponse> getReviewsByPropertyAndStatus(
-      Long propertyId,
-      ReviewStatus status);
+    List<ReviewResponse> getReviewsByPropertyAndStatus(
+            Long propertyId,
+            ReviewStatus status);
 
-  ReviewResponse updateReview(
-      Long reviewId,
-      UpdateReviewRequest request);
+    ReviewResponse updateReview(
+            Long reviewId,
+            UpdateReviewRequest request);
 
-  void updateReviewStatus(
-      Long reviewId,
-      ReviewStatus status);
+    void updateReviewStatus(
+            Long reviewId,
+            ReviewStatus status);
 
-  void deleteReview(Long reviewId);
+    void deleteReview(Long reviewId);
 }

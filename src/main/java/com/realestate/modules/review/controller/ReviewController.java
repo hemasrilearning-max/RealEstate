@@ -18,81 +18,111 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ReviewController {
 
-  private final ReviewService reviewService;
+    private final ReviewService reviewService;
 
-  // Create a new review
-  @PostMapping
-  public ResponseEntity<ReviewResponse> createReview(
-      @Valid @RequestBody CreateReviewRequest request) {
-    ReviewResponse response = reviewService.createReview(request);
+    /**
+     * Create a review for a property.
+     * The reviewer is taken from the JWT authenticated user.
+     */
+    @PostMapping
+    public ResponseEntity<ReviewResponse> createReview(
+            @Valid @RequestBody CreateReviewRequest request) {
 
-    return ResponseEntity
-        .status(HttpStatus.CREATED)
-        .body(response);
-  }
+        ReviewResponse response = reviewService.createReview(request);
 
-  // Get review by ID
-  @GetMapping("/{reviewId}")
-  public ResponseEntity<ReviewResponse> getReviewById(
-      @PathVariable Long reviewId) {
-    return ResponseEntity.ok(
-        reviewService.getReviewById(reviewId));
-  }
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(response);
+    }
 
-  // Get all reviews for a property
-  @GetMapping("/property/{propertyId}")
-  public ResponseEntity<List<ReviewResponse>> getReviewsByProperty(
-      @PathVariable Long propertyId) {
-    return ResponseEntity.ok(
-        reviewService.getReviewsByProperty(propertyId));
-  }
+    /**
+     * Get review by ID.
+     */
+    @GetMapping("/{reviewId}")
+    public ResponseEntity<ReviewResponse> getReviewById(
+            @PathVariable Long reviewId) {
 
-  // Get all reviews written by a user
-  @GetMapping("/user/{userId}")
-  public ResponseEntity<List<ReviewResponse>> getReviewsByUser(
-      @PathVariable Long userId) {
-    return ResponseEntity.ok(
-        reviewService.getReviewsByUser(userId));
-  }
+        return ResponseEntity.ok(
+                reviewService.getReviewById(reviewId));
+    }
 
-  // Get reviews for a property by status
-  @GetMapping("/property/{propertyId}/status/{status}")
-  public ResponseEntity<List<ReviewResponse>> getReviewsByPropertyAndStatus(
-      @PathVariable Long propertyId,
-      @PathVariable ReviewStatus status) {
-    return ResponseEntity.ok(
-        reviewService.getReviewsByPropertyAndStatus(
-            propertyId,
-            status));
-  }
+    /**
+     * Get all reviews for a property.
+     */
+    @GetMapping("/property/{propertyId}")
+    public ResponseEntity<List<ReviewResponse>> getReviewsByProperty(
+            @PathVariable Long propertyId) {
 
-  // Update review
-  @PutMapping("/{reviewId}")
-  public ResponseEntity<ReviewResponse> updateReview(
-      @PathVariable Long reviewId,
-      @Valid @RequestBody UpdateReviewRequest request) {
-    return ResponseEntity.ok(
-        reviewService.updateReview(reviewId, request));
-  }
+        return ResponseEntity.ok(
+                reviewService.getReviewsByProperty(propertyId));
+    }
 
-  // Update review status
-  @PatchMapping("/{reviewId}/status")
-  public ResponseEntity<String> updateReviewStatus(
-      @PathVariable Long reviewId,
-      @RequestParam ReviewStatus status) {
-    reviewService.updateReviewStatus(reviewId, status);
+    /**
+     * Get reviews written by the currently authenticated user.
+     */
+    @GetMapping("/my")
+    public ResponseEntity<List<ReviewResponse>> getMyReviews() {
 
-    return ResponseEntity.ok(
-        "Review status updated successfully");
-  }
+        return ResponseEntity.ok(
+                reviewService.getMyReviews());
+    }
 
-  // Delete review
-  @DeleteMapping("/{reviewId}")
-  public ResponseEntity<String> deleteReview(
-      @PathVariable Long reviewId) {
-    reviewService.deleteReview(reviewId);
+    /**
+     * Get reviews for a property by status.
+     */
+    @GetMapping("/property/{propertyId}/status/{status}")
+    public ResponseEntity<List<ReviewResponse>> getReviewsByPropertyAndStatus(
+            @PathVariable Long propertyId,
+            @PathVariable ReviewStatus status) {
 
-    return ResponseEntity.ok(
-        "Review deleted successfully");
-  }
+        return ResponseEntity.ok(
+                reviewService.getReviewsByPropertyAndStatus(
+                        propertyId,
+                        status));
+    }
+
+    /**
+     * Update own review.
+     */
+    @PutMapping("/{reviewId}")
+    public ResponseEntity<ReviewResponse> updateReview(
+            @PathVariable Long reviewId,
+            @Valid @RequestBody UpdateReviewRequest request) {
+
+        return ResponseEntity.ok(
+                reviewService.updateReview(
+                        reviewId,
+                        request));
+    }
+
+    /**
+     * Update review status.
+     *
+     * This is intended for administrative/moderation functionality.
+     */
+    @PatchMapping("/{reviewId}/status")
+    public ResponseEntity<String> updateReviewStatus(
+            @PathVariable Long reviewId,
+            @RequestParam ReviewStatus status) {
+
+        reviewService.updateReviewStatus(
+                reviewId,
+                status);
+
+        return ResponseEntity.ok(
+                "Review status updated successfully");
+    }
+
+    /**
+     * Delete own review.
+     */
+    @DeleteMapping("/{reviewId}")
+    public ResponseEntity<String> deleteReview(
+            @PathVariable Long reviewId) {
+
+        reviewService.deleteReview(reviewId);
+
+        return ResponseEntity.ok(
+                "Review deleted successfully");
+    }
 }

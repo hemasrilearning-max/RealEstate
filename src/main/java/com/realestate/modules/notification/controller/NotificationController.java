@@ -1,11 +1,8 @@
 package com.realestate.modules.notification.controller;
 
-import com.realestate.modules.notification.dto.request.CreateNotificationRequest;
 import com.realestate.modules.notification.dto.response.NotificationResponse;
 import com.realestate.modules.notification.service.NotificationService;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -18,13 +15,25 @@ public class NotificationController {
 
   private final NotificationService notificationService;
 
-  @PostMapping
-  public ResponseEntity<NotificationResponse> createNotification(
-      @Valid @RequestBody CreateNotificationRequest request) {
+  @GetMapping
+  public ResponseEntity<List<NotificationResponse>> getMyNotifications() {
 
-    return ResponseEntity
-        .status(HttpStatus.CREATED)
-        .body(notificationService.createNotification(request));
+    return ResponseEntity.ok(
+        notificationService.getMyNotifications());
+  }
+
+  @GetMapping("/unread")
+  public ResponseEntity<List<NotificationResponse>> getMyUnreadNotifications() {
+
+    return ResponseEntity.ok(
+        notificationService.getMyUnreadNotifications());
+  }
+
+  @GetMapping("/unread/count")
+  public ResponseEntity<Long> getMyUnreadNotificationCount() {
+
+    return ResponseEntity.ok(
+        notificationService.getMyUnreadNotificationCount());
   }
 
   @GetMapping("/{notificationId}")
@@ -33,30 +42,6 @@ public class NotificationController {
 
     return ResponseEntity.ok(
         notificationService.getNotificationById(notificationId));
-  }
-
-  @GetMapping("/user/{recipientId}")
-  public ResponseEntity<List<NotificationResponse>> getUserNotifications(
-      @PathVariable Long recipientId) {
-
-    return ResponseEntity.ok(
-        notificationService.getUserNotifications(recipientId));
-  }
-
-  @GetMapping("/user/{recipientId}/unread")
-  public ResponseEntity<List<NotificationResponse>> getUnreadNotifications(
-      @PathVariable Long recipientId) {
-
-    return ResponseEntity.ok(
-        notificationService.getUnreadNotifications(recipientId));
-  }
-
-  @GetMapping("/user/{recipientId}/unread/count")
-  public ResponseEntity<Long> getUnreadNotificationCount(
-      @PathVariable Long recipientId) {
-
-    return ResponseEntity.ok(
-        notificationService.getUnreadNotificationCount(recipientId));
   }
 
   @PatchMapping("/{notificationId}/read")

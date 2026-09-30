@@ -8,11 +8,15 @@ import java.util.Optional;
 
 public interface ReviewRepository extends JpaRepository<Review, Long> {
 
-  List<Review> findByPropertyIdOrderByCreatedAtDesc(Long propertyId);
+  List<Review> findByPropertyIdOrderByCreatedAtDesc(
+      Long propertyId);
 
-  List<Review> findByUserIdOrderByCreatedAtDesc(Long userId);
+  List<Review> findByUserIdOrderByCreatedAtDesc(
+      Long userId);
 
-  Optional<Review> findByUserIdAndPropertyId(Long userId, Long propertyId);
+  Optional<Review> findByUserIdAndPropertyId(
+      Long userId,
+      Long propertyId);
 
   List<Review> findByPropertyIdAndStatusOrderByCreatedAtDesc(
       Long propertyId,

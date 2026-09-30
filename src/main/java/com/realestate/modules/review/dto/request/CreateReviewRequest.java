@@ -13,9 +13,6 @@ import lombok.*;
 @Builder
 public class CreateReviewRequest {
 
-  @NotNull(message = "User ID is required")
-  private Long userId;
-
   @NotNull(message = "Property ID is required")
   private Long propertyId;
 

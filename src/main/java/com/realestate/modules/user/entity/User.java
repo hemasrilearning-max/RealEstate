@@ -25,7 +25,7 @@ public class User {
 
   @Column(nullable = false, length = 100)
   private String lastName;
-  
+
   @Column(nullable = false, unique = true, length = 50)
   private String username;
 
@@ -50,6 +50,9 @@ public class User {
   @Enumerated(EnumType.STRING)
   @Column(length = 30)
   private AccountType accountType;
+
+  @Column(length = 500)
+  private String profilePhotoPath;
 
   @Column(nullable = false, updatable = false)
   @Builder.Default

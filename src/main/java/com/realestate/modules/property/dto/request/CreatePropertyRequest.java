@@ -52,6 +52,4 @@ public class CreatePropertyRequest {
   @NotNull(message = "Location ID is required")
   private Long locationId;
 
-  @NotNull(message = "Seller ID is required")
-  private Long sellerId;
 }
