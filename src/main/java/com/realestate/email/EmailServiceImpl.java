@@ -17,11 +17,11 @@ public class EmailServiceImpl implements EmailService {
             String recipientName,
             String otp
     ) {
-
         SimpleMailMessage message = new SimpleMailMessage();
 
+        message.setFrom("realestate.application12@gmail.com");
         message.setTo(recipientEmail);
-        message.setSubject("Real Estate Application - Email Verification OTP");
+        message.setSubject("Real Estate Application - Email Verification");
 
         message.setText(
                 "Hello " + recipientName + ",\n\n"
@@ -29,6 +29,37 @@ public class EmailServiceImpl implements EmailService {
                 + "Your email verification OTP is:\n\n"
                 + otp + "\n\n"
                 + "This OTP is valid for 10 minutes.\n\n"
+                + "Please do not share this OTP with anyone.\n\n"
+                + "Regards,\n"
+                + "Real Estate Application"
+        );
+
+        mailSender.send(message);
+    }
+    
+    @Override
+    public void sendPasswordResetOtp(
+            String recipientEmail,
+            String recipientName,
+            String otp) {
+
+        SimpleMailMessage message = new SimpleMailMessage();
+
+        message.setFrom("realestate.application12@gmail.com");
+        message.setTo(recipientEmail);
+
+        message.setSubject(
+                "Real Estate Application - Password Reset OTP"
+        );
+
+        message.setText(
+                "Hello " + recipientName + ",\n\n"
+                + "We received a request to reset your password.\n\n"
+                + "Your password reset OTP is:\n\n"
+                + otp + "\n\n"
+                + "This OTP is valid for 10 minutes.\n\n"
+                + "If you did not request a password reset, "
+                + "please ignore this email.\n\n"
                 + "Please do not share this OTP with anyone.\n\n"
                 + "Regards,\n"
                 + "Real Estate Application"

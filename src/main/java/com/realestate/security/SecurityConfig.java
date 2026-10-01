@@ -77,6 +77,9 @@ public class SecurityConfig {
                                 "/api/admin/**"
                         ).hasRole("SUPER_ADMIN")
 
+                        //Email Testing
+                        .requestMatchers("/api/test-email/**").permitAll()
+                        
                         // Everything else requires login
                         .anyRequest().authenticated()
                 )
