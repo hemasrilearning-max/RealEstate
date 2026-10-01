@@ -18,115 +18,115 @@ import java.util.List;
 @RequiredArgsConstructor
 public class MessageController {
 
-  private final MessagingService messagingService;
+    private final MessagingService messagingService;
 
-  // =========================
-  // CONVERSATION APIs
-  // =========================
+    // ============================================================
+    // CONVERSATION APIs
+    // ============================================================
 
-  @PostMapping("/conversations")
-  public ResponseEntity<ConversationResponse> createConversation(
-      @Valid @RequestBody CreateConversationRequest request) {
+    @PostMapping("/conversations")
+    public ResponseEntity<ConversationResponse> createConversation(
+            @Valid @RequestBody CreateConversationRequest request) {
 
-    ConversationResponse response = messagingService.createConversation(request);
+        ConversationResponse response = messagingService.createConversation(request);
 
-    return ResponseEntity
-        .status(HttpStatus.CREATED)
-        .body(response);
-  }
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(response);
+    }
 
-  @GetMapping("/conversations/{conversationId}")
-  public ResponseEntity<ConversationResponse> getConversation(
-      @PathVariable Long conversationId) {
+    @GetMapping("/conversations/{conversationId}")
+    public ResponseEntity<ConversationResponse> getConversation(
+            @PathVariable Long conversationId) {
 
-    return ResponseEntity.ok(
-        messagingService.getConversationById(conversationId));
-  }
+        return ResponseEntity.ok(
+                messagingService.getConversationById(conversationId));
+    }
 
-  @GetMapping("/conversations/buyer/{buyerId}")
-  public ResponseEntity<List<ConversationResponse>> getBuyerConversations(
-      @PathVariable Long buyerId) {
+    @GetMapping("/conversations/buyer/{buyerId}")
+    public ResponseEntity<List<ConversationResponse>> getBuyerConversations(
+            @PathVariable Long buyerId) {
 
-    return ResponseEntity.ok(
-        messagingService.getBuyerConversations(buyerId));
-  }
+        return ResponseEntity.ok(
+                messagingService.getBuyerConversations(buyerId));
+    }
 
-  @GetMapping("/conversations/seller/{sellerId}")
-  public ResponseEntity<List<ConversationResponse>> getSellerConversations(
-      @PathVariable Long sellerId) {
+    @GetMapping("/conversations/seller/{sellerId}")
+    public ResponseEntity<List<ConversationResponse>> getSellerConversations(
+            @PathVariable Long sellerId) {
 
-    return ResponseEntity.ok(
-        messagingService.getSellerConversations(sellerId));
-  }
+        return ResponseEntity.ok(
+                messagingService.getSellerConversations(sellerId));
+    }
 
-  @GetMapping("/conversations/property/{propertyId}")
-  public ResponseEntity<List<ConversationResponse>> getPropertyConversations(
-      @PathVariable Long propertyId) {
+    @GetMapping("/conversations/property/{propertyId}")
+    public ResponseEntity<List<ConversationResponse>> getPropertyConversations(
+            @PathVariable Long propertyId) {
 
-    return ResponseEntity.ok(
-        messagingService.getPropertyConversations(propertyId));
-  }
+        return ResponseEntity.ok(
+                messagingService.getPropertyConversations(propertyId));
+    }
 
-  // =========================
-  // MESSAGE APIs
-  // =========================
+    // ============================================================
+    // MESSAGE APIs
+    // ============================================================
 
-  @PostMapping("/conversations/{conversationId}/messages")
-  public ResponseEntity<MessageResponse> sendMessage(
-      @PathVariable Long conversationId,
-      @Valid @RequestBody SendMessageRequest request) {
+    @PostMapping("/conversations/{conversationId}/messages")
+    public ResponseEntity<MessageResponse> sendMessage(
+            @PathVariable Long conversationId,
+            @Valid @RequestBody SendMessageRequest request) {
 
-    MessageResponse response = messagingService.sendMessage(
-        conversationId,
-        request);
+        MessageResponse response = messagingService.sendMessage(
+                conversationId,
+                request);
 
-    return ResponseEntity
-        .status(HttpStatus.CREATED)
-        .body(response);
-  }
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(response);
+    }
 
-  @GetMapping("/conversations/{conversationId}/messages")
-  public ResponseEntity<List<MessageResponse>> getMessages(
-      @PathVariable Long conversationId) {
+    @GetMapping("/conversations/{conversationId}/messages")
+    public ResponseEntity<List<MessageResponse>> getMessages(
+            @PathVariable Long conversationId) {
 
-    return ResponseEntity.ok(
-        messagingService.getConversationMessages(
-            conversationId));
-  }
+        return ResponseEntity.ok(
+                messagingService.getConversationMessages(
+                        conversationId));
+    }
 
-  @PatchMapping("/messages/{messageId}/read")
-  public ResponseEntity<String> markMessageAsRead(
-      @PathVariable Long messageId) {
+    @PatchMapping("/messages/{messageId}/read")
+    public ResponseEntity<String> markMessageAsRead(
+            @PathVariable Long messageId) {
 
-    messagingService.markMessageAsRead(messageId);
+        messagingService.markMessageAsRead(messageId);
 
-    return ResponseEntity.ok(
-        "Message marked as read");
-  }
+        return ResponseEntity.ok(
+                "Message marked as read");
+    }
 
-  @GetMapping("/messages/unread/{receiverId}")
-  public ResponseEntity<List<MessageResponse>> getUnreadMessages(
-      @PathVariable Long receiverId) {
+    @GetMapping("/messages/unread/{receiverId}")
+    public ResponseEntity<List<MessageResponse>> getUnreadMessages(
+            @PathVariable Long receiverId) {
 
-    return ResponseEntity.ok(
-        messagingService.getUnreadMessages(receiverId));
-  }
+        return ResponseEntity.ok(
+                messagingService.getUnreadMessages(receiverId));
+    }
 
-  @GetMapping("/messages/unread/{receiverId}/count")
-  public ResponseEntity<Long> getUnreadMessageCount(
-      @PathVariable Long receiverId) {
+    @GetMapping("/messages/unread/{receiverId}/count")
+    public ResponseEntity<Long> getUnreadMessageCount(
+            @PathVariable Long receiverId) {
 
-    return ResponseEntity.ok(
-        messagingService.getUnreadMessageCount(receiverId));
-  }
+        return ResponseEntity.ok(
+                messagingService.getUnreadMessageCount(receiverId));
+    }
 
-  @DeleteMapping("/messages/{messageId}")
-  public ResponseEntity<String> deleteMessage(
-      @PathVariable Long messageId) {
+    @DeleteMapping("/messages/{messageId}")
+    public ResponseEntity<String> deleteMessage(
+            @PathVariable Long messageId) {
 
-    messagingService.deleteMessage(messageId);
+        messagingService.deleteMessage(messageId);
 
-    return ResponseEntity.ok(
-        "Message deleted successfully");
-  }
+        return ResponseEntity.ok(
+                "Message deleted successfully");
+    }
 }

@@ -2,20 +2,23 @@ package com.realestate.modules.notification.service;
 
 import com.realestate.modules.notification.dto.request.CreateNotificationRequest;
 import com.realestate.modules.notification.dto.response.NotificationResponse;
+import com.realestate.modules.user.entity.User;
 
 import java.util.List;
 
 public interface NotificationService {
 
-  NotificationResponse createNotification(CreateNotificationRequest request);
+  NotificationResponse createNotification(
+      User recipient,
+      CreateNotificationRequest request);
 
   NotificationResponse getNotificationById(Long notificationId);
 
-  List<NotificationResponse> getUserNotifications(Long recipientId);
+  List<NotificationResponse> getMyNotifications();
 
-  List<NotificationResponse> getUnreadNotifications(Long recipientId);
+  List<NotificationResponse> getMyUnreadNotifications();
 
-  long getUnreadNotificationCount(Long recipientId);
+  long getMyUnreadNotificationCount();
 
   void markAsRead(Long notificationId);
 

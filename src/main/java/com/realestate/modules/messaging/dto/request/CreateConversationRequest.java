@@ -10,9 +10,6 @@ import lombok.*;
 @Builder
 public class CreateConversationRequest {
 
-  @NotNull(message = "Buyer ID is required")
-  private Long buyerId;
-
   @NotNull(message = "Seller ID is required")
   private Long sellerId;
 

@@ -1,6 +1,7 @@
 package com.realestate.modules.property.service.impl;
 
 import com.realestate.common.exception.ResourceNotFoundException;
+import com.realestate.security.AuthenticatedUserService;
 import com.realestate.modules.location.entity.Location;
 import com.realestate.modules.location.repository.LocationRepository;
 import com.realestate.modules.property.dto.request.CreatePropertyRequest;
@@ -14,6 +15,7 @@ import com.realestate.modules.user.entity.User;
 import com.realestate.modules.user.enums.RoleType;
 import com.realestate.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,32 +29,46 @@ public class PropertyServiceImpl implements PropertyService {
   private final UserRepository userRepository;
   private final LocationRepository locationRepository;
   private final PropertyMapper propertyMapper;
+  private final AuthenticatedUserService authenticatedUserService;
+
+  // ============================================================
+  // CREATE PROPERTY
+  // ============================================================
 
   @Override
   @Transactional
   public PropertyResponse createProperty(CreatePropertyRequest request) {
 
-    User seller = userRepository.findById(request.getSellerId())
-        .orElseThrow(() -> new ResourceNotFoundException(
-            "Seller not found with id: " + request.getSellerId()));
+    // Get currently logged-in user from JWT
+    User seller = authenticatedUserService.getCurrentUser();
 
+    // Only SELLER can create properties
     if (seller.getRole().getName() != RoleType.SELLER) {
-      throw new IllegalArgumentException(
-          "User with id " + request.getSellerId()
-              + " is not a SELLER");
+      throw new AccessDeniedException(
+          "Only SELLER users can create properties");
     }
 
+    // Find location
     Location location = locationRepository.findById(request.getLocationId())
         .orElseThrow(() -> new ResourceNotFoundException(
             "Location not found with id: "
                 + request.getLocationId()));
 
-    Property property = propertyMapper.toEntity(request, seller, location);
+    // Create property
+    Property property = propertyMapper.toEntity(
+        request,
+        seller,
+        location);
 
+    // Save property
     Property savedProperty = propertyRepository.save(property);
 
     return propertyMapper.toResponse(savedProperty);
   }
+
+  // ============================================================
+  // GET PROPERTY BY ID
+  // ============================================================
 
   @Override
   @Transactional(readOnly = true)
@@ -65,6 +81,10 @@ public class PropertyServiceImpl implements PropertyService {
     return propertyMapper.toResponse(property);
   }
 
+  // ============================================================
+  // GET ALL PROPERTIES
+  // ============================================================
+
   @Override
   @Transactional(readOnly = true)
   public List<PropertyResponse> getAllProperties() {
@@ -75,6 +95,10 @@ public class PropertyServiceImpl implements PropertyService {
         .toList();
   }
 
+  // ============================================================
+  // GET PROPERTIES BY SELLER
+  // ============================================================
+
   @Override
   @Transactional(readOnly = true)
   public List<PropertyResponse> getPropertiesBySeller(Long sellerId) {
@@ -84,7 +108,7 @@ public class PropertyServiceImpl implements PropertyService {
         .orElseThrow(() -> new ResourceNotFoundException(
             "Seller not found with id: " + sellerId));
 
-    // Check whether the user is actually a seller
+    // Check whether the user is actually a SELLER
     if (seller.getRole().getName() != RoleType.SELLER) {
       throw new IllegalArgumentException(
           "User with id " + sellerId + " is not a SELLER");
@@ -96,56 +120,77 @@ public class PropertyServiceImpl implements PropertyService {
         .toList();
   }
 
+  // ============================================================
+  // UPDATE PROPERTY
+  // ============================================================
+
   @Override
   @Transactional
   public PropertyResponse updateProperty(
       Long id,
       UpdatePropertyRequest request) {
 
+    // Find property
     Property property = propertyRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException(
             "Property not found with id: " + id));
 
+    // Check whether the logged-in user owns this property
+    validatePropertyOwnership(property);
+
+    // Update title
     if (request.getTitle() != null) {
       property.setTitle(request.getTitle());
     }
 
+    // Update description
     if (request.getDescription() != null) {
       property.setDescription(request.getDescription());
     }
 
+    // Update price
     if (request.getPrice() != null) {
       property.setPrice(request.getPrice());
     }
 
+    // Update bedrooms
     if (request.getBedrooms() != null) {
       property.setBedrooms(request.getBedrooms());
     }
 
+    // Update bathrooms
     if (request.getBathrooms() != null) {
       property.setBathrooms(request.getBathrooms());
     }
 
+    // Update area
     if (request.getArea() != null) {
       property.setArea(request.getArea());
     }
 
+    // Update property type
     if (request.getPropertyType() != null) {
       property.setPropertyType(request.getPropertyType());
     }
 
+    // Update listing type
     if (request.getListingType() != null) {
       property.setListingType(request.getListingType());
     }
 
+    // Update furnishing status
     if (request.getFurnishingStatus() != null) {
-      property.setFurnishingStatus(request.getFurnishingStatus());
+      property.setFurnishingStatus(
+          request.getFurnishingStatus());
     }
 
+    // Update ownership type
     if (request.getOwnershipType() != null) {
-      property.setOwnershipType(request.getOwnershipType());
+      property.setOwnershipType(
+          request.getOwnershipType());
     }
 
+    // Update location
     if (request.getLocationId() != null) {
 
       Location location = locationRepository
@@ -157,19 +202,55 @@ public class PropertyServiceImpl implements PropertyService {
       property.setLocation(location);
     }
 
+    // Save updated property
     Property updatedProperty = propertyRepository.save(property);
 
     return propertyMapper.toResponse(updatedProperty);
   }
 
+  // ============================================================
+  // DELETE PROPERTY
+  // ============================================================
+
   @Override
   @Transactional
   public void deleteProperty(Long id) {
 
+    // Find property
     Property property = propertyRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException(
             "Property not found with id: " + id));
 
+    // Check whether the logged-in user owns this property
+    validatePropertyOwnership(property);
+
+    // Delete property
     propertyRepository.delete(property);
+  }
+
+  // ============================================================
+  // PROPERTY OWNERSHIP VALIDATION
+  // ============================================================
+
+  private void validatePropertyOwnership(Property property) {
+
+    // Get currently logged-in user from JWT
+    User currentUser = authenticatedUserService.getCurrentUser();
+
+    // Only SELLER can modify properties
+    if (currentUser.getRole().getName() != RoleType.SELLER) {
+      throw new AccessDeniedException(
+          "Only SELLER users can modify properties");
+    }
+
+    // Check whether this property belongs to the
+    // currently logged-in seller
+    if (!property.getSeller()
+        .getId()
+        .equals(currentUser.getId())) {
+
+      throw new AccessDeniedException(
+          "You are not authorized to modify this property");
+    }
   }
 }

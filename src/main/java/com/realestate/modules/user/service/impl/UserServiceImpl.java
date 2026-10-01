@@ -1,8 +1,7 @@
 package com.realestate.modules.user.service.impl;
 
 import com.realestate.common.exception.ResourceNotFoundException;
-
-import org.springframework.security.crypto.password.PasswordEncoder;
+import com.realestate.modules.user.dto.request.ChangePasswordRequest;
 import com.realestate.modules.user.dto.request.ChangeUserStatusRequest;
 import com.realestate.modules.user.dto.request.CreateUserRequest;
 import com.realestate.modules.user.dto.request.UpdateUserRequest;
@@ -13,10 +12,14 @@ import com.realestate.modules.user.enums.RoleType;
 import com.realestate.modules.user.mapper.UserMapper;
 import com.realestate.modules.user.repository.RoleRepository;
 import com.realestate.modules.user.repository.UserRepository;
+import com.realestate.modules.user.service.UserProfileStorageService;
 import com.realestate.modules.user.service.UserService;
+import com.realestate.security.AuthenticatedUserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -24,164 +27,326 @@ import java.util.List;
 @RequiredArgsConstructor
 public class UserServiceImpl implements UserService {
 
-  private final UserRepository userRepository;
-  private final RoleRepository roleRepository;
-  private final UserMapper userMapper;
-  private final PasswordEncoder passwordEncoder;
+    private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
+    private final UserMapper userMapper;
+    private final PasswordEncoder passwordEncoder;
 
-  // =========================
-  // CREATE USER
-  // =========================
+    private final AuthenticatedUserService authenticatedUserService;
 
-  @Override
-  public UserResponse createUser(CreateUserRequest request) {
+    private final UserProfileStorageService userProfileStorageService;
 
-      if (userRepository.existsByUsername(request.getUsername())) {
-          throw new RuntimeException("Username already exists");
-      }
+    // =========================
+    // CREATE USER
+    // =========================
 
-      if (userRepository.existsByEmail(request.getEmail())) {
-          throw new RuntimeException("Email already exists");
-      }
+    @Override
+    public UserResponse createUser(
+            CreateUserRequest request) {
 
-      RoleType roleType = request.getRole();
+        if (userRepository.existsByUsername(
+                request.getUsername())) {
 
-      Role role = roleRepository.findByName(roleType)
-              .orElseThrow(() ->
-                      new RuntimeException(
-                              "Role not found: " + roleType
-                      )
-              );
+            throw new RuntimeException(
+                    "Username already exists");
+        }
 
-      User user = userMapper.toEntity(request, role);
+        if (userRepository.existsByEmail(
+                request.getEmail())) {
 
-      // Encode password before storing it
-      user.setPassword(
-              passwordEncoder.encode(request.getPassword())
-      );
+            throw new RuntimeException(
+                    "Email already exists");
+        }
 
-      User savedUser = userRepository.save(user);
+        RoleType roleType = request.getRole();
 
-      return userMapper.toResponse(savedUser);
-  }
+        Role role = roleRepository
+                .findByName(roleType)
+                .orElseThrow(() -> new RuntimeException(
+                        "Role not found: "
+                                + roleType));
 
-  // =========================
-  // GET USER BY ID
-  // =========================
+        User user = userMapper.toEntity(request, role);
 
-  @Override
-  @Transactional(readOnly = true)
-  public UserResponse getUserById(Long id) {
+        user.setPassword(
+                passwordEncoder.encode(
+                        request.getPassword()));
 
-    User user = userRepository.findById(id)
-        .orElseThrow(() -> new ResourceNotFoundException(
-            "User not found with id: " + id));
+        User savedUser = userRepository.save(user);
 
-    return userMapper.toResponse(user);
-  }
-
-  // =========================
-  // GET ALL USERS
-  // =========================
-
-  @Override
-  @Transactional(readOnly = true)
-  public List<UserResponse> getAllUsers() {
-
-    return userRepository.findAll()
-        .stream()
-        .map(userMapper::toResponse)
-        .toList();
-  }
-
-  // =========================
-  // UPDATE USER
-  // =========================
-
-  @Override
-  @Transactional
-  public UserResponse updateUser(
-      Long id,
-      UpdateUserRequest request) {
-
-    User user = userRepository.findById(id)
-        .orElseThrow(() -> new ResourceNotFoundException(
-            "User not found with id: " + id));
-
-    // Update email only if a new email is provided
-    if (request.getEmail() != null
-        && !request.getEmail().equals(user.getEmail())) {
-
-      if (userRepository.existsByEmail(request.getEmail())) {
-        throw new RuntimeException("Email already exists");
-      }
-
-      user.setEmail(request.getEmail());
+        return userMapper.toResponse(savedUser);
     }
 
-    if (request.getFirstName() != null) {
-      user.setFirstName(request.getFirstName());
+    // =========================
+    // GET USER BY ID
+    // =========================
+
+    @Override
+    @Transactional(readOnly = true)
+    public UserResponse getUserById(Long id) {
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found with id: "
+                                + id));
+
+        return userMapper.toResponse(user);
     }
 
-    if (request.getLastName() != null) {
-      user.setLastName(request.getLastName());
+    // =========================
+    // GET ALL USERS
+    // =========================
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<UserResponse> getAllUsers() {
+
+        return userRepository.findAll()
+                .stream()
+                .map(userMapper::toResponse)
+                .toList();
     }
 
-    if (request.getPhone() != null) {
-      user.setPhone(request.getPhone());
+    // =========================
+    // UPDATE USER
+    // =========================
+
+    @Override
+    @Transactional
+    public UserResponse updateUser(
+            Long id,
+            UpdateUserRequest request) {
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found with id: "
+                                + id));
+
+        if (request.getEmail() != null
+                && !request.getEmail()
+                        .equals(user.getEmail())) {
+
+            if (userRepository.existsByEmail(
+                    request.getEmail())) {
+
+                throw new RuntimeException(
+                        "Email already exists");
+            }
+
+            user.setEmail(request.getEmail());
+        }
+
+        if (request.getFirstName() != null) {
+
+            user.setFirstName(
+                    request.getFirstName());
+        }
+
+        if (request.getLastName() != null) {
+
+            user.setLastName(
+                    request.getLastName());
+        }
+
+        if (request.getPhone() != null) {
+
+            user.setPhone(
+                    request.getPhone());
+        }
+
+        if (request.getAccountType() != null) {
+
+            user.setAccountType(
+                    request.getAccountType());
+        }
+
+        if (request.getRole() != null) {
+
+            Role role = roleRepository
+                    .findByName(
+                            request.getRole())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Role not found: "
+                                    + request.getRole()));
+
+            user.setRole(role);
+        }
+
+        User updatedUser = userRepository.save(user);
+
+        return userMapper.toResponse(
+                updatedUser);
     }
 
-    if (request.getAccountType() != null) {
-      user.setAccountType(request.getAccountType());
+    // =========================
+    // CHANGE USER STATUS
+    // =========================
+
+    @Override
+    @Transactional
+    public UserResponse changeUserStatus(
+            Long id,
+            ChangeUserStatusRequest request) {
+
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found with id: "
+                                + id));
+
+        user.setStatus(
+                request.getStatus());
+
+        User updatedUser = userRepository.save(user);
+
+        return userMapper.toResponse(
+                updatedUser);
     }
 
-    if (request.getRole() != null) {
+    // =========================
+    // DELETE USER
+    // =========================
 
-      Role role = roleRepository.findByName(request.getRole())
-          .orElseThrow(() -> new ResourceNotFoundException(
-              "Role not found: " + request.getRole()));
+    @Override
+    @Transactional
+    public void deleteUser(Long id) {
 
-      user.setRole(role);
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found with id: "
+                                + id));
+
+        if (user.getProfilePhotoPath() != null) {
+
+            userProfileStorageService
+                    .deleteProfilePhoto(
+                            user.getProfilePhotoPath());
+        }
+
+        userRepository.delete(user);
     }
 
-    User updatedUser = userRepository.save(user);
+    // =========================
+    // UPLOAD PROFILE PHOTO
+    // =========================
 
-    return userMapper.toResponse(updatedUser);
-  }
+    @Override
+    @Transactional
+    public UserResponse uploadProfilePhoto(
+            MultipartFile file) {
 
-  // =========================
-  // CHANGE USER STATUS
-  // =========================
+        User currentUser = authenticatedUserService
+                .getCurrentUser();
 
-  @Override
-  @Transactional
-  public UserResponse changeUserStatus(
-      Long id,
-      ChangeUserStatusRequest request) {
+        // Delete old photo first
+        if (currentUser.getProfilePhotoPath() != null) {
 
-    User user = userRepository.findById(id)
-        .orElseThrow(() -> new ResourceNotFoundException(
-            "User not found with id: " + id));
+            userProfileStorageService
+                    .deleteProfilePhoto(
+                            currentUser
+                                    .getProfilePhotoPath());
+        }
 
-    user.setStatus(request.getStatus());
+        String filePath = userProfileStorageService
+                .storeProfilePhoto(
+                        currentUser.getId(),
+                        file);
 
-    User updatedUser = userRepository.save(user);
+        currentUser.setProfilePhotoPath(
+                filePath);
 
-    return userMapper.toResponse(updatedUser);
-  }
+        User savedUser = userRepository.save(currentUser);
 
-  // =========================
-  // DELETE USER
-  // =========================
+        return userMapper.toResponse(
+                savedUser);
+    }
 
-  @Override
-  @Transactional
-  public void deleteUser(Long id) {
+    // =========================
+    // DELETE PROFILE PHOTO
+    // =========================
 
-    User user = userRepository.findById(id)
-        .orElseThrow(() -> new ResourceNotFoundException(
-            "User not found with id: " + id));
+    @Override
+    @Transactional
+    public void deleteProfilePhoto() {
 
-    userRepository.delete(user);
-  }
+        User currentUser = authenticatedUserService
+                .getCurrentUser();
+
+        if (currentUser.getProfilePhotoPath() != null) {
+
+            userProfileStorageService
+                    .deleteProfilePhoto(
+                            currentUser
+                                    .getProfilePhotoPath());
+
+            currentUser.setProfilePhotoPath(
+                    null);
+
+            userRepository.save(currentUser);
+        }
+    }
+
+    // =========================
+    // GET PROFILE PHOTO
+    // =========================
+
+    @Override
+    @Transactional(readOnly = true)
+    public byte[] getProfilePhoto(Long userId) {
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException(
+                        "User not found with id: "
+                                + userId));
+
+        if (user.getProfilePhotoPath() == null) {
+
+            throw new ResourceNotFoundException(
+                    "Profile photo not found");
+        }
+
+        return userProfileStorageService
+                .loadProfilePhoto(
+                        user.getProfilePhotoPath());
+    }
+
+    // =========================
+    // CHANGE PASSWORD
+    // =========================
+
+    @Override
+    @Transactional
+    public void changePassword(
+            ChangePasswordRequest request) {
+
+        User currentUser = authenticatedUserService
+                .getCurrentUser();
+
+        // Check current password
+        if (!passwordEncoder.matches(
+                request.getCurrentPassword(),
+                currentUser.getPassword())) {
+
+            throw new RuntimeException(
+                    "Current password is incorrect");
+        }
+
+        // Check if new password is same
+        // as current password
+        if (passwordEncoder.matches(
+                request.getNewPassword(),
+                currentUser.getPassword())) {
+
+            throw new RuntimeException(
+                    "New password must be different from current password");
+        }
+
+        // Encode new password
+        String encodedPassword = passwordEncoder.encode(
+                request.getNewPassword());
+
+        currentUser.setPassword(
+                encodedPassword);
+
+        userRepository.save(currentUser);
+    }
 }

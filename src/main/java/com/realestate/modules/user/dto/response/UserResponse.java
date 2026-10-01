@@ -19,7 +19,7 @@ public class UserResponse {
   private String firstName;
 
   private String lastName;
-  
+
   private String username;
 
   private String email;
@@ -31,6 +31,8 @@ public class UserResponse {
   private UserStatus status;
 
   private AccountType accountType;
+
+  private String profilePhotoUrl;
 
   private LocalDateTime createdAt;
 

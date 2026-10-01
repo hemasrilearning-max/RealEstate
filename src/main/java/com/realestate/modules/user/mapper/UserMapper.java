@@ -25,6 +25,12 @@ public class UserMapper {
 
   public UserResponse toResponse(User user) {
 
+    String profilePhotoUrl = null;
+
+    if (user.getProfilePhotoPath() != null) {
+      profilePhotoUrl = "/api/users/" + user.getId() + "/profile-photo";
+    }
+
     return UserResponse.builder()
         .id(user.getId())
         .firstName(user.getFirstName())
@@ -35,6 +41,7 @@ public class UserMapper {
         .role(user.getRole().getName())
         .status(user.getStatus())
         .accountType(user.getAccountType())
+        .profilePhotoUrl(profilePhotoUrl)
         .createdAt(user.getCreatedAt())
         .updatedAt(user.getUpdatedAt())
         .build();
