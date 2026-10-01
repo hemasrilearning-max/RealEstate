@@ -46,6 +46,10 @@ public class User {
   @Column(nullable = false, length = 30)
   @Builder.Default
   private UserStatus status = UserStatus.ACTIVE;
+  
+  @Column(nullable = false)
+  @Builder.Default
+  private boolean emailVerified = false;
 
   @Enumerated(EnumType.STRING)
   @Column(length = 30)
