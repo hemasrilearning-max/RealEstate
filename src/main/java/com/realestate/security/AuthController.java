@@ -7,12 +7,51 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import com.realestate.otp.OtpRequest;
+import com.realestate.otp.OtpService;
+import com.realestate.otp.OtpVerificationRequest;
+import com.realestate.otp.OtpPurpose;
+
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
+    private final OtpService otpService;
+
+
+    // ============================================================
+    // CHECK EMAIL
+    // ============================================================
+
+    @PostMapping("/check-email")
+    public ResponseEntity<String> checkEmail(
+            @Valid @RequestBody EmailCheckRequest request) {
+
+        return ResponseEntity.ok(
+                authService.checkEmail(request)
+        );
+    }
+
+
+    // ============================================================
+    // REGISTER
+    // ============================================================
+
+    @PostMapping("/register")
+    public ResponseEntity<String> register(
+            @Valid @RequestBody RegisterRequest request) {
+
+        return ResponseEntity.ok(
+                authService.register(request)
+        );
+    }
+
+
+    // ============================================================
+    // LOGIN
+    // ============================================================
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(
@@ -23,23 +62,51 @@ public class AuthController {
         );
     }
 
-    @PostMapping("/register")
-    public ResponseEntity<String> register(
-            @Valid @RequestBody RegisterRequest request) {
+
+    // ============================================================
+    // GENERATE OTP
+    // ============================================================
+
+    @PostMapping("/generate-otp")
+    public ResponseEntity<String> generateOtp(
+            @Valid @RequestBody OtpRequest request) {
+
+        otpService.generateAndSendOtp(
+                request.getEmail(),
+                request.getRecipientName(),
+                request.getPurpose()
+        );
 
         return ResponseEntity.ok(
-                authService.register(request)
+                "OTP has been sent to " + request.getEmail()
         );
     }
-    
-    @PostMapping("/verify-email")
-    public ResponseEntity<String> verifyEmail(
-            @Valid @RequestBody VerifyEmailRequest request) {
 
-        return ResponseEntity.ok(authService.verifyEmail(request));
+
+    // ============================================================
+    // VERIFY OTP
+    // ============================================================
+
+    @PostMapping("/verify-otp")
+    public ResponseEntity<String> verifyOtp(
+            @Valid @RequestBody OtpVerificationRequest request) {
+
+        otpService.verifyOtp(
+                request.getEmail(),
+                request.getOtp(),
+                request.getPurpose()
+        );
+
+        return ResponseEntity.ok(
+                "OTP verified successfully."
+        );
     }
-    
-    
+
+
+    // ============================================================
+    // FORGOT PASSWORD
+    // ============================================================
+
     @PostMapping("/forgot-password")
     public ResponseEntity<String> forgotPassword(
             @Valid @RequestBody ForgotPasswordRequest request) {
@@ -48,16 +115,12 @@ public class AuthController {
                 authService.forgotPassword(request)
         );
     }
-    
-    @PostMapping("/verify-reset-otp")
-    public ResponseEntity<String> verifyPasswordResetOtp(
-            @Valid @RequestBody VerifyPasswordResetOtpRequest request) {
 
-        return ResponseEntity.ok(
-                authService.verifyPasswordResetOtp(request)
-        );
-    }
-    
+
+    // ============================================================
+    // RESET PASSWORD
+    // ============================================================
+
     @PostMapping("/reset-password")
     public ResponseEntity<String> resetPassword(
             @Valid @RequestBody ResetPasswordRequest request) {
@@ -66,7 +129,12 @@ public class AuthController {
                 authService.resetPassword(request)
         );
     }
-    
+
+
+    // ============================================================
+    // HEALTH CHECK
+    // ============================================================
+
     @GetMapping("/health")
     public ResponseEntity<String> health() {
 

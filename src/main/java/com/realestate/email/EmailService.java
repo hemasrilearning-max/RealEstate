@@ -7,7 +7,7 @@ public interface EmailService {
             String recipientName,
             String otp
     );
-    
+
     void sendPasswordResetOtp(
             String recipientEmail,
             String recipientName,

@@ -1,42 +1,68 @@
 package com.realestate.security;
 
-import com.realestate.modules.user.entity.User;
-import com.realestate.common.exception.RegistrationException;
-import com.realestate.email.EmailService;
-import com.realestate.email.EmailVerificationOtp;
-import com.realestate.email.EmailVerificationOtpRepository;
-import com.realestate.email.PasswordResetOtp;
-import com.realestate.email.PasswordResetOtpRepository;
-import com.realestate.modules.user.entity.Role;
-import com.realestate.modules.user.enums.RoleType;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import java.security.SecureRandom;
 import java.time.LocalDateTime;
-
-import com.realestate.modules.user.repository.RoleRepository;
-import com.realestate.modules.user.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import com.realestate.common.exception.RegistrationException;
+import com.realestate.modules.user.entity.Role;
+import com.realestate.modules.user.entity.User;
+import com.realestate.modules.user.enums.RoleType;
+import com.realestate.modules.user.repository.RoleRepository;
+import com.realestate.modules.user.repository.UserRepository;
+import com.realestate.otp.OtpPurpose;
+import com.realestate.otp.OtpService;
+import com.realestate.otp.OtpVerification;
+import com.realestate.otp.OtpVerificationRepository;
 
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
     private final AuthenticationManager authenticationManager;
+
     private final CustomUserDetailsService userDetailsService;
+
     private final UserRepository userRepository;
+
     private final JwtService jwtService;
-    private final PasswordResetOtpRepository passwordResetOtpRepository;
+
     private final RoleRepository roleRepository;
-    private final EmailService emailService;
-    private final EmailVerificationOtpRepository emailVerificationOtpRepository;
+
     private final PasswordEncoder passwordEncoder;
-    
+
+    private final OtpService otpService;
+
+    private final OtpVerificationRepository otpVerificationRepository;
+
+
+    // ============================================================
+    // CHECK EMAIL
+    // ============================================================
+
+    public String checkEmail(EmailCheckRequest request) {
+
+        if (userRepository.existsByEmail(request.getEmail())) {
+
+            throw new RegistrationException(
+                    "Email is already registered. Please use a different email."
+            );
+        }
+
+        return "Email is available.";
+    }
+
+
+    // ============================================================
+    // LOGIN
+    // ============================================================
+
     public LoginResponse login(LoginRequest request) {
 
         authenticationManager.authenticate(
@@ -48,8 +74,14 @@ public class AuthService {
 
         User user = userRepository
                 .findByUsername(request.getUsername())
-                .orElseThrow(() ->
-                        new RuntimeException("User not found")
+                .orElseGet(() ->
+                        userRepository
+                                .findByEmail(request.getUsername())
+                                .orElseThrow(() ->
+                                        new RegistrationException(
+                                                "User not found."
+                                        )
+                                )
                 );
 
         UserDetails userDetails =
@@ -71,31 +103,96 @@ public class AuthService {
                 .role(user.getRole().getName())
                 .build();
     }
-    
+
+
+    // ============================================================
+    // FINAL REGISTRATION
+    // ============================================================
+
     public String register(RegisterRequest request) {
 
-        // 1. Check whether email is already registered
-    	if (userRepository.existsByEmail(request.getEmail())) {
-    	    throw new RegistrationException(
-    	            "Email is already registered. Please try another email."
-    	    );
-    	}
+        // --------------------------------------------------------
+        // 1. Check whether email already exists
+        // --------------------------------------------------------
 
-        // 2. Determine username
+        if (userRepository.existsByEmail(request.getEmail())) {
+
+            throw new RegistrationException(
+                    "Email is already registered. Please use a different email."
+            );
+        }
+
+
+        // --------------------------------------------------------
+        // 2. Find latest registration OTP
+        // --------------------------------------------------------
+
+        OtpVerification registrationOtp =
+                otpVerificationRepository
+                        .findTopByEmailAndPurposeOrderByCreatedAtDesc(
+                                request.getEmail(),
+                                OtpPurpose.REGISTRATION
+                        )
+                        .orElseThrow(() ->
+                                new RegistrationException(
+                                        "Registration OTP not found. Please verify your email first."
+                                )
+                        );
+
+
+        // --------------------------------------------------------
+        // 3. Check whether registration OTP was verified
+        // --------------------------------------------------------
+
+        if (!registrationOtp.isVerified()) {
+
+            throw new RegistrationException(
+                    "Please verify the registration OTP before completing registration."
+            );
+        }
+
+
+        // --------------------------------------------------------
+        // 4. Check OTP expiry
+        // --------------------------------------------------------
+
+        if (registrationOtp.getExpiryTime()
+                .isBefore(LocalDateTime.now())) {
+
+            throw new RegistrationException(
+                    "Registration OTP has expired. Please request a new OTP."
+            );
+        }
+
+
+        // --------------------------------------------------------
+        // 5. Determine username
+        // --------------------------------------------------------
+
         String username = request.getUsername();
 
         if (username == null || username.trim().isEmpty()) {
+
             username = request.getEmail();
         }
 
-        // 3. Check whether username is already taken
+
+        // --------------------------------------------------------
+        // 6. Check username uniqueness
+        // --------------------------------------------------------
+
         if (userRepository.existsByUsername(username)) {
+
             throw new RegistrationException(
                     "Username is already taken. Please choose another username."
             );
         }
 
-        // 4. Allow only BUYER or SELLER registration
+
+        // --------------------------------------------------------
+        // 7. Allow only BUYER or SELLER
+        // --------------------------------------------------------
+
         if (request.getRole() != RoleType.BUYER
                 && request.getRole() != RoleType.SELLER) {
 
@@ -104,7 +201,11 @@ public class AuthService {
             );
         }
 
-        // 5. Find the selected role
+
+        // --------------------------------------------------------
+        // 8. Find selected role
+        // --------------------------------------------------------
+
         Role role = roleRepository
                 .findByName(request.getRole())
                 .orElseThrow(() ->
@@ -112,204 +213,121 @@ public class AuthService {
                                 "Selected role is not available."
                         )
                 );
-        
-        
-        // 6. Create user
+
+
+        // --------------------------------------------------------
+        // 9. Create User
+        // --------------------------------------------------------
+
         User user = User.builder()
                 .firstName(request.getFirstName())
                 .lastName(request.getLastName())
                 .username(username)
                 .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
+                .password(
+                        passwordEncoder.encode(
+                                request.getPassword()
+                        )
+                )
                 .phone(request.getPhone())
+                .address(request.getAddress())
+                .profilePhotoPath(request.getProfilePhotoPath())
                 .accountType(request.getAccountType())
                 .role(role)
-                .emailVerified(false)
+                .emailVerified(true)
                 .build();
 
-        // 7. Save user
-        User savedUser = userRepository.save(user);
 
-        // 8. Generate 6-digit OTP
-        SecureRandom secureRandom = new SecureRandom();
+        // --------------------------------------------------------
+        // 10. Save User
+        // --------------------------------------------------------
 
-        String otp = String.format(
-                "%06d",
-                secureRandom.nextInt(1_000_000)
-        );
-
-        // 9. Create OTP record
-        EmailVerificationOtp verificationOtp =
-                EmailVerificationOtp.builder()
-                        .user(savedUser)
-                        .otp(otp)
-                        .expiresAt(LocalDateTime.now().plusMinutes(10))
-                        .verified(false)
-                        .build();
-
-        emailVerificationOtpRepository.save(verificationOtp);
-
-        // 10. Send verification email
-        emailService.sendVerificationOtp(
-                savedUser.getEmail(),
-                savedUser.getFirstName(),
-                otp
-        );
-
-        return "Registration successful. Please check your email for the verification OTP.";
-    }
-    
-    public String verifyEmail(VerifyEmailRequest request) {
-
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() ->
-                        new RegistrationException("User not found with this email.")
-                );
-
-        EmailVerificationOtp verificationOtp =
-                emailVerificationOtpRepository
-                        .findTopByUserOrderByCreatedAtDesc(user)
-                        .orElseThrow(() ->
-                                new RegistrationException(
-                                        "Verification OTP not found."
-                                )
-                        );
-
-        if (verificationOtp.isVerified()) {
-            throw new RegistrationException(
-                    "Email is already verified."
-            );
-        }
-
-        if (verificationOtp.getExpiresAt().isBefore(LocalDateTime.now())) {
-            throw new RegistrationException(
-                    "Verification OTP has expired. Please request a new OTP."
-            );
-        }
-
-        if (!verificationOtp.getOtp().equals(request.getOtp())) {
-            throw new RegistrationException(
-                    "Invalid verification OTP."
-            );
-        }
-
-        verificationOtp.setVerified(true);
-        emailVerificationOtpRepository.save(verificationOtp);
-
-        user.setEmailVerified(true);
         userRepository.save(user);
 
-        return "Email verified successfully. You can now login.";
-    }
-    
-    public String forgotPassword(ForgotPasswordRequest request) {
 
-        User user = userRepository.findByEmail(request.getEmail())
+        return "Registration successful. You can now login.";
+    }
+
+
+    // ============================================================
+    // FORGOT PASSWORD
+    // ============================================================
+
+    public String forgotPassword(
+            ForgotPasswordRequest request) {
+
+        User user = userRepository
+                .findByEmail(request.getEmail())
                 .orElseThrow(() ->
                         new RegistrationException(
                                 "No account found with this email."
                         )
                 );
 
-        SecureRandom secureRandom = new SecureRandom();
 
-        String otp = String.format(
-                "%06d",
-                secureRandom.nextInt(1_000_000)
-        );
+        // Generate PASSWORD_RESET OTP
 
-        PasswordResetOtp passwordResetOtp =
-                PasswordResetOtp.builder()
-                        .user(user)
-                        .otp(otp)
-                        .expiresAt(LocalDateTime.now().plusMinutes(10))
-                        .verified(false)
-                        .build();
-
-        passwordResetOtpRepository.save(passwordResetOtp);
-
-        emailService.sendPasswordResetOtp(
+        otpService.generateAndSendOtp(
                 user.getEmail(),
                 user.getFirstName(),
-                otp
+                OtpPurpose.PASSWORD_RESET
         );
+
 
         return "Password reset OTP has been sent to your email.";
     }
-    
-    public String verifyPasswordResetOtp(
-            VerifyPasswordResetOtpRequest request) {
 
-        User user = userRepository.findByEmail(request.getEmail())
+
+    // ============================================================
+    // RESET PASSWORD
+    // ============================================================
+
+    public String resetPassword(
+            ResetPasswordRequest request) {
+
+        User user = userRepository
+                .findByEmail(request.getEmail())
                 .orElseThrow(() ->
                         new RegistrationException(
                                 "No account found with this email."
                         )
                 );
 
-        PasswordResetOtp passwordResetOtp =
-                passwordResetOtpRepository
-                        .findTopByUserOrderByCreatedAtDesc(user)
-                        .orElseThrow(() ->
-                                new RegistrationException(
-                                        "Password reset OTP not found."
-                                )
-                        );
 
-        if (passwordResetOtp.isVerified()) {
-            throw new RegistrationException(
-                    "Password reset OTP has already been verified."
-            );
-        }
+        // --------------------------------------------------------
+        // Find latest PASSWORD_RESET OTP
+        // --------------------------------------------------------
 
-        if (passwordResetOtp.getExpiresAt()
-                .isBefore(LocalDateTime.now())) {
-
-            throw new RegistrationException(
-                    "Password reset OTP has expired. Please request a new OTP."
-            );
-        }
-
-        if (!passwordResetOtp.getOtp()
-                .equals(request.getOtp())) {
-
-            throw new RegistrationException(
-                    "Invalid password reset OTP."
-            );
-        }
-
-        passwordResetOtp.setVerified(true);
-
-        passwordResetOtpRepository.save(passwordResetOtp);
-
-        return "Password reset OTP verified successfully.";
-    }
-    
-    public String resetPassword(ResetPasswordRequest request) {
-
-        User user = userRepository.findByEmail(request.getEmail())
-                .orElseThrow(() ->
-                        new RegistrationException(
-                                "No account found with this email."
+        OtpVerification passwordResetOtp =
+                otpVerificationRepository
+                        .findTopByEmailAndPurposeOrderByCreatedAtDesc(
+                                request.getEmail(),
+                                OtpPurpose.PASSWORD_RESET
                         )
-                );
-
-        PasswordResetOtp passwordResetOtp =
-                passwordResetOtpRepository
-                        .findTopByUserOrderByCreatedAtDesc(user)
                         .orElseThrow(() ->
                                 new RegistrationException(
                                         "Password reset OTP not found."
                                 )
                         );
+
+
+        // --------------------------------------------------------
+        // OTP must be verified
+        // --------------------------------------------------------
 
         if (!passwordResetOtp.isVerified()) {
+
             throw new RegistrationException(
                     "Please verify the password reset OTP first."
             );
         }
 
-        if (passwordResetOtp.getExpiresAt()
+
+        // --------------------------------------------------------
+        // OTP must not be expired
+        // --------------------------------------------------------
+
+        if (passwordResetOtp.getExpiryTime()
                 .isBefore(LocalDateTime.now())) {
 
             throw new RegistrationException(
@@ -317,11 +335,19 @@ public class AuthService {
             );
         }
 
+
+        // --------------------------------------------------------
+        // Update password
+        // --------------------------------------------------------
+
         user.setPassword(
-                passwordEncoder.encode(request.getNewPassword())
+                passwordEncoder.encode(
+                        request.getNewPassword()
+                )
         );
 
         userRepository.save(user);
+
 
         return "Password reset successfully. You can now login with your new password.";
     }

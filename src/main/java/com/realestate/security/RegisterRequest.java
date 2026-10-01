@@ -55,4 +55,10 @@ public class RegisterRequest {
         message = "Invalid phone number format"
     )
     private String phone;
+    
+    @Size(max = 500, message = "Address must not exceed 500 characters")
+    private String address;
+
+    @Size(max = 500, message = "Profile photo path must not exceed 500 characters")
+    private String profilePhotoPath;
 }

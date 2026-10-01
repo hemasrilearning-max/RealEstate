@@ -34,8 +34,9 @@ public class CustomUserDetailsService implements UserDetailsService {
     	                        )
     	        );
 
-        boolean enabled = user.getStatus() == UserStatus.ACTIVE;
-
+    	boolean enabled =
+    	        user.getStatus() == UserStatus.ACTIVE
+    	        && user.isEmailVerified();
         return new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
                 user.getPassword(),
