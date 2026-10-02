@@ -1,4 +1,3 @@
-
 package com.realestate.security;
 
 import lombok.RequiredArgsConstructor;
@@ -12,6 +11,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+
 import org.springframework.security.config.http.SessionCreationPolicy;
 
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -46,36 +46,15 @@ public class SecurityConfig {
             throws Exception {
 
         http
-
-                // =========================
-                // CORS
-                // =========================
-                .cors(cors -> {})
-
-                // =========================
-                // CSRF
-                // =========================
                 .csrf(csrf -> csrf.disable())
 
-                // =========================
-                // SESSION
-                // =========================
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
                                 SessionCreationPolicy.STATELESS
                         )
                 )
 
-                // =========================
-                // AUTHORIZATION
-                // =========================
                 .authorizeHttpRequests(auth -> auth
-
-                        // OPTIONS - CORS Preflight
-                        .requestMatchers(
-                                HttpMethod.OPTIONS,
-                                "/**"
-                        ).permitAll()
 
                         // Authentication APIs
                         .requestMatchers(
@@ -98,16 +77,13 @@ public class SecurityConfig {
                                 "/api/admin/**"
                         ).hasRole("SUPER_ADMIN")
 
-                      //Email Testing
+                        //Email Testing
                         .requestMatchers("/api/test-email/**").permitAll()
                         
                         // Everything else requires login
                         .anyRequest().authenticated()
                 )
 
-                // =========================
-                // JWT FILTER
-                // =========================
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
@@ -116,4 +92,3 @@ public class SecurityConfig {
         return http.build();
     }
 }
-
