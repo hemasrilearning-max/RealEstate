@@ -5,7 +5,7 @@ import {
   useState,
 } from "react";
 
-import authService from "../services/authService";
+import loginService from "../services/loginService";
 
 const AuthContext = createContext(null);
 
@@ -61,8 +61,8 @@ export function AuthProvider({ children }) {
    * Restore login session when the application starts.
    */
   useEffect(() => {
-    const token = authService.getToken();
-    const storedUser = authService.getUser();
+    const token = loginService.getToken();
+    const storedUser = loginService.getUser();
 
     if (token && storedUser) {
       setUser(storedUser);
@@ -76,7 +76,7 @@ export function AuthProvider({ children }) {
    */
   const login = async (username, password) => {
     try {
-      const response = await authService.login(
+      const response = await loginService.login(
         username,
         password
       );
@@ -176,7 +176,7 @@ export function AuthProvider({ children }) {
   const logout = () => {
     setUser(null);
 
-    authService.logout();
+    loginService.logout();
   };
 
   /*
