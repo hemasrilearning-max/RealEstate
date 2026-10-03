@@ -39,14 +39,27 @@ const sendOtp = async (email,name) => {
 
 
 const verifyOtp = async (email, otp) => {
-    alert(email);
-      alert(otp);
+  
     const response = await axiosInstance.post(
         "/api/auth/verify-otp",
         {
             "email":email,
             "otp": otp,
             "purpose": "REGISTRATION"
+        }
+    );
+
+    return response.data;
+};
+
+const passwordVerifyOtp = async (email, otp) => {
+   
+    const response = await axiosInstance.post(
+        "/api/auth/verify-otp",
+        {
+            "email":email,
+            "otp": otp,
+            "purpose": "PASSWORD_RESET"
         }
     );
 
@@ -65,8 +78,6 @@ const checkEmail = async (email) => {
     return response.data;
 };
 
-
-
 // const resetPassword = async(email,otp,newPassword) => {
 
 //     const response = await axiosInstance.post("/api/auth/reset-password", 
@@ -78,6 +89,18 @@ const checkEmail = async (email) => {
 //     );
 
 // };
+
+const resetPassword = async(email,newPassword) => {
+    
+    const response = await axiosInstance.post("/api/auth/reset-password", 
+        {
+           
+            "email" : email,
+            "newPassword": newPassword,
+        }
+    );
+
+};
 
 const forgotPassword = async(email) => {
 
@@ -98,4 +121,6 @@ export default {
     verifyOtp,
     checkEmail,
     forgotPassword,
+    resetPassword,
+    passwordVerifyOtp,
 };

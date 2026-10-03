@@ -180,9 +180,14 @@ export default function Login() {
 
                 <button
                   type="button"
-                  className="text-xs font-semibold text-purple-600 hover:underline"
+                  className="mt-5 text-center text-xs text-gray-600"
                 >
-                  Forgot password?
+                  <Link
+                    to="/forgot-password"
+                    className="text-purple-600 font-semibold hover:underline"
+                  >
+                    Forgot Password?
+                  </Link>
                 </button>
               </div>
 

@@ -19,6 +19,7 @@ import Favorites from "./pages/public/Favorites";
 ============================================================ */
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
+import ForgotPassword from "./pages/auth/ForgotPassword";
 
 /* ============================================================
    BUYER PUBLIC PAGES
@@ -412,6 +413,15 @@ export default function App() {
               element={
                 <PublicLayout>
                   <Register />
+                </PublicLayout>
+              }
+            />
+
+            <Route
+              path="/forgot-password"
+              element={
+                <PublicLayout>
+                  <ForgotPassword />
                 </PublicLayout>
               }
             />
