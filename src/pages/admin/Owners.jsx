@@ -72,7 +72,16 @@ export default function Owners() {
     phone: "",
     properties: 0,
   });
-
+const handleViewOwner = (owner) => {
+  alert(
+    `Owner Details\n\n` +
+    `Name: ${owner.name}\n` +
+    `Email: ${owner.email}\n` +
+    `Phone: ${owner.phone}\n` +
+    `Properties: ${owner.properties}\n` +
+    `Status: ${owner.status}`
+  );
+};
   const toggleStatus = (id) => {
     setOwners((current) =>
       current.map((owner) =>
@@ -470,13 +479,14 @@ export default function Owners() {
 
               <div className="flex gap-2">
 
-                <button
-                  className="p-2 rounded-lg
-                  text-gray-600 hover:bg-gray-100"
-                  title="View Owner"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
+               <button
+  onClick={() => handleViewOwner(owner)}
+  className="p-2 rounded-lg
+  text-gray-600 hover:bg-gray-100"
+  title="View Owner"
+>
+  <Eye className="w-4 h-4" />
+</button>
 
                 <button
                   onClick={() => toggleStatus(owner.id)}
