@@ -4,6 +4,7 @@ import com.realestate.common.exception.ResourceNotFoundException;
 import com.realestate.security.AuthenticatedUserService;
 import com.realestate.modules.location.entity.Location;
 import com.realestate.modules.location.repository.LocationRepository;
+import com.realestate.modules.media.repository.MediaRepository;
 import com.realestate.modules.property.dto.request.CreatePropertyRequest;
 import com.realestate.modules.property.dto.request.UpdatePropertyRequest;
 import com.realestate.modules.property.dto.response.PropertyResponse;
@@ -30,6 +31,9 @@ public class PropertyServiceImpl implements PropertyService {
   private final LocationRepository locationRepository;
   private final PropertyMapper propertyMapper;
   private final AuthenticatedUserService authenticatedUserService;
+
+  // Media repository used when deleting a property
+  private final MediaRepository mediaRepository;
 
   // ============================================================
   // CREATE PROPERTY
@@ -227,7 +231,20 @@ public class PropertyServiceImpl implements PropertyService {
     // Check whether the logged-in user owns this property
     validatePropertyOwnership(property);
 
-    // Delete property
+    // ----------------------------------------------------------
+    // DELETE MEDIA FIRST
+    // ----------------------------------------------------------
+    //
+    // media.property_id references properties.id.
+    // Therefore media records must be removed before
+    // deleting the property.
+    //
+    mediaRepository.deleteByPropertyId(id);
+
+    // ----------------------------------------------------------
+    // DELETE PROPERTY
+    // ----------------------------------------------------------
+
     propertyRepository.delete(property);
   }
 
