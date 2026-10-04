@@ -11,4 +11,6 @@ public interface PropertyRepository
     JpaSpecificationExecutor<Property> {
 
   List<Property> findBySellerId(Long sellerId);
+
+  List<Property> findByCreatedById(Long createdById);
 }

@@ -60,6 +60,9 @@ public class PropertyServiceImpl implements PropertyService {
         seller,
         location);
 
+    // Set the user who actually created the property
+    property.setCreatedBy(seller);
+
     // Save property
     Property savedProperty = propertyRepository.save(property);
 

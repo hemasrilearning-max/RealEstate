@@ -40,4 +40,6 @@ public class PropertyResponse {
 
   private LocalDateTime createdAt;
   private LocalDateTime updatedAt;
+  private Long createdById;
+  private String createdByName;
 }

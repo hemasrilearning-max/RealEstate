@@ -77,6 +77,10 @@ public class Property {
   @JoinColumn(name = "broker_id")
   private User broker;
 
+  @ManyToOne(fetch = FetchType.LAZY)
+  @JoinColumn(name = "created_by")
+  private User createdBy;
+
   @Column(nullable = false, updatable = false)
   @Builder.Default
   private LocalDateTime createdAt = LocalDateTime.now();
