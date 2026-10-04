@@ -1,4 +1,3 @@
-
 package com.realestate.security;
 
 import lombok.RequiredArgsConstructor;
@@ -24,96 +23,124 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+        private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    @Bean
-    public PasswordEncoder passwordEncoder() {
+        @Bean
+        public PasswordEncoder passwordEncoder() {
 
-        return new BCryptPasswordEncoder();
-    }
+                return new BCryptPasswordEncoder();
+        }
 
-    @Bean
-    public AuthenticationManager authenticationManager(
-            AuthenticationConfiguration configuration)
-            throws Exception {
+        @Bean
+        public AuthenticationManager authenticationManager(
+                        AuthenticationConfiguration configuration)
+                        throws Exception {
 
-        return configuration.getAuthenticationManager();
-    }
+                return configuration.getAuthenticationManager();
+        }
 
-    @Bean
-    public SecurityFilterChain securityFilterChain(
-            HttpSecurity http)
-            throws Exception {
+        @Bean
+        public SecurityFilterChain securityFilterChain(
+                        HttpSecurity http)
+                        throws Exception {
 
-        http
+                http
 
-                // =========================
-                // CORS
-                // =========================
-                .cors(cors -> {})
+                                // =========================
+                                // CORS
+                                // =========================
+                                .cors(cors -> {
+                                })
 
-                // =========================
-                // CSRF
-                // =========================
-                .csrf(csrf -> csrf.disable())
+                                // =========================
+                                // CSRF
+                                // =========================
+                                .csrf(csrf -> csrf.disable())
 
-                // =========================
-                // SESSION
-                // =========================
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(
-                                SessionCreationPolicy.STATELESS
-                        )
-                )
+                                // =========================
+                                // SESSION
+                                // =========================
+                                .sessionManagement(session -> session.sessionCreationPolicy(
+                                                SessionCreationPolicy.STATELESS))
 
-                // =========================
-                // AUTHORIZATION
-                // =========================
-                .authorizeHttpRequests(auth -> auth
+                                // =========================
+                                // AUTHORIZATION
+                                // =========================
+                                .authorizeHttpRequests(auth -> auth
 
-                        // OPTIONS - CORS Preflight
-                        .requestMatchers(
-                                HttpMethod.OPTIONS,
-                                "/**"
-                        ).permitAll()
+                                                // =========================
+                                                // CORS PREFLIGHT
+                                                // =========================
+                                                .requestMatchers(
+                                                                HttpMethod.OPTIONS,
+                                                                "/**")
+                                                .permitAll()
 
-                        // Authentication APIs
-                        .requestMatchers(
-                                "/api/auth/**"
-                        ).permitAll()
+                                                // =========================
+                                                // AUTHENTICATION APIs
+                                                // =========================
+                                                .requestMatchers(
+                                                                "/api/auth/**")
+                                                .permitAll()
 
-                        // Public user registration
-                        .requestMatchers(
-                                HttpMethod.POST,
-                                "/api/users"
-                        ).permitAll()
+                                                // =========================
+                                                // PUBLIC USER REGISTRATION
+                                                // =========================
+                                                .requestMatchers(
+                                                                HttpMethod.POST,
+                                                                "/api/users")
+                                                .permitAll()
 
-                        // Actuator
-                        .requestMatchers(
-                                "/actuator/**"
-                        ).permitAll()
+                                                // =========================
+                                                // ACTUATOR
+                                                // =========================
+                                                .requestMatchers(
+                                                                "/actuator/**")
+                                                .permitAll()
 
-                        // Super Admin APIs
-                        .requestMatchers(
-                                "/api/admin/**"
-                        ).hasRole("SUPER_ADMIN")
+                                                // =========================
+                                                // SUPER ADMIN APIs
+                                                // =========================
+                                                .requestMatchers(
+                                                                "/api/admin/**")
+                                                .hasRole("SUPER_ADMIN")
 
-                      //Email Testing
-                        .requestMatchers("/api/test-email/**").permitAll()
-                        
-                        // Everything else requires login
-                        .anyRequest().authenticated()
-                )
+                                                // =========================
+                                                // EMAIL TESTING
+                                                // =========================
+                                                .requestMatchers(
+                                                                "/api/test-email/**")
+                                                .permitAll()
 
-                // =========================
-                // JWT FILTER
-                // =========================
-                .addFilterBefore(
-                        jwtAuthenticationFilter,
-                        UsernamePasswordAuthenticationFilter.class
-                );
+                                                // =========================
+                                                // PUBLIC PROPERTY VIEWING
+                                                // =========================
+                                                .requestMatchers(
+                                                                HttpMethod.GET,
+                                                                "/api/properties/**")
+                                                .permitAll()
 
-        return http.build();
-    }
+                                                // =========================
+                                                // PUBLIC PROPERTY MEDIA VIEWING
+                                                // =========================
+                                                .requestMatchers(
+                                                                HttpMethod.GET,
+                                                                "/api/media/**")
+                                                .permitAll()
+
+                                                // =========================
+                                                // EVERYTHING ELSE
+                                                // REQUIRES LOGIN
+                                                // =========================
+                                                .anyRequest().authenticated())
+
+                                // =========================
+                                // JWT FILTER
+                                // =========================
+                                .addFilterBefore(
+                                                jwtAuthenticationFilter,
+                                                UsernamePasswordAuthenticationFilter.class);
+
+                return http.build();
+        }
 }
-
