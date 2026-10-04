@@ -18,6 +18,9 @@ import {
   Pencil,
   X,
   Save,
+  LockKeyhole,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 const MAX_SIZE_MB = 2;
@@ -149,6 +152,38 @@ export default function BuyerProfile() {
   const userId =
     effectiveProfile?.userId ||
     effectiveProfile?.id;
+
+  /* ============================================================
+     CHANGE PASSWORD STATE
+  ============================================================ */
+
+  const [showChangePassword, setShowChangePassword] =
+    useState(false);
+
+  const [passwordForm, setPasswordForm] =
+    useState({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+
+  const [passwordSaving, setPasswordSaving] =
+    useState(false);
+
+  const [passwordError, setPasswordError] =
+    useState("");
+
+  const [passwordSuccess, setPasswordSuccess] =
+    useState("");
+
+  const [showCurrentPassword, setShowCurrentPassword] =
+    useState(false);
+
+  const [showNewPassword, setShowNewPassword] =
+    useState(false);
+
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
 
   /* ============================================================
      LOAD PROFILE FROM BACKEND
@@ -299,6 +334,71 @@ export default function BuyerProfile() {
   };
 
   /* ============================================================
+     PASSWORD FORM CHANGE
+  ============================================================ */
+
+  const handlePasswordChange = (e) => {
+    const {
+      name,
+      value,
+    } = e.target;
+
+    setPasswordForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+
+    setPasswordError("");
+    setPasswordSuccess("");
+  };
+
+  /* ============================================================
+     OPEN CHANGE PASSWORD
+  ============================================================ */
+
+  const openChangePassword = () => {
+    setPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+
+    setShowChangePassword(true);
+  };
+
+  /* ============================================================
+     CLOSE CHANGE PASSWORD
+  ============================================================ */
+
+  const closeChangePassword = () => {
+    if (passwordSaving) {
+      return;
+    }
+
+    setShowChangePassword(false);
+
+    setPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+  };
+
+  /* ============================================================
      EDIT PROFILE
   ============================================================ */
 
@@ -403,10 +503,6 @@ export default function BuyerProfile() {
       const lastName =
         nameParts.join(" ");
 
-      /* --------------------------------------------------------
-         UPDATE BACKEND
-      -------------------------------------------------------- */
-
       const updatedProfile =
         await userService.updateUser(
           userId,
@@ -425,10 +521,6 @@ export default function BuyerProfile() {
               form.phone.trim(),
           }
         );
-
-      /* --------------------------------------------------------
-         NORMALIZE BACKEND RESPONSE
-      -------------------------------------------------------- */
 
       const normalized =
         mapBackendProfile({
@@ -471,16 +563,6 @@ export default function BuyerProfile() {
           normalized.phone ||
           form.phone.trim(),
       });
-
-      /* --------------------------------------------------------
-         IMPORTANT
-
-         Only update profile information.
-
-         Do NOT spread the complete backend response into
-         AuthContext because that can overwrite authentication
-         fields such as role.
-      -------------------------------------------------------- */
 
       updateProfile({
         username:
@@ -618,9 +700,6 @@ export default function BuyerProfile() {
       setPreview(null);
       setSelectedFile(null);
 
-      /*
-       * Do not save a temporary blob URL into authUser.
-       */
       updateProfile({
         avatar: null,
       });
@@ -706,6 +785,117 @@ export default function BuyerProfile() {
   };
 
   /* ============================================================
+     CHANGE PASSWORD
+  ============================================================ */
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    const currentPassword =
+      passwordForm.currentPassword;
+
+    const newPassword =
+      passwordForm.newPassword;
+
+    const confirmPassword =
+      passwordForm.confirmPassword;
+
+    if (!currentPassword) {
+      setPasswordError(
+        "Current password is required."
+      );
+      return;
+    }
+
+    if (!newPassword) {
+      setPasswordError(
+        "New password is required."
+      );
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError(
+        "New password must be at least 6 characters."
+      );
+      return;
+    }
+
+    if (newPassword.length > 100) {
+      setPasswordError(
+        "New password must not exceed 100 characters."
+      );
+      return;
+    }
+
+    if (!confirmPassword) {
+      setPasswordError(
+        "Please confirm your new password."
+      );
+      return;
+    }
+
+    if (
+      newPassword !==
+      confirmPassword
+    ) {
+      setPasswordError(
+        "New password and confirm password do not match."
+      );
+      return;
+    }
+
+    if (
+      currentPassword ===
+      newPassword
+    ) {
+      setPasswordError(
+        "New password must be different from your current password."
+      );
+      return;
+    }
+
+    try {
+      setPasswordSaving(true);
+
+      await userService.changePassword(
+        currentPassword,
+        newPassword
+      );
+
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+
+      setPasswordSuccess(
+        "Password changed successfully."
+      );
+
+      setTimeout(() => {
+        setShowChangePassword(false);
+        setPasswordSuccess("");
+      }, 1500);
+    } catch (err) {
+      console.error(
+        "Failed to change password:",
+        err
+      );
+
+      setPasswordError(
+        err.message ||
+          "Unable to change password. Please check your current password."
+      );
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  /* ============================================================
      UI
   ============================================================ */
 
@@ -713,6 +903,7 @@ export default function BuyerProfile() {
     <div className="space-y-6 max-w-5xl mx-auto p-4 font-sans">
 
       {/* Header */}
+
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
 
         <div>
@@ -738,6 +929,7 @@ export default function BuyerProfile() {
       </div>
 
       {/* Loading */}
+
       {loading && (
         <div className="bg-white border border-gray-100 rounded-2xl p-4 text-sm text-gray-500 shadow-sm">
           Loading your profile...
@@ -745,9 +937,11 @@ export default function BuyerProfile() {
       )}
 
       {/* Main Card */}
+
       <div className="bg-white border border-gray-100 rounded-2xl p-6 md:p-8 max-w-4xl shadow-sm">
 
         {/* Profile Photo */}
+
         <div className="flex flex-col sm:flex-row items-center gap-6 pb-8 border-b border-gray-100">
 
           <div
@@ -883,12 +1077,14 @@ export default function BuyerProfile() {
         </div>
 
         {/* EDIT MODE */}
+
         {editing ? (
           <div className="pt-6">
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
 
               {/* Username */}
+
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-2">
                   Username
@@ -907,6 +1103,7 @@ export default function BuyerProfile() {
               </div>
 
               {/* Full Name */}
+
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-2">
                   Full Name
@@ -925,6 +1122,7 @@ export default function BuyerProfile() {
               </div>
 
               {/* Email */}
+
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-2">
                   Email
@@ -943,6 +1141,7 @@ export default function BuyerProfile() {
               </div>
 
               {/* Phone */}
+
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-2">
                   Phone
@@ -1000,9 +1199,11 @@ export default function BuyerProfile() {
           </div>
         ) : (
           /* VIEW MODE */
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6">
 
             {/* Username */}
+
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
 
               <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
@@ -1022,6 +1223,7 @@ export default function BuyerProfile() {
             </div>
 
             {/* Full Name */}
+
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
 
               <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
@@ -1041,6 +1243,7 @@ export default function BuyerProfile() {
             </div>
 
             {/* Email */}
+
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
 
               <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
@@ -1060,6 +1263,7 @@ export default function BuyerProfile() {
             </div>
 
             {/* Phone */}
+
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
 
               <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
@@ -1081,6 +1285,276 @@ export default function BuyerProfile() {
           </div>
         )}
       </div>
+
+      {/* ======================================================
+          CHANGE PASSWORD - SINGLE LINE
+      ====================================================== */}
+
+      <div className="max-w-4xl">
+        <button
+  type="button"
+  onClick={() => {
+    setPasswordError("");
+    setPasswordSuccess("");
+    setPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+    setShowChangePassword(true);
+  }}
+  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+>
+  <LockKeyhole className="w-4 h-4" />
+  Change Password
+</button>
+      </div>
+
+      {/* ======================================================
+          CHANGE PASSWORD MODAL
+      ====================================================== */}
+
+      {showChangePassword && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onMouseDown={(e) => {
+            if (
+              e.target === e.currentTarget &&
+              !passwordSaving
+            ) {
+              closeChangePassword();
+            }
+          }}
+        >
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100">
+
+            {/* Modal Header */}
+
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+
+              <div className="flex items-center gap-3">
+
+                <div className="p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-600">
+                  <LockKeyhole className="w-5 h-5" />
+                </div>
+
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">
+                    Change Password
+                  </h3>
+
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    Update your account password
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={closeChangePassword}
+                disabled={passwordSaving}
+                className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+
+            <form
+              onSubmit={handleChangePassword}
+              className="p-6 space-y-5"
+            >
+
+              {/* Current Password */}
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-2">
+                  Current Password
+                </label>
+
+                <div className="relative">
+
+                  <input
+                    type={
+                      showCurrentPassword
+                        ? "text"
+                        : "password"
+                    }
+                    name="currentPassword"
+                    value={
+                      passwordForm.currentPassword
+                    }
+                    onChange={
+                      handlePasswordChange
+                    }
+                    autoComplete="current-password"
+                    placeholder="Enter current password"
+                    className="w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowCurrentPassword(
+                        (previous) =>
+                          !previous
+                      )
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showCurrentPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* New Password */}
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-2">
+                  New Password
+                </label>
+
+                <div className="relative">
+
+                  <input
+                    type={
+                      showNewPassword
+                        ? "text"
+                        : "password"
+                    }
+                    name="newPassword"
+                    value={
+                      passwordForm.newPassword
+                    }
+                    onChange={
+                      handlePasswordChange
+                    }
+                    autoComplete="new-password"
+                    placeholder="Enter new password"
+                    className="w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowNewPassword(
+                        (previous) =>
+                          !previous
+                      )
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-gray-400 mt-2">
+                  Password must be between 6 and 100 characters.
+                </p>
+              </div>
+
+              {/* Confirm Password */}
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-2">
+                  Confirm New Password
+                </label>
+
+                <div className="relative">
+
+                  <input
+                    type={
+                      showConfirmPassword
+                        ? "text"
+                        : "password"
+                    }
+                    name="confirmPassword"
+                    value={
+                      passwordForm.confirmPassword
+                    }
+                    onChange={
+                      handlePasswordChange
+                    }
+                    autoComplete="new-password"
+                    placeholder="Confirm new password"
+                    className="w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowConfirmPassword(
+                        (previous) =>
+                          !previous
+                      )
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="w-5 h-5" />
+                    ) : (
+                      <Eye className="w-5 h-5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* Error */}
+
+              {passwordError && (
+                <p className="text-sm font-medium text-red-600">
+                  {passwordError}
+                </p>
+              )}
+
+              {/* Success */}
+
+              {passwordSuccess && (
+                <p className="text-sm font-medium text-green-600 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" />
+                  {passwordSuccess}
+                </p>
+              )}
+
+              {/* Buttons */}
+
+              <div className="flex justify-end gap-3 pt-2">
+
+                <button
+                  type="button"
+                  onClick={closeChangePassword}
+                  disabled={passwordSaving}
+                  className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={passwordSaving}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition disabled:opacity-60"
+                >
+                  <LockKeyhole className="w-4 h-4" />
+
+                  {passwordSaving
+                    ? "Changing..."
+                    : "Change Password"}
+                </button>
+
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <p className="text-xs text-gray-400 max-w-4xl mt-3 pl-1">
         Your profile details and photo are saved securely through

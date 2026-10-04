@@ -76,26 +76,20 @@ export default function BuyerMessages() {
   const buyerId = profile?.userId || profile?.id;
 
   const [chats, setChats] = useState([]);
-  const [msgHistory, setMsgHistory] =
-    useState({});
+  const [msgHistory, setMsgHistory] = useState({});
 
-  const [activeChat, setActiveChat] =
-    useState(null);
+  const [activeChat, setActiveChat] = useState(null);
 
-  const [typedMessage, setTypedMessage] =
-    useState("");
+  const [typedMessage, setTypedMessage] = useState("");
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
   const [loadingMessages, setLoadingMessages] =
     useState(false);
 
-  const [sending, setSending] =
-    useState(false);
+  const [sending, setSending] = useState(false);
 
-  const [error, setError] =
-    useState("");
+  const [error, setError] = useState("");
 
   // ============================================================
   // LOAD BUYER CONVERSATIONS
@@ -184,6 +178,7 @@ export default function BuyerMessages() {
       }
 
       setLoadingMessages(true);
+      setError("");
 
       try {
         const response =
@@ -289,6 +284,24 @@ export default function BuyerMessages() {
           message.isRead === false
       );
 
+      /*
+       * Backend does not have an approval/status field.
+       *
+       * Therefore:
+       * - No messages = request is still pending.
+       * - Owner message exists = owner accepted request.
+       */
+      const ownerMessages = history.filter(
+        (message) =>
+          message.senderId === chat.sellerId
+      );
+
+      const isPending =
+        history.length === 0;
+
+      const isAccepted =
+        ownerMessages.length > 0;
+
       return {
         ...chat,
 
@@ -304,7 +317,7 @@ export default function BuyerMessages() {
 
         lastMsg:
           lastMessage?.content ||
-          "No messages yet",
+          "Message request sent",
 
         date:
           formatMessageTime(
@@ -315,6 +328,10 @@ export default function BuyerMessages() {
           ),
 
         unread,
+
+        isPending,
+
+        isAccepted,
       };
     });
   }, [
@@ -346,6 +363,17 @@ export default function BuyerMessages() {
       !selectedChat ||
       sending
     ) {
+      return;
+    }
+
+    /*
+     * Do not allow buyer to send a message while
+     * the owner's request is still pending.
+     */
+    if (!selectedChat.isAccepted) {
+      setError(
+        "Please wait for the property owner to accept your message request."
+      );
       return;
     }
 
@@ -481,6 +509,7 @@ export default function BuyerMessages() {
                         : "hover:bg-gray-100/70 text-gray-500"
                     }`}
                   >
+
                     {chat.unread && (
                       <span className="absolute top-4 right-4 h-2.5 w-2.5 bg-emerald-500 rounded-full" />
                     )}
@@ -515,9 +544,31 @@ export default function BuyerMessages() {
 
                     </span>
 
-                    <p className="text-xs text-gray-500 truncate mt-2 font-medium">
-                      {chat.lastMsg}
-                    </p>
+                    <div className="flex items-center justify-between gap-2 mt-2">
+
+                      <p
+                        className={`text-xs truncate font-medium ${
+                          chat.isPending
+                            ? "text-amber-600"
+                            : "text-gray-500"
+                        }`}
+                      >
+                        {chat.lastMsg}
+                      </p>
+
+                      {chat.isPending && (
+                        <span className="shrink-0 text-[9px] bg-amber-50 text-amber-600 border border-amber-100 px-1.5 py-0.5 rounded-md font-semibold">
+                          Pending
+                        </span>
+                      )}
+
+                      {chat.isAccepted && (
+                        <span className="shrink-0 text-[9px] bg-emerald-50 text-emerald-600 border border-emerald-100 px-1.5 py-0.5 rounded-md font-semibold">
+                          Accepted
+                        </span>
+                      )}
+
+                    </div>
 
                   </button>
                 ))
@@ -555,11 +606,27 @@ export default function BuyerMessages() {
 
                   </div>
 
-                  <div className="mt-3 flex items-center gap-1.5 text-[11px] text-emerald-600 font-medium">
+                  <div className="mt-3 flex items-center justify-between gap-3">
 
-                    <Building2 className="h-3.5 w-3.5" />
+                    <div className="flex items-center gap-1.5 text-[11px] text-emerald-600 font-medium min-w-0">
 
-                    {selectedChat.property}
+                      <Building2 className="h-3.5 w-3.5 shrink-0" />
+
+                      <span className="truncate">
+                        {selectedChat.property}
+                      </span>
+
+                    </div>
+
+                    {selectedChat.isPending ? (
+                      <span className="shrink-0 text-[10px] bg-amber-50 border border-amber-200 text-amber-600 px-2.5 py-1 rounded-lg font-semibold">
+                        Request Pending
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-[10px] bg-emerald-50 border border-emerald-100 text-emerald-600 px-2.5 py-1 rounded-lg font-semibold">
+                        Accepted
+                      </span>
+                    )}
 
                   </div>
 
@@ -572,6 +639,22 @@ export default function BuyerMessages() {
                   </div>
                 )}
 
+                {/* PENDING REQUEST MESSAGE */}
+                {selectedChat.isPending && (
+                  <div className="px-4 py-3 bg-amber-50 border-b border-amber-100">
+
+                    <p className="text-xs font-semibold text-amber-700">
+                      Message request sent
+                    </p>
+
+                    <p className="text-[11px] text-amber-600 mt-0.5">
+                      The property owner needs to accept your
+                      request before you can continue chatting.
+                    </p>
+
+                  </div>
+                )}
+
                 {/* CHAT MESSAGES */}
                 <div className="flex-1 p-4 sm:p-6 overflow-y-auto space-y-4 bg-gray-50/30">
 
@@ -581,7 +664,21 @@ export default function BuyerMessages() {
                     </div>
                   ) : activeMessages.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-xs text-gray-400">
-                      No messages in this conversation yet.
+
+                      <div className="text-center">
+
+                        <MessageSquare className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+
+                        <p className="text-xs text-gray-400">
+                          Your message request has been sent.
+                        </p>
+
+                        <p className="text-[11px] text-gray-300 mt-1">
+                          Waiting for the property owner to accept.
+                        </p>
+
+                      </div>
+
                     </div>
                   ) : (
                     activeMessages.map((msg) => {
@@ -630,22 +727,30 @@ export default function BuyerMessages() {
 
                   <input
                     type="text"
-                    placeholder="Type your message..."
+                    placeholder={
+                      selectedChat.isPending
+                        ? "Waiting for owner approval..."
+                        : "Type your message..."
+                    }
                     value={typedMessage}
                     onChange={(e) =>
                       setTypedMessage(
                         e.target.value
                       )
                     }
-                    disabled={sending}
-                    className="flex-1 px-4 py-2.5 text-xs sm:text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all font-medium"
+                    disabled={
+                      sending ||
+                      selectedChat.isPending
+                    }
+                    className="flex-1 px-4 py-2.5 text-xs sm:text-sm border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all font-medium disabled:bg-gray-50 disabled:text-gray-400"
                   />
 
                   <button
                     type="submit"
                     disabled={
                       !typedMessage.trim() ||
-                      sending
+                      sending ||
+                      selectedChat.isPending
                     }
                     className="bg-emerald-600 text-white p-2.5 sm:p-3 rounded-xl hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-sm shrink-0"
                     aria-label="Send message"

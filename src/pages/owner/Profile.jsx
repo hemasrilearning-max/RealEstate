@@ -12,6 +12,10 @@ import {
   Trash2,
   CheckCircle2,
   User,
+  LockKeyhole,
+  Eye,
+  EyeOff,
+  X,
 } from "lucide-react";
 
 const MAX_SIZE_MB = 2;
@@ -21,11 +25,6 @@ const ACCEPT =
 
 // ============================================================
 // ROLE NORMALIZATION
-// Backend roles:
-// SUPER_ADMIN, ADMIN, BUYER, SELLER, BROKER
-//
-// Frontend roles:
-// admin, buyer, owner, agent
 // ============================================================
 
 const normalizeProfileRole = (role) => {
@@ -165,6 +164,38 @@ export default function UniversalProfile() {
     useState(true);
 
   // ============================================================
+  // CHANGE PASSWORD STATE
+  // ============================================================
+
+  const [showChangePassword, setShowChangePassword] =
+    useState(false);
+
+  const [passwordForm, setPasswordForm] =
+    useState({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+
+  const [passwordError, setPasswordError] =
+    useState("");
+
+  const [passwordSuccess, setPasswordSuccess] =
+    useState("");
+
+  const [changingPassword, setChangingPassword] =
+    useState(false);
+
+  const [showCurrentPassword, setShowCurrentPassword] =
+    useState(false);
+
+  const [showNewPassword, setShowNewPassword] =
+    useState(false);
+
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
+
+  // ============================================================
   // LOAD PROFILE PHOTO USING JWT
   // ============================================================
 
@@ -184,9 +215,7 @@ export default function UniversalProfile() {
         return;
       }
 
-      if (
-        photoObjectUrlRef.current
-      ) {
+      if (photoObjectUrlRef.current) {
         URL.revokeObjectURL(
           photoObjectUrlRef.current
         );
@@ -205,9 +234,7 @@ export default function UniversalProfile() {
         err.message
       );
 
-      if (
-        photoObjectUrlRef.current
-      ) {
+      if (photoObjectUrlRef.current) {
         URL.revokeObjectURL(
           photoObjectUrlRef.current
         );
@@ -385,9 +412,7 @@ export default function UniversalProfile() {
 
   useEffect(() => {
     return () => {
-      if (
-        photoObjectUrlRef.current
-      ) {
+      if (photoObjectUrlRef.current) {
         URL.revokeObjectURL(
           photoObjectUrlRef.current
         );
@@ -494,15 +519,10 @@ export default function UniversalProfile() {
     const phone =
       editForm.phone.trim();
 
-    // ========================================================
-    // BASIC VALIDATION
-    // ========================================================
-
     if (!firstName) {
       setError(
         "First name is required."
       );
-
       return;
     }
 
@@ -510,7 +530,6 @@ export default function UniversalProfile() {
       setError(
         "Last name is required."
       );
-
       return;
     }
 
@@ -518,7 +537,6 @@ export default function UniversalProfile() {
       setError(
         "Email is required."
       );
-
       return;
     }
 
@@ -530,7 +548,6 @@ export default function UniversalProfile() {
       setError(
         "Please enter a valid email address."
       );
-
       return;
     }
 
@@ -538,7 +555,6 @@ export default function UniversalProfile() {
       setError(
         "Phone number is required."
       );
-
       return;
     }
 
@@ -546,13 +562,6 @@ export default function UniversalProfile() {
       setSaving(true);
       setError("");
       setSuccess("");
-
-      // ======================================================
-      // UPDATE BACKEND
-      //
-      // Only fields supported by UpdateUserRequest are sent.
-      // Company, role, username and joined date are NOT sent.
-      // ======================================================
 
       const updatedData =
         await userService.updateUser(
@@ -564,10 +573,6 @@ export default function UniversalProfile() {
             phone,
           }
         );
-
-      // ======================================================
-      // BUILD UPDATED LOCAL PROFILE
-      // ======================================================
 
       const fullName =
         [
@@ -705,6 +710,168 @@ export default function UniversalProfile() {
   };
 
   // ============================================================
+  // CHANGE PASSWORD - OPEN MODAL
+  // ============================================================
+
+  const handleOpenChangePassword = () => {
+    setPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+
+    setShowChangePassword(true);
+  };
+
+  // ============================================================
+  // CHANGE PASSWORD - CLOSE MODAL
+  // ============================================================
+
+  const handleCloseChangePassword = () => {
+    if (changingPassword) {
+      return;
+    }
+
+    setShowChangePassword(false);
+
+    setPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+  };
+
+  // ============================================================
+  // CHANGE PASSWORD - FORM CHANGE
+  // ============================================================
+
+  const handlePasswordFormChange = (e) => {
+    const {
+      name,
+      value,
+    } = e.target;
+
+    setPasswordForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
+
+    setPasswordError("");
+    setPasswordSuccess("");
+  };
+
+  // ============================================================
+  // CHANGE PASSWORD - SUBMIT
+  // ============================================================
+
+  const handleChangePassword = async () => {
+    const currentPassword =
+      passwordForm.currentPassword.trim();
+
+    const newPassword =
+      passwordForm.newPassword.trim();
+
+    const confirmPassword =
+      passwordForm.confirmPassword.trim();
+
+    if (!currentPassword) {
+      setPasswordError(
+        "Current password is required."
+      );
+      return;
+    }
+
+    if (!newPassword) {
+      setPasswordError(
+        "New password is required."
+      );
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError(
+        "New password must be at least 6 characters."
+      );
+      return;
+    }
+
+    if (newPassword.length > 100) {
+      setPasswordError(
+        "New password cannot exceed 100 characters."
+      );
+      return;
+    }
+
+    if (!confirmPassword) {
+      setPasswordError(
+        "Please confirm your new password."
+      );
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError(
+        "New password and confirm password do not match."
+      );
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setPasswordError(
+        "New password must be different from your current password."
+      );
+      return;
+    }
+
+    try {
+      setChangingPassword(true);
+      setPasswordError("");
+      setPasswordSuccess("");
+
+      await userService.changePassword(
+        currentPassword,
+        newPassword
+      );
+
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+
+      setPasswordSuccess(
+        "Password changed successfully!"
+      );
+    } catch (err) {
+      console.error(
+        "Password change failed:",
+        err
+      );
+
+      setPasswordError(
+        err.message ||
+          "Failed to change password."
+      );
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  // ============================================================
   // FILE SELECT
   // ============================================================
 
@@ -791,14 +958,15 @@ export default function UniversalProfile() {
       );
 
       const updatedProfile = {
-  ...profileData,
+        ...profileData,
 
-  profilePhotoUrl: true,
+        profilePhotoUrl: true,
 
-  avatar: null,
+        avatar: null,
 
-  profilePhotoUpdatedAt: Date.now(),
-};
+        profilePhotoUpdatedAt:
+          Date.now(),
+      };
 
       setProfileData(
         updatedProfile
@@ -851,9 +1019,7 @@ export default function UniversalProfile() {
 
         await userService.deleteProfilePhoto();
 
-        if (
-          photoObjectUrlRef.current
-        ) {
+        if (photoObjectUrlRef.current) {
           URL.revokeObjectURL(
             photoObjectUrlRef.current
           );
@@ -869,14 +1035,15 @@ export default function UniversalProfile() {
         setSelectedFile(null);
 
         const updatedProfile = {
-  ...profileData,
+          ...profileData,
 
-  profilePhotoUrl: null,
+          profilePhotoUrl: null,
 
-  avatar: null,
+          avatar: null,
 
-  profilePhotoUpdatedAt: Date.now(),
-};
+          profilePhotoUpdatedAt:
+            Date.now(),
+        };
 
         setProfileData(
           updatedProfile
@@ -999,14 +1166,13 @@ export default function UniversalProfile() {
   // ============================================================
 
   const accountLabel = `${
-    rawRole
-      .charAt(0)
-      .toUpperCase() +
+    rawRole.charAt(0).toUpperCase() +
     rawRole.slice(1)
   } Account`;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto p-4 font-sans">
+
       {/* ========================================================
           MAIN HEADLINE
       ======================================================== */}
@@ -1040,14 +1206,14 @@ export default function UniversalProfile() {
       ======================================================== */}
 
       <div className="bg-white border border-gray-100 rounded-2xl p-6 md:p-8 max-w-4xl shadow-sm">
+
         {/* ======================================================
             TOP SPLIT VIEW
         ====================================================== */}
 
         <div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-gray-100">
-          {/* ====================================================
-              AVATAR
-          ==================================================== */}
+
+          {/* AVATAR */}
 
           <div
             className="relative group cursor-pointer"
@@ -1066,11 +1232,10 @@ export default function UniversalProfile() {
             </div>
           </div>
 
-          {/* ====================================================
-              PROFILE NAME + PHOTO CONTROLS
-          ==================================================== */}
+          {/* PROFILE NAME + PHOTO CONTROLS */}
 
           <div className="flex-1 text-center sm:text-left min-w-0">
+
             <h3 className="text-xl font-bold text-gray-900 truncate">
               {displayName}
             </h3>
@@ -1079,13 +1244,12 @@ export default function UniversalProfile() {
               {accountLabel}
             </p>
 
-            {/* ==================================================
-                PERFORMANCE METRICS
-            ================================================== */}
+            {/* PERFORMANCE METRICS */}
 
             {(rawRole === "agent" ||
               profileData.rating) && (
               <div className="flex items-center justify-center sm:justify-start gap-1 mt-1.5 text-sm text-gray-500">
+
                 <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
 
                 <span className="font-semibold text-gray-800">
@@ -1102,11 +1266,10 @@ export default function UniversalProfile() {
               </div>
             )}
 
-            {/* ==================================================
-                PHOTO CONTROLS
-            ================================================== */}
+            {/* PHOTO CONTROLS */}
 
             <div className="mt-4 flex flex-wrap items-center justify-center sm:justify-start gap-2">
+
               <input
                 ref={fileRef}
                 type="file"
@@ -1181,18 +1344,14 @@ export default function UniversalProfile() {
                 )}
             </div>
 
-            {/* ==================================================
-                FILE INFORMATION
-            ================================================== */}
+            {/* FILE INFORMATION */}
 
             <p className="text-[11px] text-gray-400 mt-2.5">
               JPG, PNG, WebP or GIF · Max{" "}
               {MAX_SIZE_MB}MB
             </p>
 
-            {/* ==================================================
-                ERROR
-            ================================================== */}
+            {/* ERROR */}
 
             {error && (
               <p className="text-xs font-medium text-red-600 mt-2">
@@ -1200,9 +1359,7 @@ export default function UniversalProfile() {
               </p>
             )}
 
-            {/* ==================================================
-                SUCCESS
-            ================================================== */}
+            {/* SUCCESS */}
 
             {success && (
               <p className="text-xs font-medium text-green-600 mt-2 flex items-center gap-1 justify-center sm:justify-start">
@@ -1219,7 +1376,9 @@ export default function UniversalProfile() {
         ====================================================== */}
 
         <div className="pt-6">
+
           <div className="flex items-center justify-between mb-4">
+
             <div>
               <h3 className="text-sm font-bold text-gray-900">
                 Personal Information
@@ -1231,29 +1390,49 @@ export default function UniversalProfile() {
             </div>
 
             {!editing && (
-              <button
-                type="button"
-                onClick={
-                  handleStartEditing
-                }
-                className={`text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 ${theme.textColor} ${theme.hoverBg} transition`}
-              >
-                Edit Profile
-              </button>
+              <div className="flex items-center gap-2">
+
+                {/* EDIT PROFILE */}
+
+                <button
+                  type="button"
+                  onClick={
+                    handleStartEditing
+                  }
+                  className={`text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 ${theme.textColor} ${theme.hoverBg} transition`}
+                >
+                  Edit Profile
+                </button>
+
+                {/* CHANGE PASSWORD */}
+
+                <button
+                  type="button"
+                  onClick={
+                    handleOpenChangePassword
+                  }
+                  className={`inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 ${theme.textColor} ${theme.hoverBg} transition`}
+                >
+                  <LockKeyhole className="w-3.5 h-3.5" />
+
+                  Change Password
+                </button>
+              </div>
             )}
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* ==================================================
-                FIRST NAME
-            ================================================== */}
+
+            {/* FIRST NAME */}
 
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
+
               <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
                 <User className="w-4 h-4" />
               </div>
 
               <div className="min-w-0 flex-1">
+
                 <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
                   First Name
                 </label>
@@ -1279,16 +1458,16 @@ export default function UniversalProfile() {
               </div>
             </div>
 
-            {/* ==================================================
-                LAST NAME
-            ================================================== */}
+            {/* LAST NAME */}
 
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
+
               <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
                 <User className="w-4 h-4" />
               </div>
 
               <div className="min-w-0 flex-1">
+
                 <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
                   Last Name
                 </label>
@@ -1314,16 +1493,16 @@ export default function UniversalProfile() {
               </div>
             </div>
 
-            {/* ==================================================
-                EMAIL
-            ================================================== */}
+            {/* EMAIL */}
 
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
+
               <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
                 <Mail className="w-4 h-4" />
               </div>
 
               <div className="min-w-0 flex-1">
+
                 <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
                   Email
                 </label>
@@ -1349,16 +1528,16 @@ export default function UniversalProfile() {
               </div>
             </div>
 
-            {/* ==================================================
-                PHONE
-            ================================================== */}
+            {/* PHONE */}
 
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
+
               <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
                 <Phone className="w-4 h-4" />
               </div>
 
               <div className="min-w-0 flex-1">
+
                 <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
                   Phone
                 </label>
@@ -1384,16 +1563,16 @@ export default function UniversalProfile() {
               </div>
             </div>
 
-            {/* ==================================================
-                JOINED DATE - DISPLAY ONLY
-            ================================================== */}
+            {/* JOINED DATE */}
 
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl sm:col-span-2">
+
               <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
                 <Calendar className="w-4 h-4" />
               </div>
 
               <div>
+
                 <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
                   Joined
                 </label>
@@ -1405,12 +1584,11 @@ export default function UniversalProfile() {
             </div>
           </div>
 
-          {/* ====================================================
-              SAVE / CANCEL PROFILE CHANGES
-          ==================================================== */}
+          {/* SAVE / CANCEL PROFILE CHANGES */}
 
           {editing && (
             <div className="flex flex-wrap items-center justify-end gap-3 mt-5 pt-5 border-t border-gray-100">
+
               <button
                 type="button"
                 onClick={
@@ -1446,7 +1624,242 @@ export default function UniversalProfile() {
       <p className="text-xs text-gray-400 max-w-4xl mt-3 pl-1">
         Your profile information and photo are saved to your HomeSpace account.
       </p>
+
+      {/* ========================================================
+          CHANGE PASSWORD MODAL
+      ======================================================== */}
+
+      {showChangePassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100">
+
+            {/* MODAL HEADER */}
+
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  Change Password
+                </h3>
+
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Update your account password securely.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={
+                  handleCloseChangePassword
+                }
+                disabled={changingPassword}
+                className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* MODAL BODY */}
+
+            <div className="p-6 space-y-4">
+
+              {/* CURRENT PASSWORD */}
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  Current Password
+                </label>
+
+                <div className="relative">
+
+                  <input
+                    type={
+                      showCurrentPassword
+                        ? "text"
+                        : "password"
+                    }
+                    name="currentPassword"
+                    value={
+                      passwordForm.currentPassword
+                    }
+                    onChange={
+                      handlePasswordFormChange
+                    }
+                    placeholder="Enter current password"
+                    autoComplete="current-password"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 pr-11 text-sm text-gray-800 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowCurrentPassword(
+                        (value) => !value
+                      )
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                  >
+                    {showCurrentPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* NEW PASSWORD */}
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  New Password
+                </label>
+
+                <div className="relative">
+
+                  <input
+                    type={
+                      showNewPassword
+                        ? "text"
+                        : "password"
+                    }
+                    name="newPassword"
+                    value={
+                      passwordForm.newPassword
+                    }
+                    onChange={
+                      handlePasswordFormChange
+                    }
+                    placeholder="Enter new password"
+                    autoComplete="new-password"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 pr-11 text-sm text-gray-800 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowNewPassword(
+                        (value) => !value
+                      )
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-gray-400 mt-1.5">
+                  Password must be between 6 and 100 characters.
+                </p>
+              </div>
+
+              {/* CONFIRM PASSWORD */}
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+                  Confirm New Password
+                </label>
+
+                <div className="relative">
+
+                  <input
+                    type={
+                      showConfirmPassword
+                        ? "text"
+                        : "password"
+                    }
+                    name="confirmPassword"
+                    value={
+                      passwordForm.confirmPassword
+                    }
+                    onChange={
+                      handlePasswordFormChange
+                    }
+                    placeholder="Confirm new password"
+                    autoComplete="new-password"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 pr-11 text-sm text-gray-800 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowConfirmPassword(
+                        (value) => !value
+                      )
+                    }
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
+                  >
+                    {showConfirmPassword ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {/* ERROR */}
+
+              {passwordError && (
+                <div className="rounded-xl bg-red-50 border border-red-100 px-3 py-2.5">
+                  <p className="text-xs font-medium text-red-600">
+                    {passwordError}
+                  </p>
+                </div>
+              )}
+
+              {/* SUCCESS */}
+
+              {passwordSuccess && (
+                <div className="rounded-xl bg-green-50 border border-green-100 px-3 py-2.5">
+                  <p className="text-xs font-medium text-green-600 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4" />
+                    {passwordSuccess}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* MODAL FOOTER */}
+
+            <div className="flex items-center justify-end gap-3 px-6 py-5 border-t border-gray-100">
+
+              <button
+                type="button"
+                onClick={
+                  handleCloseChangePassword
+                }
+                disabled={changingPassword}
+                className="text-sm font-semibold px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={
+                  handleChangePassword
+                }
+                disabled={
+                  changingPassword
+                }
+                className={`inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl text-white ${theme.fallbackColor} hover:opacity-90 transition disabled:opacity-60`}
+              >
+                <LockKeyhole className="w-4 h-4" />
+
+                {changingPassword
+                  ? "Changing..."
+                  : "Change Password"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

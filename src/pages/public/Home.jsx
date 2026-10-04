@@ -25,10 +25,23 @@ export default function Home() {
   .filter((p) => p.isFeatured)
   .slice(0, 3);
 
-const homepageProperties =
-  featured.length > 0
-    ? featured
-    : properties.slice(0, 3);
+const latestProperties = [...properties]
+  .sort((a, b) => {
+    const dateA = new Date(
+      a.createdAt || a.created_at || 0
+    ).getTime();
+
+    const dateB = new Date(
+      b.createdAt || b.created_at || 0
+    ).getTime();
+
+    if (dateB !== dateA) {
+      return dateB - dateA;
+    }
+
+    return Number(b.id || 0) - Number(a.id || 0);
+  })
+  .slice(0, 3);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -200,7 +213,7 @@ const homepageProperties =
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {homepageProperties.map((property) => (
+          {latestProperties.map((property) => (
   <PropertyCard
     key={property.id}
     property={property}

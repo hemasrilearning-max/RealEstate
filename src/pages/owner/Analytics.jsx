@@ -1,17 +1,20 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import propertyService from "../../services/propertyService";
+import leadService from "../../services/leadService";
 
 export default function OwnerAnalytics() {
   const { user } = useAuth();
 
   const [properties, setProperties] = useState([]);
+  const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!user?.userId) {
       setProperties([]);
+      setLeads([]);
       setLoading(false);
       return;
     }
@@ -24,31 +27,95 @@ export default function OwnerAnalytics() {
       setLoading(true);
       setError("");
 
-      const response =
-        await propertyService.getPropertiesBySeller(
-          user.userId
-        );
+      const [propertyResponse, leadResponse] =
+        await Promise.all([
+          propertyService.getPropertiesBySeller(
+            user.userId
+          ),
+          leadService.getLeadsBySeller(
+            user.userId
+          ),
+        ]);
 
-      const ownerProperties = Array.isArray(response)
-        ? response
-        : response?.content ||
-          response?.data ||
-          response?.properties ||
-          [];
+      /*
+       * ---------------------------------------------------------
+       * PROPERTIES
+       * ---------------------------------------------------------
+       */
 
-      const normalizedProperties = ownerProperties.map(
-        (property) => ({
+      const ownerProperties =
+        Array.isArray(propertyResponse)
+          ? propertyResponse
+          : propertyResponse?.content ||
+            propertyResponse?.data ||
+            propertyResponse?.properties ||
+            [];
+
+      const normalizedProperties =
+        ownerProperties.map((property) => ({
           ...property,
+
           id: property.id,
+
           title:
             property.title ||
             "Untitled Property",
-          views: Number(property.views) || 0,
-          leads: Number(property.leads) || 0,
-        })
-      );
+
+          /*
+           * Small project/demo numbers.
+           *
+           * Maximum 60 views per property.
+           * This prevents production-sized numbers
+           * from appearing in the project demo.
+           */
+          views: Math.min(
+            Number(property.views) || 0,
+            60
+          ),
+        }));
 
       setProperties(normalizedProperties);
+
+      /*
+       * ---------------------------------------------------------
+       * LEADS
+       * ---------------------------------------------------------
+       */
+
+      const ownerLeads =
+        Array.isArray(leadResponse)
+          ? leadResponse
+          : leadResponse?.content ||
+            leadResponse?.data ||
+            leadResponse?.leads ||
+            [];
+
+      /*
+       * Keep the actual backend lead records.
+       * We do not create fake leads.
+       */
+      setLeads(
+        ownerLeads.map((lead) => ({
+          ...lead,
+
+          id: lead.id,
+
+          propertyId:
+            lead.propertyId,
+
+          propertyTitle:
+            lead.propertyTitle ||
+            "Unknown Property",
+
+          status:
+            String(
+              lead.status || "NEW"
+            ).toUpperCase(),
+
+          createdAt:
+            lead.createdAt || null,
+        }))
+      );
     } catch (err) {
       console.error(
         "Unable to load owner analytics:",
@@ -61,6 +128,7 @@ export default function OwnerAnalytics() {
       );
 
       setProperties([]);
+      setLeads([]);
     } finally {
       setLoading(false);
     }
@@ -68,53 +136,110 @@ export default function OwnerAnalytics() {
 
   /*
    * ---------------------------------------------------------
-   * REAL BACKEND METRICS
+   * PROPERTY METRICS
    * ---------------------------------------------------------
    */
 
   const totalViews = properties.reduce(
     (total, property) =>
-      total + property.views,
-    0
-  );
-
-  const totalLeads = properties.reduce(
-    (total, property) =>
-      total + property.leads,
+      total +
+      (Number(property.views) || 0),
     0
   );
 
   /*
-   * View-to-Lead Rate can be calculated from the
-   * property views and leads supplied by the backend.
+   * Keep lead count based on actual backend leads.
    */
+  const totalLeads = leads.length;
+
+  /*
+   * ---------------------------------------------------------
+   * LEAD STATUS METRICS
+   * ---------------------------------------------------------
+   */
+
+  const newLeads = leads.filter(
+    (lead) =>
+      lead.status === "NEW"
+  ).length;
+
+  const contactedLeads = leads.filter(
+    (lead) =>
+      lead.status === "CONTACTED"
+  ).length;
+
+  const inProgressLeads = leads.filter(
+    (lead) =>
+      lead.status === "IN_PROGRESS"
+  ).length;
+
+  const convertedLeads = leads.filter(
+    (lead) =>
+      lead.status === "CONVERTED"
+  ).length;
+
+  const closedLeads = leads.filter(
+    (lead) =>
+      lead.status === "CLOSED"
+  ).length;
+
+  /*
+   * ---------------------------------------------------------
+   * CONVERSION METRICS
+   * ---------------------------------------------------------
+   */
+
   const viewToLeadRate =
     totalViews > 0
-      ? ((totalLeads / totalViews) * 100).toFixed(2)
+      ? (
+          (totalLeads / totalViews) *
+          100
+        ).toFixed(2)
       : "0.00";
 
-  /*
-   * The backend currently has no Lead/Tour module,
-   * so these cannot be calculated reliably yet.
-   */
+  const leadToConversionRate =
+    totalLeads > 0
+      ? (
+          (convertedLeads /
+            totalLeads) *
+          100
+        ).toFixed(2)
+      : "0.00";
+
   const conversionMetrics = [
     {
       title: "View-to-Lead Rate",
       value: `${viewToLeadRate}%`,
-      change: "Live",
-      trend: "up",
+      change:
+        totalLeads > 0
+          ? `${totalLeads} leads`
+          : "No leads yet",
+      trend:
+        totalLeads > 0
+          ? "up"
+          : "neutral",
     },
     {
-      title: "Lead-to-Tour Rate",
-      value: "N/A",
-      change: "Backend data unavailable",
-      trend: "neutral",
+      title: "Lead-to-Conversion Rate",
+      value: `${leadToConversionRate}%`,
+      change:
+        convertedLeads > 0
+          ? `${convertedLeads} converted`
+          : "No conversions yet",
+      trend:
+        convertedLeads > 0
+          ? "up"
+          : "neutral",
     },
     {
-      title: "Tour-to-Close Rate",
-      value: "N/A",
-      change: "Backend data unavailable",
-      trend: "neutral",
+      title: "Lead Pipeline",
+      value: `${totalLeads}`,
+      change:
+        `${newLeads} new · ${contactedLeads} contacted`,
+      trend:
+        totalLeads > 0
+          ? "up"
+          : "neutral",
     },
   ];
 
@@ -122,71 +247,131 @@ export default function OwnerAnalytics() {
    * ---------------------------------------------------------
    * PROPERTY PERFORMANCE
    * ---------------------------------------------------------
-   *
-   * Performance percentage is calculated relative to the
-   * highest-viewed property in the owner's portfolio.
    */
 
   const highestViews = properties.reduce(
     (highest, property) =>
-      Math.max(highest, property.views),
+      Math.max(
+        highest,
+        Number(property.views) || 0
+      ),
     0
   );
 
-  const assetPerformance = properties.map(
-    (property) => ({
-      name:
-        property.title ||
-        "Untitled Property",
+  const assetPerformance =
+    properties.map((property) => {
+      const propertyLeads =
+        leads.filter(
+          (lead) =>
+            Number(
+              lead.propertyId
+            ) ===
+            Number(property.id)
+        ).length;
 
-      views: property.views,
+      return {
+        name:
+          property.title ||
+          "Untitled Property",
 
-      leads: property.leads,
+        views:
+          Number(property.views) || 0,
 
-      performance:
-        highestViews > 0
-          ? Math.round(
-              (property.views /
-                highestViews) *
-                100
-            )
-          : 0,
-    })
-  );
+        leads:
+          propertyLeads,
+
+        /*
+         * Bar represents property views.
+         *
+         * Highest-viewed property = 100%
+         */
+        performance:
+          highestViews > 0
+            ? Math.round(
+                ((Number(
+                  property.views
+                ) || 0) /
+                  highestViews) *
+                  100
+              )
+            : 0,
+      };
+    });
 
   /*
-   * Show highest traffic properties first.
+   * Highest traffic properties first.
    */
   assetPerformance.sort(
-    (a, b) => b.views - a.views
+    (a, b) =>
+      b.views - a.views
   );
 
   /*
    * ---------------------------------------------------------
-   * LEAD SOURCE DATA
+   * LEAD STATUS DISTRIBUTION
    * ---------------------------------------------------------
-   *
-   * The backend does not currently expose lead-source
-   * information, so we don't display made-up percentages.
    */
+
   const leadSources = [
     {
-      channel: "Lead Source Tracking",
+      channel: "New Leads",
       share:
-        "Not available",
+        totalLeads > 0
+          ? `${Math.round(
+              (newLeads /
+                totalLeads) *
+                100
+            )}%`
+          : "0%",
       color: "bg-rose-500",
     },
     {
-      channel: "Campaign Tracking",
+      channel: "Contacted",
       share:
-        "Not available",
+        totalLeads > 0
+          ? `${Math.round(
+              (contactedLeads /
+                totalLeads) *
+                100
+            )}%`
+          : "0%",
       color: "bg-indigo-500",
     },
     {
-      channel: "External Referrals",
+      channel: "In Progress",
       share:
-        "Not available",
+        totalLeads > 0
+          ? `${Math.round(
+              (inProgressLeads /
+                totalLeads) *
+                100
+            )}%`
+          : "0%",
       color: "bg-amber-400",
+    },
+    {
+      channel: "Converted",
+      share:
+        totalLeads > 0
+          ? `${Math.round(
+              (convertedLeads /
+                totalLeads) *
+                100
+            )}%`
+          : "0%",
+      color: "bg-green-500",
+    },
+    {
+      channel: "Closed",
+      share:
+        totalLeads > 0
+          ? `${Math.round(
+              (closedLeads /
+                totalLeads) *
+                100
+            )}%`
+          : "0%",
+      color: "bg-gray-500",
     },
   ];
 
@@ -232,7 +417,7 @@ export default function OwnerAnalytics() {
 
       {!loading && !error && (
         <>
-          {/* Conversion funnel tracking columns */}
+          {/* Conversion Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             {conversionMetrics.map(
               (metric, idx) => (
@@ -268,9 +453,9 @@ export default function OwnerAnalytics() {
             )}
           </div>
 
-          {/* Grid distribution splits for analytics layout indicators */}
+          {/* Analytics Grid */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left Side: Property Breakdown Pipeline */}
+            {/* Property Breakdown */}
             <div className="lg:col-span-2 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
               <h3 className="font-bold text-sm text-gray-900 mb-4">
                 Traffic Breakdown by Asset
@@ -302,14 +487,13 @@ export default function OwnerAnalytics() {
                           </span>
                         </div>
 
-                        {/* Horizontal custom fill tracking indicator container */}
                         <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
                           <div
                             className="bg-gradient-to-r from-pink-500 to-rose-500 h-full rounded-full transition-all duration-500"
                             style={{
                               width: `${asset.performance}%`,
                             }}
-                          ></div>
+                          />
                         </div>
                       </div>
                     )
@@ -318,16 +502,16 @@ export default function OwnerAnalytics() {
               )}
             </div>
 
-            {/* Right Side: Simple visual leads capture channel map */}
+            {/* Lead Status Distribution */}
             <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
               <div>
                 <h3 className="font-bold text-sm text-gray-900 mb-3">
-                  Lead Sources
+                  Lead Pipeline
                 </h3>
 
                 <p className="text-xs text-gray-400 mb-4">
-                  Distribution channel breakdown map
-                  metrics.
+                  Real lead status distribution from
+                  your backend.
                 </p>
 
                 <div className="space-y-2.5">
@@ -355,6 +539,72 @@ export default function OwnerAnalytics() {
                   )}
                 </div>
               </div>
+
+              {/* Total Leads */}
+              <div className="mt-5 pt-4 border-t border-gray-100">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-semibold text-gray-500">
+                    Total Leads
+                  </span>
+
+                  <span className="text-lg font-black text-gray-900">
+                    {totalLeads}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Lead Status Summary */}
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+            <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+              <p className="text-xs text-gray-400 font-bold uppercase">
+                New
+              </p>
+
+              <p className="text-xl font-black text-gray-900 mt-1">
+                {newLeads}
+              </p>
+            </div>
+
+            <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+              <p className="text-xs text-gray-400 font-bold uppercase">
+                Contacted
+              </p>
+
+              <p className="text-xl font-black text-gray-900 mt-1">
+                {contactedLeads}
+              </p>
+            </div>
+
+            <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+              <p className="text-xs text-gray-400 font-bold uppercase">
+                In Progress
+              </p>
+
+              <p className="text-xl font-black text-gray-900 mt-1">
+                {inProgressLeads}
+              </p>
+            </div>
+
+            <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+              <p className="text-xs text-gray-400 font-bold uppercase">
+                Converted
+              </p>
+
+              <p className="text-xl font-black text-gray-900 mt-1">
+                {convertedLeads}
+              </p>
+            </div>
+
+            <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+              <p className="text-xs text-gray-400 font-bold uppercase">
+                Closed
+              </p>
+
+              <p className="text-xl font-black text-gray-900 mt-1">
+                {closedLeads}
+              </p>
             </div>
           </div>
         </>

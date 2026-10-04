@@ -17,13 +17,34 @@ import wishlistService from "../services/wishlistService";
 export default function PropertyCard({ property }) {
   const navigate = useNavigate();
 
-  const { isFavorite, toggleFavorite } = useData();
+  const {
+    isFavorite,
+    toggleFavorite,
+    getPropertyImage,
+  } = useData();
+
   const { user, isAuthenticated } = useAuth();
+
+  /*
+   * Get the property image from DataContext.
+   *
+   * Priority:
+   * 1. Backend media image
+   * 2. Local/browser image
+   * 3. Placeholder
+   */
+  const propertyImage =
+    getPropertyImage(property?.id) ||
+    property?.images?.[0] ||
+    "https://via.placeholder.com/400x300";
 
   const localFavorite = isFavorite(property.id);
 
-  const [favorite, setFavorite] = useState(localFavorite);
-  const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [favorite, setFavorite] =
+    useState(localFavorite);
+
+  const [favoriteLoading, setFavoriteLoading] =
+    useState(false);
 
   /*
    * Load the real wishlist status from backend
@@ -33,7 +54,11 @@ export default function PropertyCard({ property }) {
     let cancelled = false;
 
     const loadWishlistStatus = async () => {
-      if (!isAuthenticated || !user?.userId || !property?.id) {
+      if (
+        !isAuthenticated ||
+        !user?.userId ||
+        !property?.id
+      ) {
         setFavorite(false);
         return;
       }
@@ -71,6 +96,12 @@ export default function PropertyCard({ property }) {
     property?.id,
   ]);
 
+  /*
+   * ============================================================
+   * FAVORITE
+   * ============================================================
+   */
+
   const handleFavorite = async (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -84,6 +115,7 @@ export default function PropertyCard({ property }) {
       console.error(
         "Logged-in user ID is not available."
       );
+
       return;
     }
 
@@ -104,7 +136,7 @@ export default function PropertyCard({ property }) {
 
         /*
          * Keep the existing local DataContext state
-         * synchronized for the current frontend.
+         * synchronized.
          */
         if (localFavorite) {
           toggleFavorite(property.id);
@@ -142,14 +174,24 @@ export default function PropertyCard({ property }) {
       to={`/properties/${property.id}`}
       className="group bg-white rounded-xl border border-gray-200 overflow-hidden hover:shadow-lg transition-all duration-300 block"
     >
+      {/* ======================================================
+          IMAGE
+      ====================================================== */}
+
       <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
         <img
-          src={
-            property.images?.[0] ||
-            "https://via.placeholder.com/400x300"
-          }
+          src={propertyImage}
           alt={property.title}
           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          onError={(event) => {
+            if (
+              event.currentTarget.src !==
+              "https://via.placeholder.com/400x300"
+            ) {
+              event.currentTarget.src =
+                "https://via.placeholder.com/400x300";
+            }
+          }}
         />
 
         {/* Listing badges */}
@@ -198,7 +240,9 @@ export default function PropertyCard({ property }) {
         >
           <Heart
             className={`w-5 h-5 ${
-              favorite ? "fill-red-500" : ""
+              favorite
+                ? "fill-red-500"
+                : ""
             }`}
           />
         </button>
@@ -209,6 +253,10 @@ export default function PropertyCard({ property }) {
           {property.views || 0}
         </div>
       </div>
+
+      {/* ======================================================
+          PROPERTY DETAILS
+      ====================================================== */}
 
       <div className="p-4">
         <div className="text-xl font-bold text-gray-900 mb-1">
@@ -234,6 +282,7 @@ export default function PropertyCard({ property }) {
 
         <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
           <MapPin className="w-3.5 h-3.5 shrink-0" />
+
           <span className="line-clamp-1">
             {property.location}
           </span>
@@ -256,7 +305,8 @@ export default function PropertyCard({ property }) {
 
           <span className="flex items-center gap-1">
             <Maximize className="w-4 h-4" />
-            {property.area} {property.areaUnit}
+            {property.area}{" "}
+            {property.areaUnit}
           </span>
         </div>
 

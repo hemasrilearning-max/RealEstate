@@ -18,6 +18,7 @@ import {
   MoreVertical,
   CheckCircle,
   Clock,
+  Trash2,
 } from "lucide-react";
 
 import { useAuth } from "../../context/AuthContext";
@@ -32,7 +33,10 @@ export default function OwnerProperties() {
 
   const { owner, user } = useAuth();
 
-  const { propertyImages } = useData();
+  const {
+    propertyImages,
+    getPropertyImage,
+  } = useData();
 
   const [propertiesData, setPropertiesData] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -46,6 +50,17 @@ export default function OwnerProperties() {
    */
   const [editingPropertyId, setEditingPropertyId] =
     useState(null);
+
+  /*
+   * =========================================================
+   * DELETE PROPERTY
+   * =========================================================
+   */
+  const [deletePropertyId, setDeletePropertyId] =
+    useState(null);
+
+  const [deleting, setDeleting] =
+    useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -190,23 +205,36 @@ export default function OwnerProperties() {
 
   /*
    * =========================================================
-   * GET LOCAL PROPERTY IMAGE
+   * GET PROPERTY IMAGE
+   *
+   * Priority:
+   *
+   * 1. Backend media image
+   * 2. Existing local image
+   * 3. Fallback image
    * =========================================================
    */
 
-  const getLocalPropertyImage = (
+  const getOwnerPropertyImage = (
     propertyId
   ) => {
-    const images =
+    const backendImage =
+      getPropertyImage?.(propertyId);
+
+    if (backendImage) {
+      return backendImage;
+    }
+
+    const localImages =
       propertyImages?.[
         String(propertyId)
       ];
 
     if (
-      Array.isArray(images) &&
-      images.length > 0
+      Array.isArray(localImages) &&
+      localImages.length > 0
     ) {
-      return images[0];
+      return localImages[0];
     }
 
     return FALLBACK_PROPERTY_IMAGE;
@@ -234,11 +262,6 @@ export default function OwnerProperties() {
         property.price,
         property.listingType
       ),
-
-      /*
-       * Backend PropertyResponse currently does not
-       * provide these analytics values.
-       */
 
       views:
         property.views ?? 0,
@@ -276,7 +299,7 @@ export default function OwnerProperties() {
         ),
 
       image:
-        getLocalPropertyImage(
+        getOwnerPropertyImage(
           property.id
         ),
     };
@@ -285,9 +308,6 @@ export default function OwnerProperties() {
   /*
    * =========================================================
    * LOAD OWNER PROPERTIES FROM BACKEND
-   *
-   * This is outside useEffect so that we can call it
-   * again after editing a property.
    * =========================================================
    */
 
@@ -309,21 +329,6 @@ export default function OwnerProperties() {
         await propertyService.getPropertiesBySeller(
           sellerId
         );
-
-      /*
-       * Support:
-       *
-       * [
-       *   {...},
-       *   {...}
-       * ]
-       *
-       * and:
-       *
-       * {
-       *   content: [...]
-       * }
-       */
 
       const backendProperties =
         Array.isArray(response)
@@ -449,8 +454,6 @@ export default function OwnerProperties() {
   /*
    * =========================================================
    * AFTER PROPERTY IS SAVED
-   *
-   * AddProperty calls this after a successful update.
    * =========================================================
    */
 
@@ -473,6 +476,55 @@ export default function OwnerProperties() {
 
   /*
    * =========================================================
+   * DELETE PROPERTY
+   * =========================================================
+   */
+
+  const handleDeleteProperty = async () => {
+    if (!deletePropertyId) {
+      return;
+    }
+
+    try {
+      setDeleting(true);
+      setError("");
+
+      await propertyService.deleteProperty(
+        deletePropertyId
+      );
+
+      setPropertiesData(
+        (currentProperties) =>
+          currentProperties.filter(
+            (property) =>
+              property.id !==
+              deletePropertyId
+          )
+      );
+
+      setDeletePropertyId(null);
+    } catch (err) {
+      console.error(
+        "Failed to delete property:",
+        err
+      );
+
+      const backendMessage =
+        err?.response?.data?.message ||
+        err?.response?.data?.error;
+
+      setError(
+        backendMessage ||
+          err?.message ||
+          "Unable to delete the property."
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  /*
+   * =========================================================
    * MAP BACKEND DATA FOR DISPLAY
    * =========================================================
    */
@@ -485,6 +537,7 @@ export default function OwnerProperties() {
     }, [
       propertiesData,
       propertyImages,
+      getPropertyImage,
     ]);
 
   /*
@@ -580,14 +633,6 @@ export default function OwnerProperties() {
   /*
    * =========================================================
    * SAME-PAGE EDIT MODE
-   *
-   * IMPORTANT:
-   * We do NOT navigate to:
-   *
-   * /owner/properties/:id/edit
-   *
-   * Instead, AddProperty is rendered inside this same
-   * Owner Properties route.
    * =========================================================
    */
 
@@ -616,9 +661,7 @@ export default function OwnerProperties() {
   return (
     <div className="space-y-6">
 
-      {/* =========================================================
-          HEADER
-      ========================================================== */}
+      {/* HEADER */}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 
@@ -648,9 +691,7 @@ export default function OwnerProperties() {
 
       </div>
 
-      {/* =========================================================
-          SEARCH + FILTERS
-      ========================================================== */}
+      {/* SEARCH + FILTERS */}
 
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-stretch md:items-center">
 
@@ -704,9 +745,7 @@ export default function OwnerProperties() {
         </div>
       </div>
 
-      {/* =========================================================
-          LOADING
-      ========================================================== */}
+      {/* LOADING */}
 
       {loading && (
         <div className="bg-white border border-gray-200 rounded-xl py-16 px-6 text-center shadow-sm">
@@ -724,9 +763,7 @@ export default function OwnerProperties() {
         </div>
       )}
 
-      {/* =========================================================
-          ERROR
-      ========================================================== */}
+      {/* ERROR */}
 
       {!loading && error && (
         <div className="bg-white border border-red-200 rounded-xl py-12 px-6 text-center shadow-sm">
@@ -756,9 +793,7 @@ export default function OwnerProperties() {
         </div>
       )}
 
-      {/* =========================================================
-          PROPERTY COUNT + GRID
-      ========================================================== */}
+      {/* PROPERTY COUNT + GRID */}
 
       {!loading && !error && (
         <>
@@ -809,9 +844,7 @@ export default function OwnerProperties() {
                     className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm flex flex-col sm:flex-row hover:shadow-md transition group"
                   >
 
-                    {/* =================================================
-                        PROPERTY IMAGE
-                    ================================================== */}
+                    {/* PROPERTY IMAGE */}
 
                     <div className="relative w-full sm:w-48 h-52 sm:h-auto sm:min-h-[230px] shrink-0 bg-gray-100 overflow-hidden">
 
@@ -847,9 +880,7 @@ export default function OwnerProperties() {
 
                     </div>
 
-                    {/* =================================================
-                        PROPERTY CONTENT
-                    ================================================== */}
+                    {/* PROPERTY CONTENT */}
 
                     <div className="p-5 flex-1 flex flex-col justify-between space-y-4 min-w-0">
 
@@ -873,23 +904,39 @@ export default function OwnerProperties() {
 
                           </span>
 
-                          {/* =================================================
-                              EDIT BUTTON
-                          ================================================== */}
+                          {/* EDIT + DELETE */}
 
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setEditingPropertyId(
-                                property.id
-                              )
-                            }
-                            className="text-gray-400 hover:text-rose-600 hover:bg-rose-50 p-1 rounded transition-colors"
-                            aria-label={`Edit ${property.title}`}
-                            title="Edit Property"
-                          >
-                            <MoreVertical className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-1">
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditingPropertyId(
+                                  property.id
+                                )
+                              }
+                              className="text-gray-400 hover:text-rose-600 hover:bg-rose-50 p-1 rounded transition-colors"
+                              aria-label={`Edit ${property.title}`}
+                              title="Edit Property"
+                            >
+                              <MoreVertical className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDeletePropertyId(
+                                  property.id
+                                )
+                              }
+                              className="text-gray-400 hover:text-red-600 hover:bg-red-50 p-1 rounded transition-colors"
+                              aria-label={`Delete ${property.title}`}
+                              title="Delete Property"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+
+                          </div>
 
                         </div>
 
@@ -911,9 +958,7 @@ export default function OwnerProperties() {
 
                       </div>
 
-                      {/* =================================================
-                          PROPERTY SPECS
-                      ================================================== */}
+                      {/* PROPERTY SPECS */}
 
                       <div className="flex items-center gap-3 text-gray-500 text-xs border-y border-gray-100 py-2 overflow-hidden">
 
@@ -957,9 +1002,7 @@ export default function OwnerProperties() {
 
                       </div>
 
-                      {/* =================================================
-                          PROPERTY VALUE + ANALYTICS
-                      ================================================== */}
+                      {/* PROPERTY VALUE + ANALYTICS */}
 
                       <div className="flex items-end justify-between gap-3 pt-1">
 
@@ -1078,7 +1121,65 @@ export default function OwnerProperties() {
         </>
       )}
 
+      {/* DELETE CONFIRMATION MODAL */}
+
+      {deletePropertyId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6">
+
+            <div className="flex items-start gap-4">
+
+              <div className="w-11 h-11 rounded-full bg-red-50 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  Delete Property?
+                </h3>
+
+                <p className="mt-1 text-sm text-gray-500 leading-6">
+                  Are you sure you want to delete this
+                  property? This action cannot be undone.
+                </p>
+              </div>
+
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+
+              <button
+                type="button"
+                onClick={() =>
+                  setDeletePropertyId(null)
+                }
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={
+                  handleDeleteProperty
+                }
+                disabled={deleting}
+                className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white text-sm font-semibold transition disabled:opacity-50"
+              >
+                {deleting
+                  ? "Deleting..."
+                  : "Delete Property"}
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
     </div>
   );
 }
-

@@ -1,5 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
+
 import {
   MapPin,
   Bed,
@@ -22,6 +23,9 @@ import { useData } from "../../context/DataContext";
 import { formatPrice } from "../../data/mockData";
 import { useAuth } from "../../context/AuthContext";
 import reviewService from "../../services/reviewService";
+import messagingService from "../../services/messagingService";
+import leadService from "../../services/leadService";
+import mediaService from "../../services/mediaService";
 
 export default function PropertyDetail() {
   const { id } = useParams();
@@ -29,7 +33,6 @@ export default function PropertyDetail() {
 
   const {
     properties,
-    addLead,
     addTourRequest,
     addViewedProperty,
     isFavorite,
@@ -42,6 +45,13 @@ export default function PropertyDetail() {
     (p) => String(p.id) === String(id)
   );
 
+  /*
+   * ============================================================
+   * IMAGE STATE
+   * ============================================================
+   */
+  const [propertyImages, setPropertyImages] = useState([]);
+  const [imagesLoading, setImagesLoading] = useState(true);
   const [imgIdx, setImgIdx] = useState(0);
 
   const [showLeadForm, setShowLeadForm] = useState(false);
@@ -57,6 +67,23 @@ export default function PropertyDetail() {
 
   /*
    * ============================================================
+   * LEADS
+   * ============================================================
+   */
+  const [leadSubmitting, setLeadSubmitting] = useState(false);
+  const [leadError, setLeadError] = useState("");
+
+  /*
+   * ============================================================
+   * MESSAGE OWNER
+   * ============================================================
+   */
+  const [messageLoading, setMessageLoading] = useState(false);
+  const [messageSuccess, setMessageSuccess] = useState("");
+  const [messageError, setMessageError] = useState("");
+
+  /*
+   * ============================================================
    * REVIEWS
    * ============================================================
    */
@@ -68,6 +95,144 @@ export default function PropertyDetail() {
   const [reviewComment, setReviewComment] = useState("");
   const [reviewSubmitting, setReviewSubmitting] = useState(false);
   const [reviewSuccess, setReviewSuccess] = useState("");
+
+  /*
+   * ============================================================
+   * LOAD PROPERTY IMAGES FROM BACKEND
+   * ============================================================
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPropertyImages = async () => {
+      if (!property?.id) {
+        setPropertyImages([]);
+        setImagesLoading(false);
+        return;
+      }
+
+      try {
+        setImagesLoading(true);
+
+        /*
+         * Get all media records belonging to this property.
+         */
+        const response =
+          await mediaService.getMediaByProperty(property.id);
+
+        if (cancelled) {
+          return;
+        }
+
+        let mediaList = [];
+
+        if (Array.isArray(response)) {
+          mediaList = response;
+        } else if (Array.isArray(response?.content)) {
+          mediaList = response.content;
+        } else if (Array.isArray(response?.data)) {
+          mediaList = response.data;
+        } else if (Array.isArray(response?.media)) {
+          mediaList = response.media;
+        }
+
+        /*
+         * Keep only images.
+         */
+        const imageMedia = mediaList.filter((media) => {
+          const mediaType = String(
+            media?.mediaType ||
+              media?.media_type ||
+              ""
+          ).toUpperCase();
+
+          return (
+            !mediaType ||
+            mediaType === "IMAGE" ||
+            mediaType === "PHOTO"
+          );
+        });
+
+        /*
+         * Primary image first.
+         */
+        imageMedia.sort((a, b) => {
+          const primaryA = Boolean(
+            a?.primary ??
+              a?.isPrimary ??
+              a?.is_primary
+          );
+
+          const primaryB = Boolean(
+            b?.primary ??
+              b?.isPrimary ??
+              b?.is_primary
+          );
+
+          return Number(primaryB) - Number(primaryA);
+        });
+
+        /*
+         * Convert backend file URLs into browser URLs.
+         */
+        const urls = imageMedia
+          .map((media) => {
+            const fileUrl =
+              media?.fileUrl ||
+              media?.file_url ||
+              "";
+
+            return mediaService.resolveMediaUrl(
+              fileUrl
+            );
+          })
+          .filter(Boolean);
+
+        /*
+         * Fallback to old property.images if backend
+         * does not have media.
+         */
+        if (urls.length === 0) {
+          const fallbackImages =
+            Array.isArray(property.images)
+              ? property.images
+              : [];
+
+          setPropertyImages(fallbackImages);
+        } else {
+          setPropertyImages(urls);
+        }
+
+        setImgIdx(0);
+      } catch (error) {
+        console.error(
+          "Failed to load property images:",
+          error
+        );
+
+        /*
+         * Fallback to existing property.images.
+         */
+        const fallbackImages =
+          Array.isArray(property.images)
+            ? property.images
+            : [];
+
+        setPropertyImages(fallbackImages);
+        setImgIdx(0);
+      } finally {
+        if (!cancelled) {
+          setImagesLoading(false);
+        }
+      }
+    };
+
+    loadPropertyImages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [property?.id]);
 
   /*
    * ============================================================
@@ -181,7 +346,31 @@ export default function PropertyDetail() {
     );
   }
 
-  const images = property.images || [];
+  /*
+   * ============================================================
+   * USE BACKEND IMAGES
+   * ============================================================
+   */
+  const images =
+    propertyImages.length > 0
+      ? propertyImages
+      : Array.isArray(property.images)
+      ? property.images
+      : [];
+
+  /*
+   * ============================================================
+   * FIND SELLER ID
+   * ============================================================
+   */
+  const sellerId =
+    property.sellerId ||
+    property.ownerId ||
+    property.seller?.id ||
+    property.seller?.userId ||
+    property.owner?.id ||
+    property.owner?.userId ||
+    null;
 
   /*
    * ============================================================
@@ -189,19 +378,25 @@ export default function PropertyDetail() {
    * ============================================================
    */
   const nextImg = () => {
-    if (images.length === 0) return;
+    if (images.length === 0) {
+      return;
+    }
 
     setImgIdx(
-      (current) => (current + 1) % images.length
+      (current) =>
+        (current + 1) % images.length
     );
   };
 
   const prevImg = () => {
-    if (images.length === 0) return;
+    if (images.length === 0) {
+      return;
+    }
 
     setImgIdx(
       (current) =>
-        (current - 1 + images.length) % images.length
+        (current - 1 + images.length) %
+        images.length
     );
   };
 
@@ -223,11 +418,88 @@ export default function PropertyDetail() {
 
   /*
    * ============================================================
+   * MESSAGE OWNER
+   * ============================================================
+   */
+  const handleMessageOwner = async () => {
+    setMessageSuccess("");
+    setMessageError("");
+
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    if (!sellerId) {
+      setMessageError(
+        "Owner information is not available for this property."
+      );
+      return;
+    }
+
+    if (
+      user?.id &&
+      String(user.id) === String(sellerId)
+    ) {
+      setMessageError(
+        "You cannot send a message request to yourself."
+      );
+      return;
+    }
+
+    try {
+      setMessageLoading(true);
+
+      const conversation =
+        await messagingService.createConversation(
+          sellerId,
+          property.id
+        );
+
+      if (conversation?.id) {
+        setMessageSuccess(
+          "Message request sent to the property owner."
+        );
+      } else {
+        setMessageSuccess(
+          "Message request sent successfully."
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Failed to send message request:",
+        error
+      );
+
+      setMessageError(
+        error.message ||
+          "Failed to send message request."
+      );
+    } finally {
+      setMessageLoading(false);
+    }
+  };
+
+  /*
+   * ============================================================
    * OPEN INTEREST FORM
    * ============================================================
    */
   const handleInterested = () => {
+    setLeadError("");
     setSubmitted(false);
+
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    if (user?.role !== "buyer") {
+      setLeadError(
+        "Only buyers can submit property enquiries."
+      );
+      return;
+    }
 
     setLeadForm((prev) => ({
       ...prev,
@@ -244,20 +516,102 @@ export default function PropertyDetail() {
    * LEAD SUBMISSION
    * ============================================================
    */
-  const handleLeadSubmit = (e) => {
+  const handleLeadSubmit = async (e) => {
     e.preventDefault();
 
-    addLead({
-      ...leadForm,
-      propertyId: property.id,
-      agentId: property.agentId || 1,
-      source: "Website",
-      userId: user?.id || user?.userId || null,
-      status: "NEW",
-    });
+    setLeadError("");
 
-    setSubmitted(true);
-    setShowLeadForm(false);
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    if (user?.role !== "buyer") {
+      setLeadError(
+        "Only buyers can submit property enquiries."
+      );
+      return;
+    }
+
+    const name = leadForm.name.trim();
+    const email = leadForm.email.trim();
+    const phone = leadForm.phone.trim();
+    const message = leadForm.message.trim();
+
+    if (!name) {
+      setLeadError("Please enter your name.");
+      return;
+    }
+
+    if (!email) {
+      setLeadError("Please enter your email.");
+      return;
+    }
+
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    ) {
+      setLeadError(
+        "Please enter a valid email address."
+      );
+      return;
+    }
+
+    const normalizedPhone = phone.replace(
+      /\D/g,
+      ""
+    );
+
+    const finalPhone =
+      normalizedPhone.length > 10
+        ? normalizedPhone.slice(-10)
+        : normalizedPhone;
+
+    if (!/^[0-9]{10}$/.test(finalPhone)) {
+      setLeadError(
+        "Phone number must contain exactly 10 digits."
+      );
+      return;
+    }
+
+    try {
+      setLeadSubmitting(true);
+
+      const createdLead =
+        await leadService.createLead({
+          propertyId: property.id,
+          name,
+          email,
+          phone: finalPhone,
+          message,
+        });
+
+      console.log(
+        "Lead created successfully:",
+        createdLead
+      );
+
+      setSubmitted(true);
+      setShowLeadForm(false);
+
+      setLeadForm((prev) => ({
+        ...prev,
+        phone: finalPhone,
+        message: "",
+      }));
+    } catch (error) {
+      console.error(
+        "Failed to submit property enquiry:",
+        error
+      );
+
+      setLeadError(
+        error.message ||
+          "Failed to submit your enquiry. Please try again."
+      );
+    } finally {
+      setLeadSubmitting(false);
+    }
   };
 
   /*
@@ -340,11 +694,6 @@ export default function PropertyDetail() {
           comment: reviewComment.trim(),
         });
 
-      /*
-       * Add the newly created review immediately.
-       * This keeps the page responsive without requiring
-       * the user to refresh the browser.
-       */
       if (createdReview) {
         setReviews((prev) => [
           createdReview,
@@ -354,6 +703,7 @@ export default function PropertyDetail() {
 
       setReviewRating(0);
       setReviewComment("");
+
       setReviewSuccess(
         "Your review was submitted successfully."
       );
@@ -439,88 +789,146 @@ export default function PropertyDetail() {
           {/* ====================================================
               IMAGE GALLERY
           ==================================================== */}
-          <div className="relative rounded-xl overflow-hidden bg-gray-100 aspect-[16/10]">
+          <div>
 
-            <img
-              src={
-                images[imgIdx] ||
-                "https://via.placeholder.com/800x500"
-              }
-              alt={property.title}
-              className="w-full h-full object-cover"
-            />
+            <div className="relative rounded-xl overflow-hidden bg-gray-100 aspect-[16/10]">
 
-            {/* FAVORITE */}
-            <button
-              type="button"
-              onClick={handleFavorite}
-              aria-label={
-                favorite
-                  ? "Remove from favorites"
-                  : "Add to favorites"
-              }
-              className="absolute top-3 right-3 w-11 h-11 rounded-full bg-white/95 shadow-md flex items-center justify-center hover:bg-white transition"
-            >
-              <Heart
-                className={`w-5 h-5 ${
-                  favorite
-                    ? "text-red-500 fill-red-500"
-                    : "text-gray-600"
-                }`}
-              />
-            </button>
-
-            {/* IMAGE NAVIGATION */}
-            {images.length > 1 && (
-              <>
-                <button
-                  type="button"
-                  onClick={prevImg}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/90 p-2 rounded-full shadow hover:bg-white"
-                  aria-label="Previous image"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-
-                <button
-                  type="button"
-                  onClick={nextImg}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/90 p-2 rounded-full shadow hover:bg-white"
-                  aria-label="Next image"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                  {images.map((_, i) => (
-                    <button
-                      type="button"
-                      key={i}
-                      onClick={() => setImgIdx(i)}
-                      aria-label={`View image ${i + 1}`}
-                      className={`w-2 h-2 rounded-full ${
-                        i === imgIdx
-                          ? "bg-white"
-                          : "bg-white/50"
-                      }`}
-                    />
-                  ))}
+              {imagesLoading ? (
+                <div className="w-full h-full flex items-center justify-center">
+                  <div className="text-sm text-gray-500">
+                    Loading images...
+                  </div>
                 </div>
-              </>
-            )}
+              ) : (
+                <img
+                  src={
+                    images[imgIdx] ||
+                    "https://via.placeholder.com/800x500"
+                  }
+                  alt={`${property.title} ${
+                    imgIdx + 1
+                  }`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src =
+                      "https://via.placeholder.com/800x500";
+                  }}
+                />
+              )}
 
-            {/* BUY / RENT BADGE */}
-            <div className="absolute top-3 left-3">
-              <span
-                className={`px-3 py-1 text-sm font-semibold rounded-full ${
-                  property.listingType === "Rent"
-                    ? "bg-blue-600 text-white"
-                    : "bg-red-600 text-white"
-                }`}
+              {/* FAVORITE */}
+              <button
+                type="button"
+                onClick={handleFavorite}
+                aria-label={
+                  favorite
+                    ? "Remove from favorites"
+                    : "Add to favorites"
+                }
+                className="absolute top-3 right-3 w-11 h-11 rounded-full bg-white/95 shadow-md flex items-center justify-center hover:bg-white transition"
               >
-                For {property.listingType}
-              </span>
+                <Heart
+                  className={`w-5 h-5 ${
+                    favorite
+                      ? "text-red-500 fill-red-500"
+                      : "text-gray-600"
+                  }`}
+                />
+              </button>
+
+              {/* IMAGE NAVIGATION */}
+              {images.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={prevImg}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 bg-white/90 p-2 rounded-full shadow hover:bg-white"
+                    aria-label="Previous image"
+                  >
+                    <ChevronLeft className="w-5 h-5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={nextImg}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-white/90 p-2 rounded-full shadow hover:bg-white"
+                    aria-label="Next image"
+                  >
+                    <ChevronRight className="w-5 h-5" />
+                  </button>
+
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                    {images.map((_, i) => (
+                      <button
+                        type="button"
+                        key={i}
+                        onClick={() =>
+                          setImgIdx(i)
+                        }
+                        aria-label={`View image ${
+                          i + 1
+                        }`}
+                        className={`w-2 h-2 rounded-full ${
+                          i === imgIdx
+                            ? "bg-white"
+                            : "bg-white/50"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* BUY / RENT BADGE */}
+              <div className="absolute top-3 left-3">
+                <span
+                  className={`px-3 py-1 text-sm font-semibold rounded-full ${
+                    property.listingType === "Rent"
+                      ? "bg-blue-600 text-white"
+                      : "bg-red-600 text-white"
+                  }`}
+                >
+                  For {property.listingType}
+                </span>
+              </div>
             </div>
+
+            {/* ==================================================
+                IMAGE THUMBNAILS
+            ================================================== */}
+            {images.length > 1 && (
+              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+                {images.map((image, index) => (
+                  <button
+                    type="button"
+                    key={`${image}-${index}`}
+                    onClick={() =>
+                      setImgIdx(index)
+                    }
+                    className={`shrink-0 rounded-lg overflow-hidden border-2 transition ${
+                      index === imgIdx
+                        ? "border-purple-600"
+                        : "border-transparent"
+                    }`}
+                    aria-label={`Select image ${
+                      index + 1
+                    }`}
+                  >
+                    <img
+                      src={image}
+                      alt={`Thumbnail ${
+                        index + 1
+                      }`}
+                      className="w-20 h-14 sm:w-24 sm:h-16 object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src =
+                          "https://via.placeholder.com/100x70";
+                      }}
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* ====================================================
@@ -764,14 +1172,12 @@ export default function PropertyDetail() {
               )}
             </div>
 
-            {/* REVIEW ERROR */}
             {reviewsError && (
               <div className="mb-4 bg-red-50 border border-red-100 text-red-600 rounded-lg px-4 py-3 text-sm">
                 {reviewsError}
               </div>
             )}
 
-            {/* REVIEW SUCCESS */}
             {reviewSuccess && (
               <div className="mb-4 bg-green-50 border border-green-100 text-green-700 rounded-lg px-4 py-3 text-sm flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 shrink-0" />
@@ -779,9 +1185,6 @@ export default function PropertyDetail() {
               </div>
             )}
 
-            {/* ==================================================
-                WRITE REVIEW
-            ================================================== */}
             {isAuthenticated ? (
               <form
                 onSubmit={handleReviewSubmit}
@@ -795,7 +1198,6 @@ export default function PropertyDetail() {
                   Share your experience with this property.
                 </p>
 
-                {/* RATING */}
                 <div className="mt-4">
                   <p className="text-sm font-medium text-gray-700 mb-2">
                     Your Rating
@@ -845,7 +1247,6 @@ export default function PropertyDetail() {
                   </div>
                 </div>
 
-                {/* COMMENT */}
                 <div className="mt-4">
                   <label
                     htmlFor="review-comment"
@@ -896,9 +1297,6 @@ export default function PropertyDetail() {
               </div>
             )}
 
-            {/* ==================================================
-                EXISTING REVIEWS
-            ================================================== */}
             {reviewsLoading ? (
               <div className="text-center py-8">
                 <Star className="w-7 h-7 text-gray-300 mx-auto mb-2" />
@@ -994,7 +1392,6 @@ export default function PropertyDetail() {
               </div>
             )}
           </div>
-
         </div>
 
         {/* ======================================================
@@ -1005,14 +1402,48 @@ export default function PropertyDetail() {
           <div className="bg-white border border-gray-200 rounded-xl p-5 sticky top-24 shadow-sm">
 
             <h3 className="font-semibold text-lg mb-4">
-              Contact Agent
+              Contact Agent/Seller
             </h3>
 
-            {/* ==================================================
-                SUCCESS MESSAGE
-            ================================================== */}
-            {submitted ? (
+            {messageSuccess && (
+              <div className="mb-4 bg-green-50 border border-green-100 text-green-700 rounded-lg px-3 py-3 text-sm flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
 
+                <div>
+                  <p className="font-medium">
+                    Request Sent
+                  </p>
+
+                  <p className="text-xs mt-0.5">
+                    {messageSuccess}
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate("/messages")
+                    }
+                    className="mt-2 text-xs font-semibold text-green-700 hover:text-green-800 underline"
+                  >
+                    View Messages
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {messageError && (
+              <div className="mb-4 bg-red-50 border border-red-100 text-red-600 rounded-lg px-3 py-3 text-sm">
+                {messageError}
+              </div>
+            )}
+
+            {leadError && !showLeadForm && (
+              <div className="mb-4 bg-red-50 border border-red-100 text-red-600 rounded-lg px-3 py-3 text-sm">
+                {leadError}
+              </div>
+            )}
+
+            {submitted ? (
               <div className="text-center py-6">
 
                 <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
@@ -1029,6 +1460,8 @@ export default function PropertyDetail() {
                   type="button"
                   onClick={() => {
                     setSubmitted(false);
+                    setLeadError("");
+
                     setLeadForm({
                       name: user?.name || "",
                       email: user?.email || "",
@@ -1042,16 +1475,18 @@ export default function PropertyDetail() {
                 </button>
 
               </div>
-
             ) : showLeadForm ? (
 
-              /* ==================================================
-                 INDIVIDUAL INTEREST FORM
-              ================================================== */
               <form
                 onSubmit={handleLeadSubmit}
                 className="space-y-3"
               >
+
+                {leadError && (
+                  <div className="bg-red-50 border border-red-100 text-red-600 rounded-lg px-3 py-2.5 text-sm">
+                    {leadError}
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between mb-1">
                   <div>
@@ -1066,7 +1501,10 @@ export default function PropertyDetail() {
 
                   <button
                     type="button"
-                    onClick={() => setShowLeadForm(false)}
+                    onClick={() => {
+                      setShowLeadForm(false);
+                      setLeadError("");
+                    }}
                     className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500"
                     aria-label="Close interest form"
                   >
@@ -1130,15 +1568,22 @@ export default function PropertyDetail() {
 
                 <button
                   type="submit"
-                  className="w-full bg-purple-600 text-white py-2.5 rounded-lg font-semibold hover:bg-purple-700 transition"
+                  disabled={leadSubmitting}
+                  className="w-full bg-purple-600 text-white py-2.5 rounded-lg font-semibold hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Submit Interest
+                  {leadSubmitting
+                    ? "Submitting..."
+                    : "Submit Interest"}
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setShowLeadForm(false)}
-                  className="w-full text-sm text-gray-500 hover:text-gray-700 py-1"
+                  onClick={() => {
+                    setShowLeadForm(false);
+                    setLeadError("");
+                  }}
+                  disabled={leadSubmitting}
+                  className="w-full text-sm text-gray-500 hover:text-gray-700 py-1 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -1147,14 +1592,8 @@ export default function PropertyDetail() {
 
             ) : (
 
-              /* ==================================================
-                 CONTACT ACTIONS
-              ================================================== */
               <div className="space-y-3">
 
-                {/* =================================================
-                    I'M INTERESTED
-                ================================================= */}
                 <button
                   type="button"
                   onClick={handleInterested}
@@ -1164,9 +1603,19 @@ export default function PropertyDetail() {
                   I'm Interested
                 </button>
 
-                {/* =================================================
-                    REQUEST TOUR
-                ================================================= */}
+                <button
+                  type="button"
+                  onClick={handleMessageOwner}
+                  disabled={messageLoading}
+                  className="w-full border border-purple-600 text-purple-600 py-2.5 rounded-lg font-semibold hover:bg-purple-50 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <MessageSquare className="w-4 h-4" />
+
+                  {messageLoading
+                    ? "Sending Request..."
+                    : "Message Request"}
+                </button>
+
                 <button
                   type="button"
                   onClick={handleTourRequest}
@@ -1179,9 +1628,6 @@ export default function PropertyDetail() {
               </div>
             )}
 
-            {/* ==================================================
-                SELLER INFORMATION
-            ================================================== */}
             {property.sellerName && (
               <div className="mt-5 pt-5 border-t border-gray-100">
 

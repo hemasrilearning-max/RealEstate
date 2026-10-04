@@ -13,7 +13,6 @@ import {
   Home,
   Heart,
   User,
-  Search,
   MessageCircle,
   CalendarDays,
   ChevronDown,
@@ -341,15 +340,7 @@ export default function Navbar() {
                           Favorites
                         </Link>
 
-                        {/* Saved Searches */}
-                        <Link
-                          to="/saved-searches"
-                          onClick={closeMenu}
-                          className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-purple-50 hover:text-purple-700 transition"
-                        >
-                          <Search className="w-4 h-4" />
-                          Saved Searches
-                        </Link>
+                       
 
                         {/* Viewed Properties */}
                         <Link
@@ -624,15 +615,6 @@ export default function Navbar() {
                     Favorites
                   </Link>
 
-                  {/* Saved Searches */}
-                  <Link
-                    to="/saved-searches"
-                    onClick={closeMenu}
-                    className="flex items-center gap-2 px-3 py-2.5 text-gray-700 hover:bg-purple-50 hover:text-purple-700 rounded-lg transition"
-                  >
-                    <Search className="w-4 h-4" />
-                    Saved Searches
-                  </Link>
 
                   {/* Viewed Properties */}
                   <Link

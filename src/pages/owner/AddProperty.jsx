@@ -1,11 +1,19 @@
-import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Upload, X, Home } from "lucide-react";
+import React, {
+  useEffect,
+  useState,
+} from "react";
 
-import { useData } from "../../context/DataContext";
+import { useNavigate } from "react-router-dom";
+
+import {
+  Upload,
+  X,
+  Home,
+} from "lucide-react";
 
 import locationService from "../../services/locationService";
 import propertyService from "../../services/propertyService";
+import mediaService from "../../services/mediaService";
 
 const EMPTY_FORM = {
   title: "",
@@ -41,25 +49,61 @@ export default function AddProperty({
     propertyId
   );
 
-  const {
-    addPropertyImages,
-    propertyImages,
-  } = useData();
-
   const [formData, setFormData] =
     useState(EMPTY_FORM);
 
-  const [images, setImages] = useState([]);
-  const [imagePreviews, setImagePreviews] =
+  /*
+   * New files selected by the user.
+   */
+  const [images, setImages] =
     useState([]);
 
-  const [loadingProperty, setLoadingProperty] =
-    useState(isEditMode);
+  /*
+   * Images already stored in backend.
+   *
+   * Each item:
+   * {
+   *   id,
+   *   fileUrl,
+   *   url
+   * }
+   */
+  const [
+    existingImages,
+    setExistingImages,
+  ] = useState([]);
 
-  const [submitting, setSubmitting] =
-    useState(false);
+  /*
+   * New image previews.
+   */
+  const [
+    newImagePreviews,
+    setNewImagePreviews,
+  ] = useState([]);
 
-  const [error, setError] = useState("");
+  /*
+   * Media IDs removed by user while editing.
+   *
+   * They are deleted from backend only after
+   * the property update succeeds.
+   */
+  const [
+    removedMediaIds,
+    setRemovedMediaIds,
+  ] = useState([]);
+
+  const [
+    loadingProperty,
+    setLoadingProperty,
+  ] = useState(isEditMode);
+
+  const [
+    submitting,
+    setSubmitting,
+  ] = useState(false);
+
+  const [error, setError] =
+    useState("");
 
   /*
    * =========================================================
@@ -80,7 +124,9 @@ export default function AddProperty({
         setError("");
 
         const property =
-          await propertyService.getPropertyById(id);
+          await propertyService.getPropertyById(
+            id
+          );
 
         if (!mounted) {
           return;
@@ -104,29 +150,31 @@ export default function AddProperty({
           "Apartment";
 
         if (
-          backendPropertyType === "VILLA"
+          backendPropertyType ===
+          "VILLA"
         ) {
-          frontendPropertyType = "Villa";
+          frontendPropertyType =
+            "Villa";
         } else if (
-          backendPropertyType === "OFFICE" ||
+          backendPropertyType ===
+            "OFFICE" ||
           backendPropertyType ===
             "COMMERCIAL"
         ) {
           frontendPropertyType =
             "Commercial";
         } else if (
-          backendPropertyType === "PLOT"
+          backendPropertyType ===
+          "PLOT"
         ) {
-          frontendPropertyType = "Plot";
+          frontendPropertyType =
+            "Plot";
         }
 
         const listingType =
           String(
             property.listingType || ""
           ).toUpperCase();
-
-        const localImages =
-          propertyImages?.[String(id)];
 
         setFormData({
           title:
@@ -188,19 +236,101 @@ export default function AddProperty({
         });
 
         /*
-         * Existing browser-local images.
-         *
-         * Backend does not currently store images,
-         * so these remain frontend-only.
+         * -----------------------------------------------------
+         * LOAD BACKEND MEDIA
+         * -----------------------------------------------------
          */
-        if (
-          Array.isArray(localImages) &&
-          localImages.length > 0
-        ) {
-          setImagePreviews(
-            localImages
+
+        const mediaResponse =
+          await mediaService.getMediaByProperty(
+            id
           );
+
+        if (!mounted) {
+          return;
         }
+
+        const mediaList =
+          Array.isArray(
+            mediaResponse
+          )
+            ? mediaResponse
+            : Array.isArray(
+                mediaResponse?.content
+              )
+            ? mediaResponse.content
+            : Array.isArray(
+                mediaResponse?.data
+              )
+            ? mediaResponse.data
+            : [];
+
+        const backendImages =
+          mediaList
+            .filter((media) => {
+              const mediaType =
+                String(
+                  media?.mediaType ||
+                    ""
+                ).toUpperCase();
+
+              return (
+                mediaType.includes(
+                  "IMAGE"
+                ) ||
+                mediaType === "PHOTO"
+              );
+            })
+            .sort((a, b) => {
+              const primaryA =
+                Boolean(
+                  a?.primary ??
+                    a?.isPrimary ??
+                    a?.is_primary
+                );
+
+              const primaryB =
+                Boolean(
+                  b?.primary ??
+                    b?.isPrimary ??
+                    b?.is_primary
+                );
+
+              return (
+                Number(primaryB) -
+                Number(primaryA)
+              );
+            })
+            .map((media) => ({
+              id: media.id,
+
+              fileUrl:
+                media.fileUrl ||
+                media.file_url ||
+                "",
+
+              url:
+                mediaService.resolveMediaUrl(
+                  media.fileUrl ||
+                    media.file_url ||
+                    ""
+                ),
+
+              primary:
+                Boolean(
+                  media.primary ??
+                    media.isPrimary ??
+                    media.is_primary
+                ),
+            }))
+            .filter(
+              (media) =>
+                media.url
+            );
+
+        setExistingImages(
+          backendImages
+        );
       } catch (err) {
         console.error(
           "Load Property Error:",
@@ -228,7 +358,6 @@ export default function AddProperty({
   }, [
     id,
     isEditMode,
-    propertyImages,
   ]);
 
   /*
@@ -238,8 +367,10 @@ export default function AddProperty({
    */
 
   const handleChange = (e) => {
-    const { name, value } =
-      e.target;
+    const {
+      name,
+      value,
+    } = e.target;
 
     setFormData((prev) => ({
       ...prev,
@@ -253,7 +384,9 @@ export default function AddProperty({
    * =========================================================
    */
 
-  const handleImageChange = (e) => {
+  const handleImageChange = (
+    e
+  ) => {
     const files =
       Array.from(
         e.target.files || []
@@ -310,7 +443,7 @@ export default function AddProperty({
           new FileReader();
 
         reader.onloadend = () => {
-          setImagePreviews(
+          setNewImagePreviews(
             (prev) => [
               ...prev,
               reader.result,
@@ -325,43 +458,72 @@ export default function AddProperty({
     e.target.value = "";
   };
 
+  /*
+   * =========================================================
+   * REMOVE IMAGE
+   * =========================================================
+   */
+
   const removeImage = (
-    indexToRemove
+    type,
+    index
   ) => {
     /*
-     * Existing local image:
-     * remove from preview only.
-     *
-     * New selected image:
-     * remove from both File list and preview.
+     * Existing backend image.
      */
-
-    const existingImageCount =
-      imagePreviews.length -
-      images.length;
-
     if (
-      indexToRemove >=
-      existingImageCount
+      type === "existing"
     ) {
-      const newFileIndex =
-        indexToRemove -
-        existingImageCount;
+      const image =
+        existingImages[index];
 
-      setImages((prev) =>
-        prev.filter(
-          (_, index) =>
-            index !==
-            newFileIndex
-        )
+      if (image?.id) {
+        setRemovedMediaIds(
+          (prev) => {
+            if (
+              prev.includes(
+                image.id
+              )
+            ) {
+              return prev;
+            }
+
+            return [
+              ...prev,
+              image.id,
+            ];
+          }
+        );
+      }
+
+      setExistingImages(
+        (prev) =>
+          prev.filter(
+            (_, imageIndex) =>
+              imageIndex !==
+              index
+          )
       );
+
+      return;
     }
 
-    setImagePreviews((prev) =>
+    /*
+     * New image.
+     */
+    setImages((prev) =>
       prev.filter(
-        (_, index) =>
-          index !== indexToRemove
+        (_, imageIndex) =>
+          imageIndex !== index
       )
+    );
+
+    setNewImagePreviews(
+      (prev) =>
+        prev.filter(
+          (_, imageIndex) =>
+            imageIndex !== index
+        )
     );
   };
 
@@ -390,21 +552,100 @@ export default function AddProperty({
       return (
         propertyTypeMap[
           formData.propertyType
-        ] || "APARTMENT"
+        ] ||
+        "APARTMENT"
       );
     };
 
   /*
    * =========================================================
+   * UPLOAD ALL NEW IMAGES
+   * =========================================================
+   */
+
+  const uploadNewImages = async (
+    propertyId
+  ) => {
+    if (
+      !propertyId ||
+      images.length === 0
+    ) {
+      return [];
+    }
+
+    const uploadedMedia = [];
+
+    /*
+     * For a brand-new property:
+     *
+     * first image = primary
+     * remaining images = non-primary
+     *
+     * For edit mode:
+     * all newly added images are non-primary,
+     * because an existing primary image may already exist.
+     */
+    for (
+      let index = 0;
+      index < images.length;
+      index += 1
+    ) {
+      const file = images[index];
+
+      const primary =
+        !isEditMode &&
+        index === 0;
+
+      const response =
+        await mediaService.uploadMedia(
+          propertyId,
+          file,
+          "IMAGE",
+          primary
+        );
+
+      uploadedMedia.push(
+        response
+      );
+    }
+
+    return uploadedMedia;
+  };
+
+  /*
+   * =========================================================
+   * DELETE REMOVED BACKEND IMAGES
+   * =========================================================
+   */
+
+  const deleteRemovedImages =
+    async () => {
+      if (
+        removedMediaIds.length ===
+        0
+      ) {
+        return;
+      }
+
+      for (
+        const mediaId of removedMediaIds
+      ) {
+        try {
+          await mediaService.deleteMedia(
+            mediaId
+          );
+        } catch (deleteError) {
+          console.error(
+            `Unable to delete media ${mediaId}:`,
+            deleteError
+          );
+        }
+      }
+    };
+
+  /*
+   * =========================================================
    * SUBMIT
-   *
-   * ADD:
-   *   Create Location
-   *   Create Property
-   *
-   * EDIT:
-   *   Create updated Location
-   *   PUT Property
    * =========================================================
    */
 
@@ -420,11 +661,6 @@ export default function AddProperty({
          * -----------------------------------------------------
          * STEP 1: CREATE LOCATION
          * -----------------------------------------------------
-         *
-         * We create a location from the current form values.
-         *
-         * This allows the existing backend property to receive
-         * the updated locationId without changing the backend.
          */
 
         const locationPayload = {
@@ -475,16 +711,24 @@ export default function AddProperty({
             null,
 
           price:
-            Number(formData.price),
+            Number(
+              formData.price
+            ),
 
           bedrooms:
-            Number(formData.bedrooms),
+            Number(
+              formData.bedrooms
+            ),
 
           bathrooms:
-            Number(formData.bathrooms),
+            Number(
+              formData.bathrooms
+            ),
 
           area:
-            Number(formData.area),
+            Number(
+              formData.area
+            ),
 
           propertyType:
             getBackendPropertyType(),
@@ -516,7 +760,7 @@ export default function AddProperty({
 
         /*
          * -----------------------------------------------------
-         * STEP 3: CREATE OR UPDATE
+         * STEP 3: CREATE OR UPDATE PROPERTY
          * -----------------------------------------------------
          */
 
@@ -544,13 +788,8 @@ export default function AddProperty({
 
         /*
          * -----------------------------------------------------
-         * STEP 4: SAVE NEW IMAGES
+         * STEP 4: PROPERTY ID
          * -----------------------------------------------------
-         *
-         * Only newly selected files are saved.
-         *
-         * Existing browser-local images are left alone unless
-         * the user removed them from the current preview.
          */
 
         const propertyId =
@@ -558,52 +797,69 @@ export default function AddProperty({
             ? id
             : propertyResponse?.id;
 
-        if (
-          !propertyId
-        ) {
+        if (!propertyId) {
           throw new Error(
             "Property was saved but no property ID was returned."
           );
         }
 
+        /*
+         * -----------------------------------------------------
+         * STEP 5: UPLOAD ALL NEW IMAGES
+         * -----------------------------------------------------
+         */
+
+        let uploadedImages = [];
+
         if (
           images.length > 0
         ) {
-          const imageResult =
-            await addPropertyImages(
-              propertyId,
-              images
+          uploadedImages =
+            await uploadNewImages(
+              propertyId
             );
 
-          if (
-            !imageResult?.success
-          ) {
-            console.warn(
-              "Property was saved, but new images could not be saved:",
-              imageResult?.error
-            );
-          }
+          console.log(
+            "Uploaded property images:",
+            uploadedImages
+          );
         }
 
         /*
          * -----------------------------------------------------
-         * STEP 5: SUCCESS
+         * STEP 6: DELETE REMOVED EXISTING IMAGES
+         * -----------------------------------------------------
+         */
+
+        if (
+          isEditMode &&
+          removedMediaIds.length > 0
+        ) {
+          await deleteRemovedImages();
+        }
+
+        /*
+         * -----------------------------------------------------
+         * STEP 7: SUCCESS
          * -----------------------------------------------------
          */
 
         alert(
-  isEditMode
-    ? "Property updated successfully!"
-    : "Property added successfully to your portfolio catalogue!"
-);
+          isEditMode
+            ? "Property updated successfully!"
+            : "Property added successfully to your portfolio catalogue!"
+        );
 
-if (isEditMode && onSaved) {
-  await onSaved();
-} else {
-  navigate("/owner/properties");
-}
-
-        
+        if (
+          isEditMode &&
+          onSaved
+        ) {
+          await onSaved();
+        } else {
+          navigate(
+            "/owner/properties"
+          );
+        }
       } catch (err) {
         console.error(
           isEditMode
@@ -723,7 +979,10 @@ if (isEditMode && onSaved) {
 
               <div className="flex gap-4">
 
-                {["Rent", "Sale"].map(
+                {[
+                  "Rent",
+                  "Sale",
+                ].map(
                   (intent) => (
 
                     <button
@@ -850,7 +1109,9 @@ if (isEditMode && onSaved) {
                 name="bedrooms"
                 placeholder="e.g., 4"
                 min="0"
-                value={formData.bedrooms}
+                value={
+                  formData.bedrooms
+                }
                 onChange={handleChange}
                 className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:border-rose-500 transition-colors text-sm font-medium"
                 required
@@ -869,7 +1130,9 @@ if (isEditMode && onSaved) {
                 name="bathrooms"
                 placeholder="e.g., 3"
                 min="0"
-                value={formData.bathrooms}
+                value={
+                  formData.bathrooms
+                }
                 onChange={handleChange}
                 className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:border-rose-500 transition-colors text-sm font-medium"
                 required
@@ -1119,11 +1382,50 @@ if (isEditMode && onSaved) {
 
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4 mb-4">
 
-              {imagePreviews.map(
+              {/* EXISTING BACKEND IMAGES */}
+
+              {existingImages.map(
+                (image, index) => (
+
+                  <div
+                    key={`existing-${image.id}`}
+                    className="relative aspect-square rounded-xl border border-gray-200 overflow-hidden group shadow-sm bg-gray-50"
+                  >
+
+                    <img
+                      src={image.url}
+                      alt="Property"
+                      className="w-full h-full object-cover"
+                      onError={(event) => {
+                        event.currentTarget.style.display =
+                          "none";
+                      }}
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        removeImage(
+                          "existing",
+                          index
+                        )
+                      }
+                      className="absolute top-1.5 right-1.5 p-1 bg-black/60 hover:bg-rose-600 text-white rounded-md transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+
+                  </div>
+                )
+              )}
+
+              {/* NEW IMAGE PREVIEWS */}
+
+              {newImagePreviews.map(
                 (imgUrl, index) => (
 
                   <div
-                    key={index}
+                    key={`new-${index}`}
                     className="relative aspect-square rounded-xl border border-gray-200 overflow-hidden group shadow-sm bg-gray-50"
                   >
 
@@ -1136,7 +1438,10 @@ if (isEditMode && onSaved) {
                     <button
                       type="button"
                       onClick={() =>
-                        removeImage(index)
+                        removeImage(
+                          "new",
+                          index
+                        )
                       }
                       className="absolute top-1.5 right-1.5 p-1 bg-black/60 hover:bg-rose-600 text-white rounded-md transition-colors"
                     >
@@ -1144,7 +1449,6 @@ if (isEditMode && onSaved) {
                     </button>
 
                   </div>
-
                 )
               )}
 
@@ -1175,7 +1479,7 @@ if (isEditMode && onSaved) {
             </p>
 
             <p className="text-[10px] text-gray-400 mt-1">
-              Property photos are saved to this browser and linked to this property.
+              Property photos are securely stored with the property.
             </p>
 
           </div>
@@ -1187,13 +1491,18 @@ if (isEditMode && onSaved) {
             <button
               type="button"
               onClick={() => {
-  if (isEditMode && onCancel) {
-    onCancel();
-    return;
-  }
+                if (
+                  isEditMode &&
+                  onCancel
+                ) {
+                  onCancel();
+                  return;
+                }
 
-  navigate("/owner/properties");
-}}
+                navigate(
+                  "/owner/properties"
+                );
+              }}
               disabled={submitting}
               className="px-5 py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-600 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
             >

@@ -1,4 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+
 import { useAuth } from "../../context/AuthContext";
 import messagingService from "../../services/messagingService";
 
@@ -70,6 +75,7 @@ export default function OwnerMessages() {
   const [loading, setLoading] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [sending, setSending] = useState(false);
+  const [accepting, setAccepting] = useState(false);
   const [error, setError] = useState("");
 
   // ============================================================
@@ -158,6 +164,7 @@ export default function OwnerMessages() {
       }
 
       setLoadingMessages(true);
+      setError("");
 
       try {
         const response =
@@ -259,24 +266,37 @@ export default function OwnerMessages() {
           message.isRead === false
       );
 
+      // A conversation with no messages is treated
+      // as a new message request.
+      const isPending =
+        conversationMessages.length === 0;
+
       return {
         ...conversation,
+
         name:
           conversation.buyerName ||
           "Buyer",
+
         property:
           conversation.propertyTitle ||
           "Property",
+
         lastMessage:
           lastMessage?.content ||
-          "No messages yet",
+          "New message request",
+
         time:
           formatMessageTime(
             lastMessage?.createdAt
-          ) || formatMessageTime(
+          ) ||
+          formatMessageTime(
             conversation.createdAt
           ),
+
         unread,
+
+        isPending,
       };
     });
   }, [
@@ -291,6 +311,58 @@ export default function OwnerMessages() {
 
   const activeMessages =
     messages[activeChat] || [];
+
+  // ============================================================
+  // ACCEPT MESSAGE REQUEST
+  // ============================================================
+
+  const handleAcceptRequest = async () => {
+    if (
+      !selectedChatInfo ||
+      !selectedChatInfo.buyerId ||
+      accepting
+    ) {
+      return;
+    }
+
+    setAccepting(true);
+    setError("");
+
+    try {
+      /*
+       * No backend change is required.
+       *
+       * Sending the first owner message acts as the
+       * approval signal for the buyer.
+       */
+      const acceptanceMessage =
+        await messagingService.sendMessage(
+          selectedChatInfo.id,
+          selectedChatInfo.buyerId,
+          "Hi! Your message request has been accepted. How can I help you?"
+        );
+
+      setMessages((previous) => ({
+        ...previous,
+        [selectedChatInfo.id]: [
+          ...(previous[selectedChatInfo.id] || []),
+          acceptanceMessage,
+        ],
+      }));
+    } catch (err) {
+      console.error(
+        "Failed to accept message request:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Failed to accept the message request."
+      );
+    } finally {
+      setAccepting(false);
+    }
+  };
 
   // ============================================================
   // SEND MESSAGE
@@ -420,7 +492,13 @@ export default function OwnerMessages() {
                   {chat.property}
                 </span>
 
-                <p className="text-xs text-gray-500 truncate mt-1.5">
+                <p
+                  className={`text-xs truncate mt-1.5 ${
+                    chat.isPending
+                      ? "text-rose-500 font-semibold"
+                      : "text-gray-500"
+                  }`}
+                >
                   {chat.lastMessage}
                 </p>
               </button>
@@ -447,15 +525,48 @@ export default function OwnerMessages() {
                 </p>
               </div>
 
-              <span className="text-xs bg-gray-50 border border-gray-200 text-gray-500 px-3 py-1 rounded-lg font-medium">
-                Active Inquiry
-              </span>
+              {selectedChatInfo.isPending ? (
+                <span className="text-xs bg-amber-50 border border-amber-200 text-amber-600 px-3 py-1 rounded-lg font-semibold">
+                  Message Request
+                </span>
+              ) : (
+                <span className="text-xs bg-gray-50 border border-gray-200 text-gray-500 px-3 py-1 rounded-lg font-medium">
+                  Active Inquiry
+                </span>
+              )}
             </div>
 
             {/* ERROR */}
             {error && (
               <div className="px-4 py-2 text-xs text-rose-600 bg-rose-50 border-b border-rose-100">
                 {error}
+              </div>
+            )}
+
+            {/* PENDING REQUEST */}
+            {selectedChatInfo.isPending && (
+              <div className="px-4 py-3 bg-amber-50 border-b border-amber-100 flex items-center justify-between gap-4">
+
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">
+                    New message request
+                  </p>
+
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {selectedChatInfo.name} wants to contact you about this property.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleAcceptRequest}
+                  disabled={accepting}
+                  className="shrink-0 bg-gradient-to-r from-pink-500 to-rose-500 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {accepting
+                    ? "Accepting..."
+                    : "Accept Request"}
+                </button>
               </div>
             )}
 
@@ -468,7 +579,15 @@ export default function OwnerMessages() {
                 </div>
               ) : activeMessages.length === 0 ? (
                 <div className="h-full flex items-center justify-center text-xs text-gray-400">
-                  No messages in this conversation yet.
+                  <div className="text-center">
+                    <p className="font-medium text-gray-500">
+                      No messages yet.
+                    </p>
+
+                    <p className="text-xs text-gray-400 mt-1">
+                      Accept the request to start the conversation.
+                    </p>
+                  </div>
                 </div>
               ) : (
                 activeMessages.map((msg) => {
@@ -512,22 +631,32 @@ export default function OwnerMessages() {
             >
               <input
                 type="text"
-                placeholder="Type a message reply..."
+                placeholder={
+                  selectedChatInfo.isPending
+                    ? "Accept request to reply..."
+                    : "Type a message reply..."
+                }
                 value={typedMessage}
                 onChange={(e) =>
                   setTypedMessage(
                     e.target.value
                   )
                 }
-                disabled={sending}
-                className="flex-1 px-4 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
+                disabled={
+                  sending ||
+                  accepting ||
+                  selectedChatInfo.isPending
+                }
+                className="flex-1 px-4 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all disabled:bg-gray-50 disabled:text-gray-400"
               />
 
               <button
                 type="submit"
                 disabled={
                   !typedMessage.trim() ||
-                  sending
+                  sending ||
+                  accepting ||
+                  selectedChatInfo.isPending
                 }
                 className="bg-gradient-to-r from-pink-500 to-rose-500 text-white px-5 py-2 rounded-xl text-sm font-semibold shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               >

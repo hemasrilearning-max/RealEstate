@@ -9,6 +9,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import userService from "../../services/userService";
 import propertyService from "../../services/propertyService";
+import leadService from "../../services/leadService";
 
 import {
   LayoutDashboard,
@@ -35,11 +36,22 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [profilePhoto, setProfilePhoto] = useState(null);
+  const [sidebarOpen, setSidebarOpen] =
+    useState(false);
 
-  const [ownerProperties, setOwnerProperties] = useState([]);
+  const [profilePhoto, setProfilePhoto] =
+    useState(null);
+
+  const [ownerProperties, setOwnerProperties] =
+    useState([]);
+
+  const [ownerLeads, setOwnerLeads] =
+    useState([]);
+
   const [propertiesLoading, setPropertiesLoading] =
+    useState(false);
+
+  const [leadsLoading, setLeadsLoading] =
     useState(false);
 
   const {
@@ -75,7 +87,9 @@ export default function DashboardLayout() {
 
       try {
         const blob =
-          await userService.getProfilePhotoBlob(userId);
+          await userService.getProfilePhotoBlob(
+            userId
+          );
 
         if (cancelled) {
           return;
@@ -111,7 +125,10 @@ export default function DashboardLayout() {
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [userId, profilePhotoUpdatedAt]);
+  }, [
+    userId,
+    profilePhotoUpdatedAt,
+  ]);
 
   /* ============================================================
      ROLE
@@ -180,7 +197,7 @@ export default function DashboardLayout() {
   ];
 
   /* ============================================================
-     LOAD OWNER PROPERTIES FROM BACKEND
+     LOAD OWNER PROPERTIES
   ============================================================ */
 
   useEffect(() => {
@@ -249,6 +266,118 @@ export default function DashboardLayout() {
   }, [userId]);
 
   /* ============================================================
+     LOAD OWNER LEADS
+  ============================================================ */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadOwnerLeads = async () => {
+      if (!userId) {
+        setOwnerLeads([]);
+        return;
+      }
+
+      setLeadsLoading(true);
+
+      try {
+        const response =
+          await leadService.getLeadsBySeller(
+            userId
+          );
+
+        if (cancelled) {
+          return;
+        }
+
+        const backendLeads =
+          Array.isArray(response)
+            ? response
+            : response?.content ||
+              response?.data ||
+              response?.leads ||
+              [];
+
+        if (!Array.isArray(backendLeads)) {
+          console.warn(
+            "Unexpected owner leads response:",
+            response
+          );
+
+          setOwnerLeads([]);
+          return;
+        }
+
+        const normalizedLeads =
+          backendLeads.map((lead) => ({
+            ...lead,
+
+            id: lead.id,
+
+            name:
+              lead.name ||
+              lead.buyerName ||
+              "Unknown Buyer",
+
+            propertyTitle:
+              lead.propertyTitle ||
+              "Property",
+
+            status:
+              String(
+                lead.status || "NEW"
+              ).toUpperCase(),
+
+            createdAt:
+              lead.createdAt || null,
+          }));
+
+        /*
+         * Newest leads first.
+         */
+        normalizedLeads.sort(
+          (a, b) => {
+            if (
+              !a.createdAt ||
+              !b.createdAt
+            ) {
+              return 0;
+            }
+
+            return (
+              new Date(b.createdAt) -
+              new Date(a.createdAt)
+            );
+          }
+        );
+
+        setOwnerLeads(
+          normalizedLeads
+        );
+      } catch (error) {
+        console.error(
+          "Failed to load owner leads:",
+          error
+        );
+
+        if (!cancelled) {
+          setOwnerLeads([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLeadsLoading(false);
+        }
+      }
+    };
+
+    loadOwnerLeads();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  /* ============================================================
      REAL PROPERTY STATISTICS
   ============================================================ */
 
@@ -258,22 +387,60 @@ export default function DashboardLayout() {
   const activeListings =
     ownerProperties.filter(
       (property) =>
-        String(property.status || "")
-          .toUpperCase() === "ACTIVE"
+        String(
+          property.status || ""
+        ).toUpperCase() ===
+        "ACTIVE"
     ).length;
 
   const soldProperties =
     ownerProperties.filter(
       (property) =>
-        String(property.status || "")
-          .toUpperCase() === "SOLD"
+        String(
+          property.status || ""
+        ).toUpperCase() ===
+        "SOLD"
     ).length;
 
   const rentedProperties =
     ownerProperties.filter(
       (property) =>
-        String(property.status || "")
-          .toUpperCase() === "RENTED"
+        String(
+          property.status || ""
+        ).toUpperCase() ===
+        "RENTED"
+    ).length;
+
+  /*
+   * Total views from real backend property data.
+   */
+  const totalViews =
+    ownerProperties.reduce(
+      (total, property) =>
+        total +
+        (Number(
+          property.views
+        ) || 0),
+      0
+    );
+
+  /*
+   * Real total leads.
+   */
+  const totalLeads =
+    ownerLeads.length;
+
+  /*
+   * New leads are currently pending
+   * inbound requests.
+   */
+  const pendingRequests =
+    ownerLeads.filter(
+      (lead) =>
+        String(
+          lead.status || ""
+        ).toUpperCase() ===
+        "NEW"
     ).length;
 
   const statistics = [
@@ -286,6 +453,7 @@ export default function DashboardLayout() {
       color: "text-blue-600",
       bg: "bg-blue-50",
     },
+
     {
       label: "Active Listings",
       count: propertiesLoading
@@ -295,6 +463,7 @@ export default function DashboardLayout() {
       color: "text-amber-600",
       bg: "bg-amber-50",
     },
+
     {
       label: "Sold",
       count: propertiesLoading
@@ -304,6 +473,7 @@ export default function DashboardLayout() {
       color: "text-green-600",
       bg: "bg-green-50",
     },
+
     {
       label: "Rented",
       count: propertiesLoading
@@ -313,30 +483,45 @@ export default function DashboardLayout() {
       color: "text-purple-600",
       bg: "bg-purple-50",
     },
+
     {
       label: "Total Views",
-      count: "3,412",
+      count:
+        propertiesLoading
+          ? "..."
+          : totalViews.toLocaleString(),
       icon: Eye,
       color: "text-pink-600",
       bg: "bg-pink-50",
     },
+
     {
       label: "Total Leads",
-      count: "24",
+      count: leadsLoading
+        ? "..."
+        : String(totalLeads),
       icon: Users,
       color: "text-indigo-600",
       bg: "bg-indigo-50",
     },
+
     {
       label: "Pending Requests",
-      count: "2",
+      count: leadsLoading
+        ? "..."
+        : String(pendingRequests),
       icon: Clock,
       color: "text-orange-600",
       bg: "bg-orange-50",
     },
+
     {
+      /*
+       * Revenue is not currently supplied by
+       * the backend property/lead APIs.
+       */
       label: "Revenue",
-      count: "₹4.50 Cr",
+      count: "N/A",
       icon: CreditCard,
       color: "text-emerald-600",
       bg: "bg-emerald-50",
@@ -345,53 +530,106 @@ export default function DashboardLayout() {
 
   /* ============================================================
      RECENT LEADS
-     Keep existing UI until Leads API is connected
   ============================================================ */
 
-  const recentLeads = [
-    {
-      id: 1,
-      name: "Rohan Sharma",
-      interest:
-        "Luxury 4 BHK Villa - Sarjapur",
-      status: "New",
-      initial: "R",
-    },
-    {
-      id: 2,
-      name: "Priya Patel",
-      interest:
-        "Spacious 3 BHK Apartment - Whitefield",
-      status: "New",
-      initial: "P",
-    },
-    {
-      id: 3,
-      name: "Amit Verma",
-      interest:
-        "3 BHK Independent House - HSR Layout",
-      status: "Contacted",
-      initial: "A",
-    },
-    {
-      id: 4,
-      name: "Neha Rao",
-      interest:
-        "2 BHK Fully Furnished Flat - Koramangala",
-      status: "Qualified",
-      initial: "N",
-    },
-  ];
+  const recentLeads =
+    ownerLeads.slice(0, 5).map(
+      (lead) => ({
+        id: lead.id,
 
-  const statusColors = {
-    New:
-      "bg-blue-50 text-blue-600 border-blue-200",
+        name:
+          lead.name ||
+          lead.buyerName ||
+          "Unknown Buyer",
 
-    Contacted:
-      "bg-amber-50 text-amber-600 border-amber-200",
+        interest:
+          lead.propertyTitle ||
+          "Property enquiry",
 
-    Qualified:
-      "bg-green-50 text-green-600 border-green-200",
+        status:
+          lead.status || "NEW",
+
+        initial:
+          (
+            lead.name ||
+            lead.buyerName ||
+            "U"
+          )
+            .trim()
+            .charAt(0)
+            .toUpperCase(),
+      })
+    );
+
+  /* ============================================================
+     STATUS LABELS
+  ============================================================ */
+
+  const getStatusLabel = (
+    status
+  ) => {
+    const normalized =
+      String(
+        status || ""
+      ).toUpperCase();
+
+    const labels = {
+      NEW: "New",
+      CONTACTED: "Contacted",
+      IN_PROGRESS:
+        "In Progress",
+      CONVERTED: "Converted",
+      CLOSED: "Closed",
+    };
+
+    return (
+      labels[normalized] ||
+      normalized ||
+      "New"
+    );
+  };
+
+  const getStatusClass = (
+    status
+  ) => {
+    const normalized =
+      String(
+        status || ""
+      ).toUpperCase();
+
+    if (normalized === "NEW") {
+      return "bg-blue-50 text-blue-600 border-blue-200";
+    }
+
+    if (
+      normalized ===
+      "CONTACTED"
+    ) {
+      return "bg-amber-50 text-amber-600 border-amber-200";
+    }
+
+    if (
+      normalized ===
+      "IN_PROGRESS"
+    ) {
+      return "bg-purple-50 text-purple-600 border-purple-200";
+    }
+
+    if (
+      normalized ===
+      "CONVERTED"
+    ) {
+      return "bg-green-50 text-green-600 border-green-200";
+    }
+
+    if (
+      normalized ===
+      "CLOSED"
+    ) {
+      return "bg-gray-50 text-gray-600 border-gray-200";
+    }
+
+    return "bg-gray-50 text-gray-600 border-gray-200";
   };
 
   /* ============================================================
@@ -399,18 +637,25 @@ export default function DashboardLayout() {
   ============================================================ */
 
   const isDashboardHome =
-    location.pathname === "/owner" ||
-    location.pathname === "/owner/dashboard";
+    location.pathname ===
+      "/owner" ||
+    location.pathname ===
+      "/owner/dashboard";
 
   /* ============================================================
      HELPERS
   ============================================================ */
 
-  const getInitials = (name) =>
+  const getInitials = (
+    name
+  ) =>
     name
       ? name
           .split(" ")
-          .map((word) => word[0])
+          .map(
+            (word) =>
+              word[0]
+          )
           .join("")
           .toUpperCase()
           .slice(0, 2)
@@ -426,11 +671,6 @@ export default function DashboardLayout() {
   ============================================================ */
 
   const SidebarContent = () => {
-    const avatarFallback =
-      rawRole === "owner"
-        ? "bg-rose-600 text-white shadow-rose-200"
-        : "bg-purple-600 text-white shadow-purple-200";
-
     return (
       <div className="flex flex-col h-full min-h-0">
 
@@ -539,7 +779,9 @@ export default function DashboardLayout() {
           </NavLink>
 
           <button
-            onClick={handleLogout}
+            onClick={
+              handleLogout
+            }
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-rose-600 hover:bg-rose-50/50 transition-colors"
           >
             <LogOut className="h-4 w-4 text-rose-500 shrink-0" />
@@ -679,54 +921,91 @@ export default function DashboardLayout() {
 
                 <div className="bg-white border border-gray-100 rounded-xl p-6 shadow-sm lg:col-span-2">
 
-                  <h3 className="font-bold text-gray-900 text-base mb-4">
-                    Recent Inbound Leads
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
 
-                  <div className="divide-y divide-gray-50">
+                    <h3 className="font-bold text-gray-900 text-base">
+                      Recent Inbound Leads
+                    </h3>
 
-                    {recentLeads.map(
-                      (lead) => (
-                        <div
-                          key={lead.id}
-                          className="flex items-center justify-between gap-3 py-3.5 first:pt-0 last:pb-0"
-                        >
-
-                          <div className="flex items-center gap-3 min-w-0">
-
-                            <div className="h-9 w-9 bg-gray-100 rounded-lg flex items-center justify-center font-bold text-sm text-gray-600 shrink-0">
-                              {lead.initial}
-                            </div>
-
-                            <div className="min-w-0">
-
-                              <p className="text-sm font-semibold text-gray-800 truncate">
-                                {lead.name}
-                              </p>
-
-                              <p className="text-xs text-gray-400 truncate mt-0.5">
-                                {lead.interest}
-                              </p>
-
-                            </div>
-                          </div>
-
-                          <span
-                            className={`text-xs px-2.5 py-1 rounded-full font-medium border shrink-0 ${
-                              statusColors[
-                                lead.status
-                              ] ||
-                              "bg-gray-50 text-gray-600"
-                            }`}
-                          >
-                            {lead.status}
-                          </span>
-
-                        </div>
-                      )
+                    {ownerLeads.length >
+                      0 && (
+                      <NavLink
+                        to="/owner/leads"
+                        className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                      >
+                        View All
+                      </NavLink>
                     )}
 
                   </div>
+
+                  {leadsLoading ? (
+                    <div className="py-8 text-center">
+                      <p className="text-sm text-gray-500">
+                        Loading leads...
+                      </p>
+                    </div>
+                  ) : recentLeads.length ===
+                    0 ? (
+                    <div className="py-8 text-center">
+                      <div className="h-10 w-10 mx-auto bg-gray-50 rounded-xl flex items-center justify-center">
+                        <Users className="h-5 w-5 text-gray-400" />
+                      </div>
+
+                      <p className="text-sm text-gray-500 mt-3">
+                        No leads received yet.
+                      </p>
+
+                      <p className="text-xs text-gray-400 mt-1">
+                        New enquiries will appear here.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-gray-50">
+
+                      {recentLeads.map(
+                        (lead) => (
+                          <div
+                            key={lead.id}
+                            className="flex items-center justify-between gap-3 py-3.5 first:pt-0 last:pb-0"
+                          >
+
+                            <div className="flex items-center gap-3 min-w-0">
+
+                              <div className="h-9 w-9 bg-gray-100 rounded-lg flex items-center justify-center font-bold text-sm text-gray-600 shrink-0">
+                                {lead.initial}
+                              </div>
+
+                              <div className="min-w-0">
+
+                                <p className="text-sm font-semibold text-gray-800 truncate">
+                                  {lead.name}
+                                </p>
+
+                                <p className="text-xs text-gray-400 truncate mt-0.5">
+                                  {lead.interest}
+                                </p>
+
+                              </div>
+                            </div>
+
+                            <span
+                              className={`text-xs px-2.5 py-1 rounded-full font-medium border shrink-0 ${getStatusClass(
+                                lead.status
+                              )}`}
+                            >
+                              {getStatusLabel(
+                                lead.status
+                              )}
+                            </span>
+
+                          </div>
+                        )
+                      )}
+
+                    </div>
+                  )}
+
                 </div>
 
               </div>
