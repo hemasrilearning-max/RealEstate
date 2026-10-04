@@ -7,19 +7,71 @@ import {
   Eye,
   Heart,
 } from "lucide-react";
+import { useEffect, useState } from "react";
+
 import { formatPrice } from "../data/mockData";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
+import wishlistService from "../services/wishlistService";
 
 export default function PropertyCard({ property }) {
   const navigate = useNavigate();
 
   const { isFavorite, toggleFavorite } = useData();
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
-  const favorite = isFavorite(property.id);
+  const localFavorite = isFavorite(property.id);
 
-  const handleFavorite = (e) => {
+  const [favorite, setFavorite] = useState(localFavorite);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
+
+  /*
+   * Load the real wishlist status from backend
+   * whenever the logged-in user/property changes.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadWishlistStatus = async () => {
+      if (!isAuthenticated || !user?.userId || !property?.id) {
+        setFavorite(false);
+        return;
+      }
+
+      try {
+        const result =
+          await wishlistService.isWishlisted(
+            user.userId,
+            property.id
+          );
+
+        if (!cancelled) {
+          setFavorite(Boolean(result));
+        }
+      } catch (error) {
+        console.error(
+          "Unable to check wishlist status:",
+          error
+        );
+
+        if (!cancelled) {
+          setFavorite(localFavorite);
+        }
+      }
+    };
+
+    loadWishlistStatus();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isAuthenticated,
+    user?.userId,
+    property?.id,
+  ]);
+
+  const handleFavorite = async (e) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -28,7 +80,61 @@ export default function PropertyCard({ property }) {
       return;
     }
 
-    toggleFavorite(property.id);
+    if (!user?.userId) {
+      console.error(
+        "Logged-in user ID is not available."
+      );
+      return;
+    }
+
+    if (favoriteLoading) {
+      return;
+    }
+
+    setFavoriteLoading(true);
+
+    try {
+      if (favorite) {
+        await wishlistService.removeFromWishlist(
+          user.userId,
+          property.id
+        );
+
+        setFavorite(false);
+
+        /*
+         * Keep the existing local DataContext state
+         * synchronized for the current frontend.
+         */
+        if (localFavorite) {
+          toggleFavorite(property.id);
+        }
+      } else {
+        await wishlistService.addToWishlist(
+          user.userId,
+          property.id
+        );
+
+        setFavorite(true);
+
+        if (!localFavorite) {
+          toggleFavorite(property.id);
+        }
+      }
+    } catch (error) {
+      console.error(
+        "Wishlist update failed:",
+        error
+      );
+
+      /*
+       * Do not change the heart state if
+       * the backend request failed.
+       */
+      setFavorite(favorite);
+    } finally {
+      setFavoriteLoading(false);
+    }
   };
 
   return (
@@ -69,6 +175,7 @@ export default function PropertyCard({ property }) {
         <button
           type="button"
           onClick={handleFavorite}
+          disabled={favoriteLoading}
           aria-label={
             favorite
               ? "Remove from favorites"
@@ -83,6 +190,10 @@ export default function PropertyCard({ property }) {
             favorite
               ? "bg-white text-red-500"
               : "bg-white/90 text-gray-600 hover:bg-white hover:text-red-500"
+          } ${
+            favoriteLoading
+              ? "opacity-70 cursor-wait"
+              : ""
           }`}
         >
           <Heart
@@ -168,4 +279,3 @@ export default function PropertyCard({ property }) {
     </Link>
   );
 }
-

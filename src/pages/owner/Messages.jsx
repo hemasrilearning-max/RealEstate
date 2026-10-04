@@ -1,153 +1,537 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
+import messagingService from "../../services/messagingService";
+
+function formatMessageTime(dateValue) {
+  if (!dateValue) return "";
+
+  const date = new Date(dateValue);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const now = new Date();
+
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+
+  if (sameDay) {
+    return date.toLocaleTimeString([], {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+
+  const isYesterday =
+    date.getFullYear() === yesterday.getFullYear() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getDate() === yesterday.getDate();
+
+  if (isYesterday) {
+    return "Yesterday";
+  }
+
+  return date.toLocaleDateString([], {
+    day: "2-digit",
+    month: "short",
+  });
+}
+
+function getLastMessage(messages) {
+  if (!messages || messages.length === 0) {
+    return null;
+  }
+
+  return [...messages].sort(
+    (a, b) =>
+      new Date(a.createdAt || 0) -
+      new Date(b.createdAt || 0)
+  )[messages.length - 1];
+}
 
 export default function OwnerMessages() {
-  // Mock data for chat conversations
-  const [conversations, setConversations] = useState([
-    { id: 1, name: "Arvind G.", property: "3BHK Villa - Whitefield", lastMessage: "Is the security deposit negotiable?", time: "2 hrs ago", unread: true },
-    { id: 2, name: "Priya Sharma", property: "2BHK Apartment - HSR Layout", lastMessage: "Can we schedule a visit this Saturday?", time: "2 hrs ago", unread: false },
-    { id: 3, name: "Rahul Verma", property: "Studio - Indiranagar", lastMessage: "Sent you the documentation copies.", time: "Yesterday", unread: false }
+  const { owner, user } = useAuth();
+
+  const profile = owner || user;
+
+  const ownerId = profile?.userId || profile?.id;
+
+  const [conversations, setConversations] = useState([]);
+  const [messages, setMessages] = useState({});
+  const [activeChat, setActiveChat] = useState(null);
+  const [typedMessage, setTypedMessage] = useState("");
+
+  const [loading, setLoading] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState("");
+
+  // ============================================================
+  // LOAD OWNER CONVERSATIONS
+  // ============================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadConversations() {
+      if (!ownerId) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      setError("");
+
+      try {
+        const response =
+          await messagingService.getSellerConversations(
+            ownerId
+          );
+
+        if (!mounted) return;
+
+        const conversationList = Array.isArray(response)
+          ? response
+          : [];
+
+        setConversations(conversationList);
+
+        if (conversationList.length > 0) {
+          setActiveChat((current) => {
+            if (
+              current &&
+              conversationList.some(
+                (conversation) =>
+                  conversation.id === current
+              )
+            ) {
+              return current;
+            }
+
+            return conversationList[0].id;
+          });
+        } else {
+          setActiveChat(null);
+        }
+      } catch (err) {
+        console.error(
+          "Failed to load owner conversations:",
+          err
+        );
+
+        if (mounted) {
+          setError(
+            err.message ||
+              "Failed to load conversations."
+          );
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadConversations();
+
+    return () => {
+      mounted = false;
+    };
+  }, [ownerId]);
+
+  // ============================================================
+  // LOAD ACTIVE CHAT MESSAGES
+  // ============================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadMessages() {
+      if (!activeChat) {
+        return;
+      }
+
+      setLoadingMessages(true);
+
+      try {
+        const response =
+          await messagingService.getMessages(
+            activeChat
+          );
+
+        if (!mounted) return;
+
+        const messageList = Array.isArray(response)
+          ? response
+          : [];
+
+        setMessages((previous) => ({
+          ...previous,
+          [activeChat]: messageList,
+        }));
+
+        // Mark unread messages received by owner as read.
+        const unreadMessages =
+          messageList.filter(
+            (message) =>
+              message.receiverId === ownerId &&
+              message.isRead === false
+          );
+
+        for (const message of unreadMessages) {
+          try {
+            await messagingService.markMessageAsRead(
+              message.id
+            );
+          } catch (readError) {
+            console.error(
+              "Failed to mark message as read:",
+              readError
+            );
+          }
+        }
+
+        if (unreadMessages.length > 0 && mounted) {
+          setMessages((previous) => ({
+            ...previous,
+            [activeChat]: (
+              previous[activeChat] || []
+            ).map((message) =>
+              unreadMessages.some(
+                (unread) =>
+                  unread.id === message.id
+              )
+                ? {
+                    ...message,
+                    isRead: true,
+                  }
+                : message
+            ),
+          }));
+        }
+      } catch (err) {
+        console.error(
+          "Failed to load messages:",
+          err
+        );
+
+        if (mounted) {
+          setError(
+            err.message ||
+              "Failed to load messages."
+          );
+        }
+      } finally {
+        if (mounted) {
+          setLoadingMessages(false);
+        }
+      }
+    }
+
+    loadMessages();
+
+    return () => {
+      mounted = false;
+    };
+  }, [activeChat, ownerId]);
+
+  // ============================================================
+  // PREPARE CHAT LIST
+  // ============================================================
+
+  const chatList = useMemo(() => {
+    return conversations.map((conversation) => {
+      const conversationMessages =
+        messages[conversation.id] || [];
+
+      const lastMessage =
+        getLastMessage(conversationMessages);
+
+      const unread = conversationMessages.some(
+        (message) =>
+          message.receiverId === ownerId &&
+          message.isRead === false
+      );
+
+      return {
+        ...conversation,
+        name:
+          conversation.buyerName ||
+          "Buyer",
+        property:
+          conversation.propertyTitle ||
+          "Property",
+        lastMessage:
+          lastMessage?.content ||
+          "No messages yet",
+        time:
+          formatMessageTime(
+            lastMessage?.createdAt
+          ) || formatMessageTime(
+            conversation.createdAt
+          ),
+        unread,
+      };
+    });
+  }, [
+    conversations,
+    messages,
+    ownerId,
   ]);
 
-  const [activeChat, setActiveChat] = useState(1);
-  const [typedMessage, setTypedMessage] = useState("");
-  
-  // Detailed chat message histories mapped by conversation ID
-  const [messages, setMessages] = useState({
-    1: [
-      { id: 101, sender: 'client', text: "Hello! I saw your listing for the Whitefield villa.", time: "10:15 AM" },
-      { id: 102, sender: 'owner', text: "Hi Arvind, glad you're interested. Let me know if you have questions.", time: "10:30 AM" },
-      { id: 103, sender: 'client', text: "Is the security deposit negotiable? The listing says 6 months.", time: "2:14 PM" }
-    ],
-    2: [
-      { id: 201, sender: 'client', text: "Hi, is the HSR layout flat available from next month?", time: "Yesterday" },
-      { id: 202, sender: 'owner', text: "Yes it is! Ready to move in by the 1st.", time: "Yesterday" },
-      { id: 203, sender: 'client', text: "Perfect. Can we schedule a visit this Saturday?", time: "2:05 PM" }
-    ],
-    3: [
-      { id: 301, sender: 'owner', text: "Please share your ID proof for the rental agreement.", time: "2 days ago" },
-      { id: 302, sender: 'client', text: "Sent you the documentation copies.", time: "Yesterday" }
-    ]
-  });
+  const selectedChatInfo = chatList.find(
+    (chat) => chat.id === activeChat
+  );
 
-  const handleSendMessage = (e) => {
+  const activeMessages =
+    messages[activeChat] || [];
+
+  // ============================================================
+  // SEND MESSAGE
+  // ============================================================
+
+  const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!typedMessage.trim()) return;
 
-    const newMsg = {
-      id: Date.now(),
-      sender: 'owner',
-      text: typedMessage,
-      time: "Just Now"
-    };
+    const content = typedMessage.trim();
 
-    // Update active chat message history list
-    setMessages(prev => ({
-      ...prev,
-      [activeChat]: [...prev[activeChat], newMsg]
-    }));
+    if (
+      !content ||
+      !selectedChatInfo ||
+      sending
+    ) {
+      return;
+    }
 
-    // Update snippet text inside the conversation sidebar pane
-    setConversations(prev => prev.map(chat => 
-      chat.id === activeChat 
-        ? { ...chat, lastMessage: typedMessage, time: "Just Now", unread: false }
-        : chat
-    ));
+    const receiverId =
+      selectedChatInfo.buyerId;
 
-    setTypedMessage("");
+    if (!receiverId) {
+      setError(
+        "Unable to identify the buyer for this conversation."
+      );
+      return;
+    }
+
+    setSending(true);
+    setError("");
+
+    try {
+      const newMessage =
+        await messagingService.sendMessage(
+          selectedChatInfo.id,
+          receiverId,
+          content
+        );
+
+      setMessages((previous) => ({
+        ...previous,
+        [selectedChatInfo.id]: [
+          ...(previous[selectedChatInfo.id] || []),
+          newMessage,
+        ],
+      }));
+
+      setTypedMessage("");
+    } catch (err) {
+      console.error(
+        "Failed to send message:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Failed to send message."
+      );
+    } finally {
+      setSending(false);
+    }
   };
 
-  const selectedChatInfo = conversations.find(c => c.id === activeChat);
+  // ============================================================
+  // SELECT CHAT
+  // ============================================================
+
+  const handleSelectChat = (chatId) => {
+    setActiveChat(chatId);
+    setError("");
+  };
 
   return (
     <div className="bg-white border border-gray-100 rounded-2xl shadow-sm font-sans flex h-[calc(100vh-10rem)] min-h-[500px] overflow-hidden animate-fadeIn">
-      
-      {/* 🗣️ LEFT COLUMN: CHAT LIST THREADS */}
+
+      {/* LEFT COLUMN */}
       <div className="w-80 border-r border-gray-100 flex flex-col bg-gray-50/30">
+
         <div className="p-4 border-b border-gray-100 bg-white">
-          <h2 className="text-lg font-bold text-gray-900">Owner Messages</h2>
-          <p className="text-xs text-gray-400 mt-0.5">Chat directly with tenants and buyers.</p>
+          <h2 className="text-lg font-bold text-gray-900">
+            Owner Messages
+          </h2>
+
+          <p className="text-xs text-gray-400 mt-0.5">
+            Chat directly with tenants and buyers.
+          </p>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {conversations.map((chat) => (
-            <button
-              key={chat.id}
-              onClick={() => {
-                setActiveChat(chat.id);
-                setConversations(prev => prev.map(c => c.id === chat.id ? { ...c, unread: false } : c));
-              }}
-              className={`w-full text-left p-3 rounded-xl transition-all flex flex-col relative ${
-                activeChat === chat.id
-                  ? 'bg-white shadow-sm border border-gray-100 text-gray-900 ring-1 ring-gray-100'
-                  : 'hover:bg-gray-100/50 text-gray-600'
-              }`}
-            >
-              {chat.unread && (
-                <span className="absolute top-4 right-4 h-2.5 w-2.5 bg-rose-500 rounded-full"></span>
-              )}
-              <div className="flex justify-between items-baseline w-full pr-4">
-                <span className="font-bold text-sm text-gray-900">{chat.name}</span>
-                <span className="text-[10px] text-gray-400 font-medium">{chat.time}</span>
-              </div>
-              <span className="text-xs text-gray-400 font-semibold truncate mt-0.5">{chat.property}</span>
-              <p className="text-xs text-gray-500 truncate mt-1.5">{chat.lastMessage}</p>
-            </button>
-          ))}
+
+          {loading ? (
+            <div className="p-4 text-center text-xs text-gray-400">
+              Loading conversations...
+            </div>
+          ) : chatList.length === 0 ? (
+            <div className="p-4 text-center text-xs text-gray-400">
+              No conversations yet.
+            </div>
+          ) : (
+            chatList.map((chat) => (
+              <button
+                key={chat.id}
+                onClick={() =>
+                  handleSelectChat(chat.id)
+                }
+                className={`w-full text-left p-3 rounded-xl transition-all flex flex-col relative ${
+                  activeChat === chat.id
+                    ? "bg-white shadow-sm border border-gray-100 text-gray-900 ring-1 ring-gray-100"
+                    : "hover:bg-gray-100/50 text-gray-600"
+                }`}
+              >
+                {chat.unread && (
+                  <span className="absolute top-4 right-4 h-2.5 w-2.5 bg-rose-500 rounded-full"></span>
+                )}
+
+                <div className="flex justify-between items-baseline w-full pr-4">
+                  <span className="font-bold text-sm text-gray-900">
+                    {chat.name}
+                  </span>
+
+                  <span className="text-[10px] text-gray-400 font-medium">
+                    {chat.time}
+                  </span>
+                </div>
+
+                <span className="text-xs text-gray-400 font-semibold truncate mt-0.5">
+                  {chat.property}
+                </span>
+
+                <p className="text-xs text-gray-500 truncate mt-1.5">
+                  {chat.lastMessage}
+                </p>
+              </button>
+            ))
+          )}
         </div>
       </div>
 
-      {/* 💬 RIGHT COLUMN: ACTIVE CONVERSATION PORTAL WINDOW */}
+      {/* RIGHT COLUMN */}
       <div className="flex-1 flex flex-col bg-white">
+
         {selectedChatInfo ? (
           <>
-            {/* Header info banner */}
+            {/* HEADER */}
             <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-white">
+
               <div>
-                <h3 className="font-bold text-gray-900 text-sm">{selectedChatInfo.name}</h3>
-                <p className="text-xs text-rose-500 font-medium mt-0.5">{selectedChatInfo.property}</p>
+                <h3 className="font-bold text-gray-900 text-sm">
+                  {selectedChatInfo.name}
+                </h3>
+
+                <p className="text-xs text-rose-500 font-medium mt-0.5">
+                  {selectedChatInfo.property}
+                </p>
               </div>
+
               <span className="text-xs bg-gray-50 border border-gray-200 text-gray-500 px-3 py-1 rounded-lg font-medium">
                 Active Inquiry
               </span>
             </div>
 
-            {/* Scrolling speech bubble chat board */}
+            {/* ERROR */}
+            {error && (
+              <div className="px-4 py-2 text-xs text-rose-600 bg-rose-50 border-b border-rose-100">
+                {error}
+              </div>
+            )}
+
+            {/* MESSAGES */}
             <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-gray-50/20">
-              {messages[activeChat]?.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex flex-col max-w-[70%] ${
-                    msg.sender === 'owner' ? 'ml-auto items-end' : 'mr-auto items-start'
-                  }`}
-                >
-                  <div
-                    className={`p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
-                      msg.sender === 'owner'
-                        ? 'bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-br-none'
-                        : 'bg-white border border-gray-100 text-gray-800 rounded-bl-none'
-                    }`}
-                  >
-                    {msg.text}
-                  </div>
-                  <span className="text-[10px] text-gray-400 mt-1 font-medium px-1">{msg.time}</span>
+
+              {loadingMessages ? (
+                <div className="h-full flex items-center justify-center text-xs text-gray-400">
+                  Loading messages...
                 </div>
-              ))}
+              ) : activeMessages.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-xs text-gray-400">
+                  No messages in this conversation yet.
+                </div>
+              ) : (
+                activeMessages.map((msg) => {
+                  const isOwner =
+                    msg.senderId === ownerId;
+
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex flex-col max-w-[70%] ${
+                        isOwner
+                          ? "ml-auto items-end"
+                          : "mr-auto items-start"
+                      }`}
+                    >
+                      <div
+                        className={`p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
+                          isOwner
+                            ? "bg-gradient-to-r from-pink-500 to-rose-500 text-white rounded-br-none"
+                            : "bg-white border border-gray-100 text-gray-800 rounded-bl-none"
+                        }`}
+                      >
+                        {msg.content}
+                      </div>
+
+                      <span className="text-[10px] text-gray-400 mt-1 font-medium px-1">
+                        {formatMessageTime(
+                          msg.createdAt
+                        )}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
             </div>
 
-            {/* Text entry field submission footer panel */}
-            <form onSubmit={handleSendMessage} className="p-3 border-t border-gray-100 flex gap-2 items-center bg-white">
+            {/* INPUT */}
+            <form
+              onSubmit={handleSendMessage}
+              className="p-3 border-t border-gray-100 flex gap-2 items-center bg-white"
+            >
               <input
                 type="text"
                 placeholder="Type a message reply..."
                 value={typedMessage}
-                onChange={(e) => setTypedMessage(e.target.value)}
+                onChange={(e) =>
+                  setTypedMessage(
+                    e.target.value
+                  )
+                }
+                disabled={sending}
                 className="flex-1 px-4 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-transparent transition-all"
               />
+
               <button
                 type="submit"
-                className="bg-gradient-to-r from-pink-500 to-rose-500 text-white px-5 py-2 rounded-xl text-sm font-semibold shadow-sm hover:opacity-95 transition-opacity"
+                disabled={
+                  !typedMessage.trim() ||
+                  sending
+                }
+                className="bg-gradient-to-r from-pink-500 to-rose-500 text-white px-5 py-2 rounded-xl text-sm font-semibold shadow-sm hover:opacity-95 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Send
+                {sending ? "Sending..." : "Send"}
               </button>
             </form>
           </>
@@ -157,7 +541,6 @@ export default function OwnerMessages() {
           </div>
         )}
       </div>
-
     </div>
   );
 }

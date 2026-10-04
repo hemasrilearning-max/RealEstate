@@ -14,11 +14,14 @@ import {
   CheckCircle2,
   Heart,
   X,
+  Star,
+  MessageSquare,
 } from "lucide-react";
 
 import { useData } from "../../context/DataContext";
 import { formatPrice } from "../../data/mockData";
 import { useAuth } from "../../context/AuthContext";
+import reviewService from "../../services/reviewService";
 
 export default function PropertyDetail() {
   const { id } = useParams();
@@ -54,6 +57,20 @@ export default function PropertyDetail() {
 
   /*
    * ============================================================
+   * REVIEWS
+   * ============================================================
+   */
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [reviewsError, setReviewsError] = useState("");
+
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState("");
+  const [reviewSubmitting, setReviewSubmitting] = useState(false);
+  const [reviewSuccess, setReviewSuccess] = useState("");
+
+  /*
+   * ============================================================
    * RECORD VIEWED PROPERTY
    * ============================================================
    */
@@ -82,6 +99,65 @@ export default function PropertyDetail() {
       phone: user.phone || prev.phone || "",
     }));
   }, [user]);
+
+  /*
+   * ============================================================
+   * LOAD PROPERTY REVIEWS
+   * ============================================================
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadReviews = async () => {
+      if (!property?.id) {
+        setReviews([]);
+        setReviewsLoading(false);
+        return;
+      }
+
+      try {
+        setReviewsLoading(true);
+        setReviewsError("");
+
+        const response =
+          await reviewService.getReviewsByProperty(
+            property.id
+          );
+
+        if (cancelled) {
+          return;
+        }
+
+        setReviews(
+          Array.isArray(response)
+            ? response
+            : []
+        );
+      } catch (error) {
+        console.error(
+          "Failed to load property reviews:",
+          error
+        );
+
+        if (!cancelled) {
+          setReviewsError(
+            error.message ||
+              "Failed to load reviews."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setReviewsLoading(false);
+        }
+      }
+    };
+
+    loadReviews();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [property?.id]);
 
   /*
    * ============================================================
@@ -149,11 +225,6 @@ export default function PropertyDetail() {
    * ============================================================
    * OPEN INTEREST FORM
    * ============================================================
-   *
-   * IMPORTANT:
-   * No login redirect here.
-   *
-   * Both logged-in users and guests can submit the form.
    */
   const handleInterested = () => {
     setSubmitted(false);
@@ -193,9 +264,6 @@ export default function PropertyDetail() {
    * ============================================================
    * TOUR REQUEST
    * ============================================================
-   *
-   * Tour still requires the user to be logged in because it
-   * belongs to the buyer's tour-booking history.
    */
   const handleTourRequest = () => {
     if (!isAuthenticated) {
@@ -231,6 +299,121 @@ export default function PropertyDetail() {
       "Tour request submitted! Agent will contact you soon."
     );
   };
+
+  /*
+   * ============================================================
+   * REVIEW SUBMISSION
+   * ============================================================
+   */
+  const handleReviewSubmit = async (e) => {
+    e.preventDefault();
+
+    setReviewSuccess("");
+    setReviewsError("");
+
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    if (!reviewRating) {
+      setReviewsError(
+        "Please select a rating from 1 to 5 stars."
+      );
+      return;
+    }
+
+    if (!reviewComment.trim()) {
+      setReviewsError(
+        "Please enter your review."
+      );
+      return;
+    }
+
+    try {
+      setReviewSubmitting(true);
+
+      const createdReview =
+        await reviewService.createReview({
+          propertyId: property.id,
+          rating: reviewRating,
+          comment: reviewComment.trim(),
+        });
+
+      /*
+       * Add the newly created review immediately.
+       * This keeps the page responsive without requiring
+       * the user to refresh the browser.
+       */
+      if (createdReview) {
+        setReviews((prev) => [
+          createdReview,
+          ...prev,
+        ]);
+      }
+
+      setReviewRating(0);
+      setReviewComment("");
+      setReviewSuccess(
+        "Your review was submitted successfully."
+      );
+    } catch (error) {
+      console.error(
+        "Failed to submit review:",
+        error
+      );
+
+      setReviewsError(
+        error.message ||
+          "Failed to submit your review."
+      );
+    } finally {
+      setReviewSubmitting(false);
+    }
+  };
+
+  /*
+   * ============================================================
+   * REVIEW DATE
+   * ============================================================
+   */
+  const formatReviewDate = (date) => {
+    if (!date) {
+      return "-";
+    }
+
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return date;
+    }
+
+    return parsedDate.toLocaleDateString(
+      "en-IN",
+      {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }
+    );
+  };
+
+  /*
+   * ============================================================
+   * REVIEW AVERAGE
+   * ============================================================
+   */
+  const averageReviewRating =
+    reviews.length > 0
+      ? (
+          reviews.reduce(
+            (total, review) =>
+              total +
+              Number(review.rating || 0),
+            0
+          ) / reviews.length
+        ).toFixed(1)
+      : "0.0";
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -546,6 +729,272 @@ export default function PropertyDetail() {
             </div>
           )}
 
+          {/* ====================================================
+              REVIEWS
+          ==================================================== */}
+          <div className="border-t border-gray-200 pt-6">
+
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
+              <div>
+                <h2 className="text-lg font-semibold flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-purple-600" />
+                  Reviews
+                </h2>
+
+                <p className="text-sm text-gray-500 mt-1">
+                  See what users have shared about this property.
+                </p>
+              </div>
+
+              {reviews.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+
+                  <span className="font-semibold text-gray-900">
+                    {averageReviewRating}
+                  </span>
+
+                  <span className="text-sm text-gray-500">
+                    ({reviews.length}{" "}
+                    {reviews.length === 1
+                      ? "review"
+                      : "reviews"})
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* REVIEW ERROR */}
+            {reviewsError && (
+              <div className="mb-4 bg-red-50 border border-red-100 text-red-600 rounded-lg px-4 py-3 text-sm">
+                {reviewsError}
+              </div>
+            )}
+
+            {/* REVIEW SUCCESS */}
+            {reviewSuccess && (
+              <div className="mb-4 bg-green-50 border border-green-100 text-green-700 rounded-lg px-4 py-3 text-sm flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                {reviewSuccess}
+              </div>
+            )}
+
+            {/* ==================================================
+                WRITE REVIEW
+            ================================================== */}
+            {isAuthenticated ? (
+              <form
+                onSubmit={handleReviewSubmit}
+                className="bg-gray-50 border border-gray-200 rounded-xl p-4 sm:p-5 mb-6"
+              >
+                <h3 className="font-semibold text-gray-900">
+                  Write a Review
+                </h3>
+
+                <p className="text-xs text-gray-500 mt-1">
+                  Share your experience with this property.
+                </p>
+
+                {/* RATING */}
+                <div className="mt-4">
+                  <p className="text-sm font-medium text-gray-700 mb-2">
+                    Your Rating
+                  </p>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from(
+                      { length: 5 },
+                      (_, index) => {
+                        const ratingValue =
+                          index + 1;
+
+                        return (
+                          <button
+                            key={ratingValue}
+                            type="button"
+                            onClick={() =>
+                              setReviewRating(
+                                ratingValue
+                              )
+                            }
+                            aria-label={`${ratingValue} star${
+                              ratingValue > 1
+                                ? "s"
+                                : ""
+                            }`}
+                            className="p-0.5"
+                          >
+                            <Star
+                              className={`w-6 h-6 transition ${
+                                ratingValue <=
+                                reviewRating
+                                  ? "text-amber-400 fill-amber-400"
+                                  : "text-gray-300 hover:text-amber-300"
+                              }`}
+                            />
+                          </button>
+                        );
+                      }
+                    )}
+
+                    {reviewRating > 0 && (
+                      <span className="text-xs text-gray-500 ml-2">
+                        {reviewRating}/5
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* COMMENT */}
+                <div className="mt-4">
+                  <label
+                    htmlFor="review-comment"
+                    className="text-sm font-medium text-gray-700 block mb-2"
+                  >
+                    Your Review
+                  </label>
+
+                  <textarea
+                    id="review-comment"
+                    rows={4}
+                    value={reviewComment}
+                    onChange={(e) =>
+                      setReviewComment(
+                        e.target.value
+                      )
+                    }
+                    placeholder="Write your experience about this property..."
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none resize-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={reviewSubmitting}
+                  className="mt-4 inline-flex items-center justify-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-lg font-semibold text-sm hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Star className="w-4 h-4" />
+
+                  {reviewSubmitting
+                    ? "Submitting..."
+                    : "Submit Review"}
+                </button>
+              </form>
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-5 mb-6">
+                <p className="text-sm text-gray-600">
+                  Please log in to write a review for this property.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => navigate("/login")}
+                  className="mt-3 text-sm font-semibold text-purple-600 hover:text-purple-700"
+                >
+                  Login to Review
+                </button>
+              </div>
+            )}
+
+            {/* ==================================================
+                EXISTING REVIEWS
+            ================================================== */}
+            {reviewsLoading ? (
+              <div className="text-center py-8">
+                <Star className="w-7 h-7 text-gray-300 mx-auto mb-2" />
+
+                <p className="text-sm text-gray-500">
+                  Loading reviews...
+                </p>
+              </div>
+            ) : reviews.length === 0 ? (
+              <div className="text-center py-8 border border-gray-100 rounded-xl">
+                <MessageSquare className="w-7 h-7 text-gray-300 mx-auto mb-2" />
+
+                <p className="font-medium text-gray-700">
+                  No reviews yet
+                </p>
+
+                <p className="text-sm text-gray-500 mt-1">
+                  Be the first person to review this property.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {reviews.map((review) => (
+                  <div
+                    key={review.id}
+                    className="border border-gray-200 rounded-xl p-4 sm:p-5"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+
+                      <div>
+                        <p className="font-semibold text-gray-900">
+                          {review.userName ||
+                            "HomeSpace User"}
+                        </p>
+
+                        <div className="flex items-center gap-1 mt-1">
+                          {Array.from(
+                            { length: 5 },
+                            (_, index) => (
+                              <Star
+                                key={index}
+                                className={`w-4 h-4 ${
+                                  index <
+                                  Number(
+                                    review.rating || 0
+                                  )
+                                    ? "text-amber-400 fill-amber-400"
+                                    : "text-gray-200"
+                                }`}
+                              />
+                            )
+                          )}
+                        </div>
+                      </div>
+
+                      <span className="text-xs text-gray-400">
+                        {formatReviewDate(
+                          review.createdAt
+                        )}
+                      </span>
+                    </div>
+
+                    <p className="text-sm text-gray-600 leading-relaxed mt-4">
+                      {review.comment ||
+                        "No comment provided."}
+                    </p>
+
+                    {review.status && (
+                      <div className="mt-3">
+                        <span
+                          className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-semibold ${
+                            String(
+                              review.status
+                            ).toUpperCase() ===
+                            "APPROVED"
+                              ? "bg-green-50 text-green-700"
+                              : String(
+                                  review.status
+                                ).toUpperCase() ===
+                                "REJECTED"
+                              ? "bg-red-50 text-red-700"
+                              : "bg-amber-50 text-amber-700"
+                          }`}
+                        >
+                          {String(
+                            review.status
+                          ).toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
         </div>
 
         {/* ======================================================
@@ -705,7 +1154,7 @@ export default function PropertyDetail() {
 
                 {/* =================================================
                     I'M INTERESTED
-                ================================================== */}
+                ================================================= */}
                 <button
                   type="button"
                   onClick={handleInterested}
@@ -717,7 +1166,7 @@ export default function PropertyDetail() {
 
                 {/* =================================================
                     REQUEST TOUR
-                ================================================== */}
+                ================================================= */}
                 <button
                   type="button"
                   onClick={handleTourRequest}
@@ -773,4 +1222,3 @@ export default function PropertyDetail() {
     </div>
   );
 }
-

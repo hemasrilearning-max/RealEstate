@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
+import propertyService from "../services/propertyService";
 
 import {
   INITIAL_PROPERTIES,
@@ -30,6 +31,55 @@ function save(key, value) {
   }
 }
 
+/*
+ * ============================================================
+ * PROPERTY IMAGE HELPERS
+ * ============================================================
+ *
+ * Images are stored in the browser as Data URLs.
+ *
+ * Example:
+ *
+ * re_property_images = {
+ *   "1": ["data:image/jpeg;base64,..."],
+ *   "2": ["data:image/png;base64,..."]
+ * }
+ *
+ * This is frontend-only storage.
+ */
+
+function readPropertyImages() {
+  return load("re_property_images", {});
+}
+
+function savePropertyImages(images) {
+  save("re_property_images", images);
+}
+
+/*
+ * Convert an uploaded File into a browser-storable Data URL.
+ */
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error("No image selected."));
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      resolve(reader.result);
+    };
+
+    reader.onerror = () => {
+      reject(new Error("Unable to read the selected image."));
+    };
+
+    reader.readAsDataURL(file);
+  });
+}
+
 export function DataProvider({ children }) {
   const { user, loading: authLoading } = useAuth();
 
@@ -42,6 +92,241 @@ export function DataProvider({ children }) {
   const [properties, setProperties] = useState(() =>
     load("re_properties", INITIAL_PROPERTIES)
   );
+  /*
+ * ============================================================
+ * LOAD PROPERTIES FROM BACKEND
+ * ============================================================
+ */
+
+useEffect(() => {
+  if (authLoading) {
+    return;
+  }
+
+  const loadBackendProperties = async () => {
+    try {
+      const response =
+        await propertyService.getAllProperties();
+
+      const backendProperties = Array.isArray(response)
+        ? response
+        : response?.content ||
+          response?.data ||
+          response?.properties ||
+          [];
+
+      if (!Array.isArray(backendProperties)) {
+        console.warn(
+          "Unexpected properties response:",
+          response
+        );
+        return;
+      }
+
+      /*
+       * Convert backend property response into the
+       * structure currently used by the frontend.
+       */
+      const normalizedProperties =
+        backendProperties.map((property) => {
+          const location = property.location || {};
+
+          const listingType =
+            String(
+              property.listingType || ""
+            ).toUpperCase() === "SALE"
+              ? "Sale"
+              : String(
+                  property.listingType || ""
+                ).toUpperCase() === "RENT"
+              ? "Rent"
+              : property.listingType || "";
+
+          const propertyType =
+            String(
+              property.propertyType || ""
+            ).toUpperCase();
+
+          let frontendPropertyType =
+            property.propertyType || "";
+
+          if (propertyType === "APARTMENT") {
+            frontendPropertyType = "Apartment";
+          } else if (propertyType === "VILLA") {
+            frontendPropertyType = "Villa";
+          } else if (propertyType === "PLOT") {
+            frontendPropertyType = "Plot";
+          } else if (
+            propertyType === "OFFICE" ||
+            propertyType === "COMMERCIAL"
+          ) {
+            frontendPropertyType = "Commercial";
+          }
+
+          const locationText = [
+            location.locality,
+            location.area,
+            location.city,
+            location.state,
+          ]
+            .filter(Boolean)
+            .join(", ");
+
+          const bedrooms =
+            property.bedrooms ??
+            property.bhk ??
+            null;
+
+          const bathrooms =
+            property.bathrooms ?? null;
+
+          const area =
+            property.area ?? null;
+
+          const images =
+            Array.isArray(property.images)
+              ? property.images
+              : [];
+
+          return {
+            ...property,
+
+            id: property.id,
+
+            title:
+              property.title ||
+              "Untitled Property",
+
+            description:
+              property.description || "",
+
+            price:
+              property.price ?? 0,
+
+            bedrooms,
+
+            bathrooms,
+
+            bhk:
+              property.bhk ||
+              (bedrooms
+                ? `${bedrooms} BHK`
+                : ""),
+
+            area,
+
+            areaUnit:
+              property.areaUnit ||
+              "sq.ft",
+
+            propertyType:
+              frontendPropertyType,
+
+            listingType,
+
+            status:
+              property.status || "AVAILABLE",
+
+            furnishing:
+              property.furnishing ||
+              property.furnishingStatus ||
+              "",
+
+            furnishingStatus:
+              property.furnishingStatus ||
+              property.furnishing ||
+              "",
+
+            location:
+              locationText ||
+              property.locationName ||
+              property.address ||
+              "",
+
+            locality:
+              location.locality ||
+              location.area ||
+              "",
+
+            city:
+              location.city ||
+              property.city ||
+              "",
+
+            state:
+              location.state ||
+              property.state ||
+              "",
+
+            pincode:
+              location.pincode ||
+              "",
+
+            address:
+              location.address ||
+              property.address ||
+              "",
+
+            images,
+
+            isFeatured:
+              Boolean(property.isFeatured),
+
+            views:
+              property.views || 0,
+
+            leads:
+              property.leads || 0,
+
+            sellerId:
+              property.sellerId ||
+              property.ownerId ||
+              property.seller?.id ||
+              property.owner?.id ||
+              null,
+
+            sellerName:
+              property.sellerName ||
+              property.ownerName ||
+              property.seller?.name ||
+              property.owner?.name ||
+              "",
+
+            agentId:
+              property.agentId ||
+              property.agent?.id ||
+              null,
+          };
+        });
+
+      /*
+       * Backend is now the source of truth for properties.
+       */
+      setProperties(normalizedProperties);
+
+      /*
+       * Keep the latest backend properties available
+       * after page refresh.
+       */
+      save(
+        "re_properties",
+        normalizedProperties
+      );
+    } catch (error) {
+      console.error(
+        "Unable to load properties from backend:",
+        error
+      );
+
+      /*
+       * Keep existing local/mock properties if the
+       * backend is unavailable.
+       */
+    }
+  };
+
+  loadBackendProperties();
+}, [authLoading]);
 
   const [leads, setLeads] = useState(() =>
     load("re_leads", INITIAL_LEADS)
@@ -69,13 +354,203 @@ export function DataProvider({ children }) {
 
   /*
    * ============================================================
+   * PROPERTY IMAGES
+   * ============================================================
+   */
+
+  const [propertyImages, setPropertyImages] = useState(() =>
+    readPropertyImages()
+  );
+
+  /*
+   * Save property images whenever they change.
+   */
+  useEffect(() => {
+    savePropertyImages(propertyImages);
+  }, [propertyImages]);
+
+  /*
+   * Add one or more uploaded images to a property.
+   *
+   * propertyId = backend property ID
+   * files = File[] from <input type="file">
+   */
+  const addPropertyImages = async (propertyId, files) => {
+    if (!propertyId || !files) {
+      return {
+        success: false,
+        error: "Property ID and images are required.",
+      };
+    }
+
+    const selectedFiles = Array.from(files).filter(
+      (file) => file && file.type?.startsWith("image/")
+    );
+
+    if (selectedFiles.length === 0) {
+      return {
+        success: false,
+        error: "Please select valid image files.",
+      };
+    }
+
+    try {
+      const imageData = await Promise.all(
+        selectedFiles.map((file) => fileToDataUrl(file))
+      );
+
+      setPropertyImages((prev) => {
+        const currentImages = Array.isArray(
+          prev[String(propertyId)]
+        )
+          ? prev[String(propertyId)]
+          : [];
+
+        return {
+          ...prev,
+          [String(propertyId)]: [
+            ...currentImages,
+            ...imageData,
+          ],
+        };
+      });
+
+      return {
+        success: true,
+        images: imageData,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error.message ||
+          "Unable to save property images.",
+      };
+    }
+  };
+
+  /*
+   * Replace all images for a property.
+   */
+  const setPropertyImagesForProperty = async (
+    propertyId,
+    files
+  ) => {
+    if (!propertyId || !files) {
+      return {
+        success: false,
+        error: "Property ID and images are required.",
+      };
+    }
+
+    const selectedFiles = Array.from(files).filter(
+      (file) => file && file.type?.startsWith("image/")
+    );
+
+    try {
+      const imageData = await Promise.all(
+        selectedFiles.map((file) => fileToDataUrl(file))
+      );
+
+      setPropertyImages((prev) => ({
+        ...prev,
+        [String(propertyId)]: imageData,
+      }));
+
+      return {
+        success: true,
+        images: imageData,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error:
+          error.message ||
+          "Unable to save property images.",
+      };
+    }
+  };
+
+  /*
+   * Get all images belonging to a property.
+   */
+  const getPropertyImages = (propertyId) => {
+    if (!propertyId) {
+      return [];
+    }
+
+    const images =
+      propertyImages[String(propertyId)];
+
+    return Array.isArray(images)
+      ? images
+      : [];
+  };
+
+  /*
+   * Get the first image belonging to a property.
+   *
+   * This is useful for PropertyCard, Home,
+   * Owner Properties, etc.
+   */
+  const getPropertyImage = (
+    propertyId,
+    fallback = ""
+  ) => {
+    const images = getPropertyImages(propertyId);
+
+    return images.length > 0
+      ? images[0]
+      : fallback;
+  };
+
+  /*
+   * Remove one image from a property.
+   */
+  const removePropertyImage = (
+    propertyId,
+    imageIndex
+  ) => {
+    if (!propertyId) return;
+
+    setPropertyImages((prev) => {
+      const key = String(propertyId);
+      const currentImages = Array.isArray(prev[key])
+        ? prev[key]
+        : [];
+
+      return {
+        ...prev,
+        [key]: currentImages.filter(
+          (_, index) => index !== imageIndex
+        ),
+      };
+    });
+  };
+
+  /*
+   * Remove all images for a property.
+   *
+   * Called when a property is deleted.
+   */
+  const deletePropertyImages = (propertyId) => {
+    if (!propertyId) return;
+
+    setPropertyImages((prev) => {
+      const updated = {
+        ...prev,
+      };
+
+      delete updated[String(propertyId)];
+
+      return updated;
+    });
+  };
+
+  /*
+   * ============================================================
    * BUYER FAVORITES
    * ============================================================
-   *
-   * Every logged-in buyer has separate favorites.
-   *
-   * Example:
-   * re_favorites_buyer@gmail.com
    */
 
   const [favoriteIds, setFavoriteIds] = useState([]);
@@ -152,11 +627,6 @@ export function DataProvider({ children }) {
    * ============================================================
    * BUYER SAVED SEARCHES
    * ============================================================
-   *
-   * Every buyer gets their own saved searches.
-   *
-   * Example:
-   * re_saved_searches_buyer@gmail.com
    */
 
   const [savedSearches, setSavedSearches] = useState([]);
@@ -262,24 +732,10 @@ export function DataProvider({ children }) {
    * ============================================================
    * BUYER VIEWED PROPERTIES
    * ============================================================
-   *
-   * Each logged-in buyer gets their own recently viewed
-   * property history.
-   *
-   * Example:
-   * re_viewed_properties_buyer@gmail.com
-   *
-   * The newest property is always stored first.
-   *
-   * Maximum:
-   * 20 recently viewed properties.
    */
 
   const [viewedPropertyIds, setViewedPropertyIds] = useState([]);
 
-  /*
-   * Load viewed properties when the logged-in buyer changes.
-   */
   useEffect(() => {
     if (authLoading) return;
 
@@ -300,9 +756,6 @@ export function DataProvider({ children }) {
     );
   }, [user?.email, authLoading]);
 
-  /*
-   * Persist viewed properties for the current buyer.
-   */
   useEffect(() => {
     if (authLoading || !user?.email) return;
 
@@ -316,11 +769,6 @@ export function DataProvider({ children }) {
     authLoading,
   ]);
 
-  /*
-   * Add a property to recently viewed.
-   *
-   * The property is moved to the top if it was already viewed.
-   */
   const addViewedProperty = (propertyId) => {
     if (!user?.email) {
       return {
@@ -345,9 +793,6 @@ export function DataProvider({ children }) {
     };
   };
 
-  /*
-   * Remove one property from viewed history.
-   */
   const removeViewedProperty = (propertyId) => {
     setViewedPropertyIds((prev) =>
       prev.filter(
@@ -356,9 +801,6 @@ export function DataProvider({ children }) {
     );
   };
 
-  /*
-   * Clear complete viewed history.
-   */
   const clearViewedProperties = () => {
     setViewedPropertyIds([]);
   };
@@ -407,6 +849,11 @@ export function DataProvider({ children }) {
         (p) => String(p.id) !== String(id)
       )
     );
+
+    /*
+     * Remove property images.
+     */
+    deletePropertyImages(id);
 
     /*
      * Also remove deleted property from buyer favorites
@@ -614,6 +1061,17 @@ export function DataProvider({ children }) {
         transactions,
         reviews,
         clients,
+
+        /*
+         * Property Images
+         */
+        propertyImages,
+        addPropertyImages,
+        setPropertyImagesForProperty,
+        getPropertyImages,
+        getPropertyImage,
+        removePropertyImage,
+        deletePropertyImages,
 
         /*
          * Favorites

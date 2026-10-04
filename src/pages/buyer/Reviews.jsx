@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Star,
   Calendar,
@@ -9,52 +9,154 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
+import reviewService from "../../services/reviewService";
 
 export default function BuyerReviews() {
   const navigate = useNavigate();
 
-  const [reviews, setReviews] = useState([
-    {
-      id: 1,
-      property: "Modern 3 BHK Apartment - Whitefield",
-      agent: "Arvind G. (Senior Broker)",
-      rating: 5,
-      date: "Sep 14, 2026",
-      comment:
-        "Excellent experience viewing this flat. The video walkthrough matched the property dimensions perfectly. The agent was punctual, highly knowledgeable, and answered all queries regarding security deposits immediately.",
-    },
-    {
-      id: 2,
-      property: "Luxury 4 BHK Villa - Sarjapur Road",
-      agent: "Sanjay Malhotra",
-      rating: 4,
-      date: "Aug 30, 2026",
-      comment:
-        "Beautiful villa structure and clean neighborhood environment. The tour was smooth, though scheduling took a little longer than expected due to current occupier timelines.",
-    },
-  ]);
+  const { buyer, user } = useAuth();
 
-  const handleRemoveReview = (id) => {
+  const profile = buyer || user;
+
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [deletingId, setDeletingId] = useState(null);
+
+  const userId =
+    profile?.userId ||
+    profile?.id;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadReviews = async () => {
+      if (!userId) {
+        setReviews([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError("");
+
+        const response =
+          await reviewService.getMyReviews();
+
+        if (cancelled) {
+          return;
+        }
+
+        setReviews(
+          Array.isArray(response)
+            ? response
+            : []
+        );
+      } catch (err) {
+        console.error(
+          "Failed to load buyer reviews:",
+          err
+        );
+
+        if (!cancelled) {
+          setError(
+            err.message ||
+              "Failed to load your reviews."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadReviews();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const formatDate = (date) => {
+    if (!date) {
+      return "-";
+    }
+
+    try {
+      const parsedDate = new Date(date);
+
+      if (Number.isNaN(parsedDate.getTime())) {
+        return date;
+      }
+
+      return parsedDate.toLocaleDateString(
+        "en-IN",
+        {
+          month: "short",
+          day: "2-digit",
+          year: "numeric",
+        }
+      );
+    } catch {
+      return date;
+    }
+  };
+
+  const handleRemoveReview = async (id) => {
     const confirmed = window.confirm(
       "Are you sure you want to remove this review?"
     );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
-    setReviews((prev) =>
-      prev.filter((item) => item.id !== id)
-    );
+    try {
+      setDeletingId(id);
+      setError("");
+
+      await reviewService.deleteReview(id);
+
+      setReviews((prev) =>
+        prev.filter(
+          (item) => item.id !== id
+        )
+      );
+    } catch (err) {
+      console.error(
+        "Failed to remove review:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Failed to remove review."
+      );
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const averageRating =
     reviews.length > 0
       ? (
           reviews.reduce(
-            (total, review) => total + review.rating,
+            (total, review) =>
+              total +
+              Number(review.rating || 0),
             0
           ) / reviews.length
         ).toFixed(1)
       : "0.0";
+
+  const fiveStarReviews =
+    reviews.filter(
+      (review) =>
+        Number(review.rating) === 5
+    ).length;
 
   return (
     <div className="bg-gray-50 min-h-[calc(100vh-5rem)] py-6 sm:py-8">
@@ -92,6 +194,13 @@ export default function BuyerReviews() {
             </button>
           </div>
         </div>
+
+        {/* ERROR */}
+        {error && (
+          <div className="mb-5 bg-red-50 border border-red-100 text-red-600 rounded-xl px-4 py-3 text-sm">
+            {error}
+          </div>
+        )}
 
         {/* REVIEW SUMMARY */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
@@ -145,11 +254,7 @@ export default function BuyerReviews() {
                 </p>
 
                 <p className="text-2xl font-bold text-gray-900 mt-1">
-                  {
-                    reviews.filter(
-                      (review) => review.rating === 5
-                    ).length
-                  }
+                  {fiveStarReviews}
                 </p>
               </div>
 
@@ -174,101 +279,137 @@ export default function BuyerReviews() {
           </div>
 
           <div className="p-4 sm:p-6 space-y-5">
-            {reviews.map((review) => (
-              <div
-                key={review.id}
-                className="border border-gray-100 rounded-2xl p-4 sm:p-5 bg-gray-50/30 hover:bg-white hover:shadow-sm transition-all"
-              >
-                {/* REVIEW HEADER */}
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-gray-900 text-sm sm:text-base flex items-start gap-2">
-                      <Building2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+            {loading ? (
+              <div className="text-center py-16">
+                <Star className="h-8 w-8 text-gray-300 mx-auto mb-4" />
 
-                      <span>{review.property}</span>
-                    </h3>
+                <h3 className="font-semibold text-gray-900">
+                  Loading your reviews...
+                </h3>
 
-                    <p className="text-xs text-gray-500 mt-2">
-                      Agent:{" "}
-                      <span className="font-semibold text-gray-700">
-                        {review.agent}
+                <p className="text-sm text-gray-500 mt-1">
+                  Please wait while we load your feedback.
+                </p>
+              </div>
+            ) : (
+              reviews.map((review) => (
+                <div
+                  key={review.id}
+                  className="border border-gray-100 rounded-2xl p-4 sm:p-5 bg-gray-50/30 hover:bg-white hover:shadow-sm transition-all"
+                >
+                  {/* REVIEW HEADER */}
+                  <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                    <div className="min-w-0">
+                      <h3 className="font-bold text-gray-900 text-sm sm:text-base flex items-start gap-2">
+                        <Building2 className="h-4 w-4 text-emerald-600 mt-0.5 shrink-0" />
+
+                        <span>
+                          {review.propertyTitle ||
+                            "Property Review"}
+                        </span>
+                      </h3>
+
+                      <p className="text-xs text-gray-500 mt-2">
+                        Agent:{" "}
+                        <span className="font-semibold text-gray-700">
+                          {review.agentName ||
+                            review.agent?.name ||
+                            "Not available"}
+                        </span>
+                      </p>
+                    </div>
+
+                    <div className="flex flex-col sm:items-end shrink-0">
+                      <div
+                        className="flex gap-0.5"
+                        aria-label={`${review.rating} out of 5 stars`}
+                      >
+                        {Array.from(
+                          { length: 5 },
+                          (_, index) => (
+                            <Star
+                              key={index}
+                              className={`h-4 w-4 ${
+                                index <
+                                Number(
+                                  review.rating || 0
+                                )
+                                  ? "text-amber-400 fill-amber-400"
+                                  : "text-gray-200"
+                              }`}
+                            />
+                          )
+                        )}
+                      </div>
+
+                      <span className="text-[10px] text-gray-400 font-medium mt-1.5 flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+
+                        {formatDate(
+                          review.createdAt
+                        )}
                       </span>
+                    </div>
+                  </div>
+
+                  {/* REVIEW CONTENT */}
+                  <div className="mt-5 bg-white border border-gray-100 rounded-xl p-4">
+                    <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
+                      “{review.comment || "No comment provided."}”
                     </p>
                   </div>
 
-                  <div className="flex flex-col sm:items-end shrink-0">
-                    <div
-                      className="flex gap-0.5"
-                      aria-label={`${review.rating} out of 5 stars`}
-                    >
-                      {Array.from(
-                        { length: 5 },
-                        (_, index) => (
-                          <Star
-                            key={index}
-                            className={`h-4 w-4 ${
-                              index < review.rating
-                                ? "text-amber-400 fill-amber-400"
-                                : "text-gray-200"
-                            }`}
-                          />
+                  {/* REVIEW ACTIONS */}
+                  <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end">
+                    <button
+                      disabled={
+                        deletingId === review.id
+                      }
+                      onClick={() =>
+                        handleRemoveReview(
+                          review.id
                         )
-                      )}
-                    </div>
+                      }
+                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border border-gray-200 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 hover:border-red-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
 
-                    <span className="text-[10px] text-gray-400 font-medium mt-1.5 flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {review.date}
-                    </span>
+                      {deletingId === review.id
+                        ? "Removing..."
+                        : "Remove Review"}
+                    </button>
                   </div>
                 </div>
-
-                {/* REVIEW CONTENT */}
-                <div className="mt-5 bg-white border border-gray-100 rounded-xl p-4">
-                  <p className="text-xs sm:text-sm text-gray-600 leading-relaxed">
-                    “{review.comment}”
-                  </p>
-                </div>
-
-                {/* REVIEW ACTIONS */}
-                <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end">
-                  <button
-                    onClick={() =>
-                      handleRemoveReview(review.id)
-                    }
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border border-gray-200 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 hover:border-red-100 transition-all"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    Remove Review
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
 
             {/* EMPTY STATE */}
-            {reviews.length === 0 && (
-              <div className="text-center py-16">
-                <div className="h-14 w-14 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
-                  <Star className="h-6 w-6 text-amber-400" />
+            {!loading &&
+              reviews.length === 0 && (
+                <div className="text-center py-16">
+                  <div className="h-14 w-14 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+                    <Star className="h-6 w-6 text-amber-400" />
+                  </div>
+
+                  <h3 className="font-semibold text-gray-900">
+                    No reviews yet
+                  </h3>
+
+                  <p className="text-sm text-gray-500 mt-1 max-w-md mx-auto">
+                    After viewing properties or working with agents,
+                    you can share your experience here.
+                  </p>
+
+                  <button
+                    onClick={() =>
+                      navigate("/properties")
+                    }
+                    className="mt-5 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors"
+                  >
+                    Explore Properties
+                  </button>
                 </div>
-
-                <h3 className="font-semibold text-gray-900">
-                  No reviews yet
-                </h3>
-
-                <p className="text-sm text-gray-500 mt-1 max-w-md mx-auto">
-                  After viewing properties or working with agents,
-                  you can share your experience here.
-                </p>
-
-                <button
-                  onClick={() => navigate("/properties")}
-                  className="mt-5 px-4 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors"
-                >
-                  Explore Properties
-                </button>
-              </div>
-            )}
+              )}
           </div>
         </div>
 

@@ -1,10 +1,16 @@
-import React, { useRef, useState } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 import { useAuth } from "../../context/AuthContext";
+import userService from "../../services/userService";
+
 import {
   Phone,
   Mail,
-  Briefcase,
-  MapPin,
+  User,
   Camera,
   Upload,
   Trash2,
@@ -15,41 +21,276 @@ import {
 } from "lucide-react";
 
 const MAX_SIZE_MB = 2;
-const ACCEPT = "image/jpeg,image/png,image/webp,image/gif";
+
+const ACCEPT =
+  "image/jpeg,image/png,image/webp,image/gif";
+
+/* ============================================================
+   HELPERS
+============================================================ */
+
+function getProfileName(profile) {
+  if (profile?.name) {
+    return profile.name;
+  }
+
+  return [
+    profile?.firstName,
+    profile?.lastName,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function mapBackendProfile(profile) {
+  const name = getProfileName(profile);
+
+  return {
+    ...profile,
+
+    id:
+      profile?.id ||
+      profile?.userId,
+
+    userId:
+      profile?.userId ||
+      profile?.id,
+
+    username:
+      profile?.username ||
+      "",
+
+    firstName:
+      profile?.firstName ||
+      "",
+
+    lastName:
+      profile?.lastName ||
+      "",
+
+    name:
+      name || "",
+
+    email:
+      profile?.email ||
+      "",
+
+    phone:
+      profile?.phone ||
+      profile?.phoneNumber ||
+      "",
+  };
+}
+
+/* ============================================================
+   COMPONENT
+============================================================ */
 
 export default function BuyerProfile() {
-  const { buyer, user, updateProfile } = useAuth();
+  const {
+    buyer,
+    user,
+    updateProfile,
+  } = useAuth();
 
   const profile = buyer || user;
 
   const fileRef = useRef(null);
 
-  const [preview, setPreview] = useState(null);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [backendProfile, setBackendProfile] =
+    useState(profile || null);
 
-  const [editing, setEditing] = useState(false);
+  const [preview, setPreview] =
+    useState(null);
+
+  const [selectedFile, setSelectedFile] =
+    useState(null);
+
+  const [profilePhotoUrl, setProfilePhotoUrl] =
+    useState(null);
+
+  const [error, setError] =
+    useState("");
+
+  const [success, setSuccess] =
+    useState("");
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [editing, setEditing] =
+    useState(false);
+
+  const effectiveProfile =
+    backendProfile || profile;
 
   const [form, setForm] = useState({
-    name: profile?.name || "Arjun Patel",
-    email: profile?.email || "buyer@gmail.com",
-    phone: profile?.phone || "+91 98765 43210",
-    occupation: profile?.occupation || "Senior Software Engineer",
-    currentCity: profile?.currentCity || "Whitefield, Bangalore",
+    username:
+      effectiveProfile?.username ||
+      "",
+
+    name:
+      getProfileName(effectiveProfile) ||
+      "",
+
+    email:
+      effectiveProfile?.email ||
+      "",
+
+    phone:
+      effectiveProfile?.phone ||
+      effectiveProfile?.phoneNumber ||
+      "",
   });
 
-  if (!profile) return null;
+  const userId =
+    effectiveProfile?.userId ||
+    effectiveProfile?.id;
+
+  /* ============================================================
+     LOAD PROFILE FROM BACKEND
+  ============================================================ */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadProfile = async () => {
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError("");
+
+        const response =
+          await userService.getUserById(
+            userId
+          );
+
+        if (cancelled) {
+          return;
+        }
+
+        const normalized =
+          mapBackendProfile(response);
+
+        setBackendProfile(normalized);
+
+        setForm({
+          username:
+            normalized.username || "",
+
+          name:
+            normalized.name || "",
+
+          email:
+            normalized.email || "",
+
+          phone:
+            normalized.phone || "",
+        });
+      } catch (err) {
+        console.error(
+          "Failed to load buyer profile:",
+          err
+        );
+
+        if (!cancelled) {
+          setError(
+            err.message ||
+              "Unable to load profile details."
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  /* ============================================================
+     LOAD PROFILE PHOTO
+  ============================================================ */
+
+  useEffect(() => {
+    let cancelled = false;
+    let objectUrl = null;
+
+    const loadProfilePhoto = async () => {
+      if (!userId) {
+        return;
+      }
+
+      try {
+        const blob =
+          await userService.getProfilePhotoBlob(
+            userId
+          );
+
+        if (cancelled) {
+          return;
+        }
+
+        objectUrl =
+          URL.createObjectURL(blob);
+
+        setProfilePhotoUrl(objectUrl);
+      } catch (err) {
+        console.debug(
+          "No backend profile photo available:",
+          err
+        );
+      }
+    };
+
+    loadProfilePhoto();
+
+    return () => {
+      cancelled = true;
+
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [userId]);
+
+  if (!effectiveProfile) {
+    return null;
+  }
+
+  /* ============================================================
+     CURRENT AVATAR
+  ============================================================ */
 
   const currentAvatar =
     preview ||
-    profile.avatar ||
+    profilePhotoUrl ||
+    effectiveProfile.avatar ||
     `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      profile.name || "Arjun Patel"
+      effectiveProfile.name || "User"
     )}&background=10b981&color=fff&size=150`;
 
+  /* ============================================================
+     FORM CHANGE
+  ============================================================ */
+
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const {
+      name,
+      value,
+    } = e.target;
 
     setForm((previous) => ({
       ...previous,
@@ -57,41 +298,72 @@ export default function BuyerProfile() {
     }));
   };
 
+  /* ============================================================
+     EDIT PROFILE
+  ============================================================ */
+
   const handleEdit = () => {
     setError("");
     setSuccess("");
 
     setForm({
-      name: profile.name || "Arjun Patel",
-      email: profile.email || "buyer@gmail.com",
-      phone: profile.phone || "+91 98765 43210",
-      occupation:
-        profile.occupation || "Senior Software Engineer",
-      currentCity:
-        profile.currentCity || "Whitefield, Bangalore",
+      username:
+        effectiveProfile.username || "",
+
+      name:
+        getProfileName(effectiveProfile) ||
+        "",
+
+      email:
+        effectiveProfile.email || "",
+
+      phone:
+        effectiveProfile.phone ||
+        effectiveProfile.phoneNumber ||
+        "",
     });
 
     setEditing(true);
   };
+
+  /* ============================================================
+     CANCEL EDIT
+  ============================================================ */
 
   const handleCancelEdit = () => {
     setEditing(false);
     setError("");
 
     setForm({
-      name: profile.name || "Arjun Patel",
-      email: profile.email || "buyer@gmail.com",
-      phone: profile.phone || "+91 98765 43210",
-      occupation:
-        profile.occupation || "Senior Software Engineer",
-      currentCity:
-        profile.currentCity || "Whitefield, Bangalore",
+      username:
+        effectiveProfile.username || "",
+
+      name:
+        getProfileName(effectiveProfile) ||
+        "",
+
+      email:
+        effectiveProfile.email || "",
+
+      phone:
+        effectiveProfile.phone ||
+        effectiveProfile.phoneNumber ||
+        "",
     });
   };
 
-  const handleSaveProfile = () => {
+  /* ============================================================
+     SAVE PROFILE DETAILS
+  ============================================================ */
+
+  const handleSaveProfile = async () => {
     setError("");
     setSuccess("");
+
+    if (!form.username.trim()) {
+      setError("Username is required.");
+      return;
+    }
 
     if (!form.name.trim()) {
       setError("Name is required.");
@@ -104,51 +376,170 @@ export default function BuyerProfile() {
     }
 
     if (!form.phone.trim()) {
-      setError("Phone number is required.");
+      setError(
+        "Phone number is required."
+      );
       return;
     }
 
-    if (!form.occupation.trim()) {
-      setError("Occupation is required.");
-      return;
-    }
-
-    if (!form.currentCity.trim()) {
-      setError("Location is required.");
+    if (!userId) {
+      setError(
+        "Unable to identify your user account."
+      );
       return;
     }
 
     setSaving(true);
 
     try {
+      const nameParts =
+        form.name
+          .trim()
+          .split(/\s+/);
+
+      const firstName =
+        nameParts.shift() || "";
+
+      const lastName =
+        nameParts.join(" ");
+
+      /* --------------------------------------------------------
+         UPDATE BACKEND
+      -------------------------------------------------------- */
+
+      const updatedProfile =
+        await userService.updateUser(
+          userId,
+          {
+            username:
+              form.username.trim(),
+
+            firstName,
+
+            lastName,
+
+            email:
+              form.email.trim(),
+
+            phone:
+              form.phone.trim(),
+          }
+        );
+
+      /* --------------------------------------------------------
+         NORMALIZE BACKEND RESPONSE
+      -------------------------------------------------------- */
+
+      const normalized =
+        mapBackendProfile({
+          ...effectiveProfile,
+          ...updatedProfile,
+
+          username:
+            form.username.trim(),
+
+          firstName,
+
+          lastName,
+
+          name:
+            form.name.trim(),
+
+          email:
+            form.email.trim(),
+
+          phone:
+            form.phone.trim(),
+        });
+
+      setBackendProfile(normalized);
+
+      setForm({
+        username:
+          normalized.username ||
+          form.username.trim(),
+
+        name:
+          normalized.name ||
+          form.name.trim(),
+
+        email:
+          normalized.email ||
+          form.email.trim(),
+
+        phone:
+          normalized.phone ||
+          form.phone.trim(),
+      });
+
+      /* --------------------------------------------------------
+         IMPORTANT
+
+         Only update profile information.
+
+         Do NOT spread the complete backend response into
+         AuthContext because that can overwrite authentication
+         fields such as role.
+      -------------------------------------------------------- */
+
       updateProfile({
-        name: form.name.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim(),
-        occupation: form.occupation.trim(),
-        currentCity: form.currentCity.trim(),
+        username:
+          normalized.username,
+
+        firstName:
+          normalized.firstName,
+
+        lastName:
+          normalized.lastName,
+
+        name:
+          normalized.name,
+
+        email:
+          normalized.email,
+
+        phone:
+          normalized.phone,
       });
 
       setEditing(false);
-      setSuccess("Profile details updated successfully.");
+
+      setSuccess(
+        "Profile details updated successfully."
+      );
 
       setTimeout(() => {
         setSuccess("");
       }, 3000);
     } catch (err) {
-      setError("Unable to update profile. Please try again.");
+      console.error(
+        "Failed to update profile:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Unable to update profile. Please try again."
+      );
     } finally {
       setSaving(false);
     }
   };
 
+  /* ============================================================
+     SELECT PHOTO
+  ============================================================ */
+
   const handleFileSelect = (e) => {
     setError("");
     setSuccess("");
 
-    const file = e.target.files?.[0];
+    const file =
+      e.target.files?.[0];
 
-    if (!file) return;
+    if (!file) {
+      return;
+    }
 
     if (!file.type.startsWith("image/")) {
       setError(
@@ -157,40 +548,86 @@ export default function BuyerProfile() {
       return;
     }
 
-    if (file.size > MAX_SIZE_MB * 1024 * 1024) {
+    if (
+      file.size >
+      MAX_SIZE_MB * 1024 * 1024
+    ) {
       setError(
         `Image must be smaller than ${MAX_SIZE_MB}MB.`
       );
       return;
     }
 
-    const reader = new FileReader();
+    setSelectedFile(file);
+
+    const reader =
+      new FileReader();
 
     reader.onload = () => {
       setPreview(reader.result);
     };
 
     reader.onerror = () => {
-      setError("Failed to read image. Try another file.");
+      setError(
+        "Failed to read image. Try another file."
+      );
+
+      setSelectedFile(null);
     };
 
     reader.readAsDataURL(file);
   };
 
-  const handleSaveAvatar = () => {
-    if (!preview) return;
+  /* ============================================================
+     SAVE PROFILE PHOTO
+  ============================================================ */
+
+  const handleSaveAvatar = async () => {
+    if (!selectedFile) {
+      return;
+    }
+
+    if (!userId) {
+      setError(
+        "Unable to identify your user account."
+      );
+      return;
+    }
 
     setSaving(true);
     setError("");
+    setSuccess("");
 
-    setTimeout(() => {
-      updateProfile({
-        avatar: preview,
-      });
+    try {
+      await userService.uploadProfilePhoto(
+        selectedFile
+      );
+
+      const blob =
+        await userService.getProfilePhotoBlob(
+          userId
+        );
+
+      const newObjectUrl =
+        URL.createObjectURL(blob);
+
+      setProfilePhotoUrl(
+        newObjectUrl
+      );
 
       setPreview(null);
-      setSuccess("Profile photo updated successfully.");
-      setSaving(false);
+      setSelectedFile(null);
+
+      /*
+       * Do not save a temporary blob URL into authUser.
+       */
+      updateProfile({
+        avatar: null,
+      });
+
+      setSuccess(
+        "Profile photo updated successfully."
+      );
 
       if (fileRef.current) {
         fileRef.current.value = "";
@@ -199,34 +636,85 @@ export default function BuyerProfile() {
       setTimeout(() => {
         setSuccess("");
       }, 3000);
-    }, 200);
+    } catch (err) {
+      console.error(
+        "Failed to upload profile photo:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Failed to upload profile photo."
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleRemoveAvatar = () => {
+  /* ============================================================
+     REMOVE PROFILE PHOTO
+  ============================================================ */
+
+  const handleRemoveAvatar = async () => {
     setError("");
     setSuccess("");
 
-    updateProfile({
-      avatar: null,
-    });
-
-    setPreview(null);
-
-    if (fileRef.current) {
-      fileRef.current.value = "";
+    if (!userId) {
+      setError(
+        "Unable to identify your user account."
+      );
+      return;
     }
 
-    setSuccess("Profile photo removed.");
+    try {
+      setSaving(true);
 
-    setTimeout(() => {
-      setSuccess("");
-    }, 3000);
+      await userService.deleteProfilePhoto();
+
+      setPreview(null);
+      setSelectedFile(null);
+      setProfilePhotoUrl(null);
+
+      updateProfile({
+        avatar: null,
+      });
+
+      if (fileRef.current) {
+        fileRef.current.value = "";
+      }
+
+      setSuccess(
+        "Profile photo removed."
+      );
+
+      setTimeout(() => {
+        setSuccess("");
+      }, 3000);
+    } catch (err) {
+      console.error(
+        "Failed to remove profile photo:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Failed to remove profile photo."
+      );
+    } finally {
+      setSaving(false);
+    }
   };
+
+  /* ============================================================
+     UI
+  ============================================================ */
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto p-4 font-sans">
+
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+
         <div>
           <h2 className="text-xl font-bold text-gray-900">
             Profile
@@ -249,18 +737,31 @@ export default function BuyerProfile() {
         )}
       </div>
 
+      {/* Loading */}
+      {loading && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 text-sm text-gray-500 shadow-sm">
+          Loading your profile...
+        </div>
+      )}
+
       {/* Main Card */}
       <div className="bg-white border border-gray-100 rounded-2xl p-6 md:p-8 max-w-4xl shadow-sm">
 
         {/* Profile Photo */}
         <div className="flex flex-col sm:flex-row items-center gap-6 pb-8 border-b border-gray-100">
+
           <div
             className="relative group cursor-pointer"
-            onClick={() => fileRef.current?.click()}
+            onClick={() =>
+              fileRef.current?.click()
+            }
           >
             <img
               src={currentAvatar}
-              alt={profile.name}
+              alt={
+                effectiveProfile.name ||
+                "Buyer"
+              }
               className="w-24 h-24 rounded-full object-cover border-4 border-emerald-100 shadow-sm transition-transform duration-200 group-hover:scale-[1.02]"
             />
 
@@ -270,27 +771,34 @@ export default function BuyerProfile() {
           </div>
 
           <div className="flex-1 text-center sm:text-left min-w-0">
+
             <h3 className="text-xl font-bold text-gray-900 truncate">
-              {profile.name || "Arjun Patel"}
+              {effectiveProfile.name ||
+                "Buyer"}
             </h3>
 
             <p className="text-sm text-gray-500 mt-0.5">
-              {profile.occupation ||
-                "Senior Software Engineer"}
+              @{effectiveProfile.username ||
+                "username"}
             </p>
 
             <div className="mt-4 flex flex-wrap items-center justify-center sm:justify-start gap-2">
+
               <input
                 ref={fileRef}
                 type="file"
                 accept={ACCEPT}
                 className="hidden"
-                onChange={handleFileSelect}
+                onChange={
+                  handleFileSelect
+                }
               />
 
               <button
                 type="button"
-                onClick={() => fileRef.current?.click()}
+                onClick={() =>
+                  fileRef.current?.click()
+                }
                 className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm transition"
               >
                 <Upload className="w-3.5 h-3.5 text-gray-400" />
@@ -304,7 +812,9 @@ export default function BuyerProfile() {
                 <>
                   <button
                     type="button"
-                    onClick={handleSaveAvatar}
+                    onClick={
+                      handleSaveAvatar
+                    }
                     disabled={saving}
                     className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-60"
                   >
@@ -315,7 +825,19 @@ export default function BuyerProfile() {
 
                   <button
                     type="button"
-                    onClick={() => setPreview(null)}
+                    onClick={() => {
+                      setPreview(null);
+                      setSelectedFile(
+                        null
+                      );
+
+                      if (
+                        fileRef.current
+                      ) {
+                        fileRef.current.value =
+                          "";
+                      }
+                    }}
                     className="text-xs text-gray-500 hover:text-gray-700 font-medium px-2"
                   >
                     Cancel
@@ -323,20 +845,26 @@ export default function BuyerProfile() {
                 </>
               )}
 
-              {!preview && profile.avatar && (
-                <button
-                  type="button"
-                  onClick={handleRemoveAvatar}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 transition"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Remove
-                </button>
-              )}
+              {!preview &&
+                (profilePhotoUrl ||
+                  effectiveProfile.avatar) && (
+                  <button
+                    type="button"
+                    onClick={
+                      handleRemoveAvatar
+                    }
+                    disabled={saving}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 transition disabled:opacity-60"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Remove
+                  </button>
+                )}
             </div>
 
             <p className="text-[11px] text-gray-400 mt-2.5">
-              JPG, PNG, WebP or GIF · Max {MAX_SIZE_MB}MB
+              JPG, PNG, WebP or GIF · Max{" "}
+              {MAX_SIZE_MB}MB
             </p>
 
             {error && (
@@ -357,9 +885,28 @@ export default function BuyerProfile() {
         {/* EDIT MODE */}
         {editing ? (
           <div className="pt-6">
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
 
-              {/* Name */}
+              {/* Username */}
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 mb-2">
+                  Username
+                </label>
+
+                <input
+                  type="text"
+                  name="username"
+                  value={form.username}
+                  onChange={
+                    handleChange
+                  }
+                  placeholder="Enter username"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                />
+              </div>
+
+              {/* Full Name */}
               <div>
                 <label className="block text-xs font-semibold text-gray-600 mb-2">
                   Full Name
@@ -369,7 +916,9 @@ export default function BuyerProfile() {
                   type="text"
                   name="name"
                   value={form.name}
-                  onChange={handleChange}
+                  onChange={
+                    handleChange
+                  }
                   placeholder="Enter your name"
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 />
@@ -385,7 +934,9 @@ export default function BuyerProfile() {
                   type="email"
                   name="email"
                   value={form.email}
-                  onChange={handleChange}
+                  onChange={
+                    handleChange
+                  }
                   placeholder="Enter your email"
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 />
@@ -401,40 +952,10 @@ export default function BuyerProfile() {
                   type="tel"
                   name="phone"
                   value={form.phone}
-                  onChange={handleChange}
+                  onChange={
+                    handleChange
+                  }
                   placeholder="Enter phone number"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                />
-              </div>
-
-              {/* Occupation */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-2">
-                  Occupation
-                </label>
-
-                <input
-                  type="text"
-                  name="occupation"
-                  value={form.occupation}
-                  onChange={handleChange}
-                  placeholder="Enter occupation"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                />
-              </div>
-
-              {/* Location */}
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-semibold text-gray-600 mb-2">
-                  Location / Base City
-                </label>
-
-                <input
-                  type="text"
-                  name="currentCity"
-                  value={form.currentCity}
-                  onChange={handleChange}
-                  placeholder="Enter your city"
                   className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
                 />
               </div>
@@ -447,9 +968,12 @@ export default function BuyerProfile() {
             )}
 
             <div className="flex flex-wrap gap-3 mt-6 pt-5 border-t border-gray-100">
+
               <button
                 type="button"
-                onClick={handleSaveProfile}
+                onClick={
+                  handleSaveProfile
+                }
                 disabled={saving}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition disabled:opacity-60"
               >
@@ -462,11 +986,14 @@ export default function BuyerProfile() {
 
               <button
                 type="button"
-                onClick={handleCancelEdit}
+                onClick={
+                  handleCancelEdit
+                }
                 disabled={saving}
                 className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition"
               >
                 <X className="w-4 h-4" />
+
                 Cancel
               </button>
             </div>
@@ -475,8 +1002,47 @@ export default function BuyerProfile() {
           /* VIEW MODE */
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6">
 
+            {/* Username */}
+            <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
+
+              <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
+                <User className="w-4 h-4" />
+              </div>
+
+              <div className="min-w-0">
+                <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                  Username
+                </label>
+
+                <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">
+                  {effectiveProfile.username ||
+                    ""}
+                </p>
+              </div>
+            </div>
+
+            {/* Full Name */}
+            <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
+
+              <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
+                <User className="w-4 h-4" />
+              </div>
+
+              <div className="min-w-0">
+                <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                  Full Name
+                </label>
+
+                <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">
+                  {effectiveProfile.name ||
+                    ""}
+                </p>
+              </div>
+            </div>
+
             {/* Email */}
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
+
               <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
                 <Mail className="w-4 h-4" />
               </div>
@@ -487,13 +1053,15 @@ export default function BuyerProfile() {
                 </label>
 
                 <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">
-                  {profile.email || "buyer@gmail.com"}
+                  {effectiveProfile.email ||
+                    ""}
                 </p>
               </div>
             </div>
 
             {/* Phone */}
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
+
               <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
                 <Phone className="w-4 h-4" />
               </div>
@@ -504,43 +1072,9 @@ export default function BuyerProfile() {
                 </label>
 
                 <p className="text-sm font-semibold text-gray-800 mt-0.5">
-                  {profile.phone || "+91 98765 43210"}
-                </p>
-              </div>
-            </div>
-
-            {/* Occupation */}
-            <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
-              <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
-                <Briefcase className="w-4 h-4" />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                  Occupation
-                </label>
-
-                <p className="text-sm font-semibold text-gray-800 mt-0.5">
-                  {profile.occupation ||
-                    "Senior Software Engineer"}
-                </p>
-              </div>
-            </div>
-
-            {/* Location */}
-            <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
-              <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
-                <MapPin className="w-4 h-4" />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                  Location Base City
-                </label>
-
-                <p className="text-sm font-semibold text-gray-800 mt-0.5">
-                  {profile.currentCity ||
-                    "Whitefield, Bangalore"}
+                  {effectiveProfile.phone ||
+                    effectiveProfile.phoneNumber ||
+                    ""}
                 </p>
               </div>
             </div>
@@ -549,10 +1083,9 @@ export default function BuyerProfile() {
       </div>
 
       <p className="text-xs text-gray-400 max-w-4xl mt-3 pl-1">
-        Your profile details and photo are saved in this browser
-        for the current demo account.
+        Your profile details and photo are saved securely through
+        your HomeSpace account.
       </p>
     </div>
   );
 }
-

@@ -1,24 +1,107 @@
 import { Heart, ArrowRight } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+
 import { useData } from "../../context/DataContext";
+import { useAuth } from "../../context/AuthContext";
 import PropertyCard from "../../components/PropertyCard";
+import wishlistService from "../../services/wishlistService";
 
 export default function BuyerFavorites() {
-  const {
-    properties,
-    favoriteIds,
-    removeFavorite,
-  } = useData();
+  const { properties } = useData();
+  const { user, isAuthenticated } = useAuth();
 
+  const [favoriteIds, setFavoriteIds] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  /*
+   * Load favorites from backend Wishlist
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFavorites = async () => {
+      if (!isAuthenticated || !user?.userId) {
+        setFavoriteIds([]);
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        const response =
+          await wishlistService.getWishlistByUser(
+            user.userId
+          );
+
+        const wishlistItems = Array.isArray(response)
+          ? response
+          : [];
+
+        const ids = wishlistItems
+          .map((item) => item.propertyId)
+          .filter(Boolean);
+
+        if (!cancelled) {
+          setFavoriteIds(ids);
+        }
+      } catch (error) {
+        console.error(
+          "Unable to load favorite properties:",
+          error
+        );
+
+        if (!cancelled) {
+          setFavoriteIds([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadFavorites();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, user?.userId]);
+
+  /*
+   * Match backend wishlist property IDs
+   * with the properties already loaded by DataContext.
+   */
   const favorites = properties.filter((property) =>
     favoriteIds.includes(property.id)
   );
 
-  const handleRemove = (e, propertyId) => {
+  const handleRemove = async (e, propertyId) => {
     e.preventDefault();
     e.stopPropagation();
 
-    removeFavorite(propertyId);
+    if (!user?.userId) {
+      return;
+    }
+
+    try {
+      await wishlistService.removeFromWishlist(
+        user.userId,
+        propertyId
+      );
+
+      setFavoriteIds((currentIds) =>
+        currentIds.filter(
+          (id) => id !== propertyId
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Unable to remove favorite:",
+        error
+      );
+    }
   };
 
   return (
@@ -44,8 +127,17 @@ export default function BuyerFavorites() {
         </span>
       </div>
 
-      {/* Favorites */}
-      {favorites.length === 0 ? (
+      {/* Loading */}
+      {loading ? (
+        <div className="bg-white border border-gray-200 rounded-2xl py-16 px-6 text-center">
+          <div className="w-8 h-8 mx-auto border-2 border-gray-200 border-t-red-500 rounded-full animate-spin" />
+
+          <p className="text-gray-500 mt-4">
+            Loading your favorite properties...
+          </p>
+        </div>
+      ) : favorites.length === 0 ? (
+        /* Empty Favorites */
         <div className="bg-white border border-gray-200 rounded-2xl py-16 px-6 text-center">
           <div className="w-16 h-16 mx-auto rounded-full bg-red-50 flex items-center justify-center mb-5">
             <Heart className="w-8 h-8 text-red-400" />
@@ -69,6 +161,7 @@ export default function BuyerFavorites() {
           </Link>
         </div>
       ) : (
+        /* Favorites */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {favorites.map((property) => (
             <div
@@ -94,4 +187,3 @@ export default function BuyerFavorites() {
     </div>
   );
 }
-

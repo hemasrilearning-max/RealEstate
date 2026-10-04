@@ -19,11 +19,16 @@ export default function Home() {
   const navigate = useNavigate();
 
   const [search, setSearch] = useState("");
-  const [listingType, setListingType] = useState("Buy");
+  const [listingType, setListingType] = useState("Sale");
 
   const featured = properties
-    .filter((p) => p.isFeatured)
-    .slice(0, 3);
+  .filter((p) => p.isFeatured)
+  .slice(0, 3);
+
+const homepageProperties =
+  featured.length > 0
+    ? featured
+    : properties.slice(0, 3);
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -71,19 +76,22 @@ export default function Home() {
             >
               {/* Buy / Rent */}
               <div className="flex rounded-xl overflow-hidden border border-gray-200">
-                {["Buy", "Rent"].map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => setListingType(type)}
-                    className={`px-5 py-3 text-sm font-semibold transition ${
-                      listingType === type
-                        ? "bg-purple-600 text-white"
-                        : "bg-gray-50 text-gray-600 hover:bg-gray-100"
-                    }`}
-                  >
-                    {type}
-                  </button>
+                {[
+  { label: "Buy", value: "Sale" },
+  { label: "Rent", value: "Rent" },
+].map((type) => (
+                 <button
+  key={type.value}
+  type="button"
+  onClick={() => setListingType(type.value)}
+  className={`px-5 py-3 text-sm font-semibold transition ${
+    listingType === type.value
+      ? "bg-purple-600 text-white"
+      : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+  }`}
+>
+  {type.label}
+</button>
                 ))}
               </div>
 
@@ -192,12 +200,12 @@ export default function Home() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {featured.map((property) => (
-            <PropertyCard
-              key={property.id}
-              property={property}
-            />
-          ))}
+          {homepageProperties.map((property) => (
+  <PropertyCard
+    key={property.id}
+    property={property}
+  />
+))}
         </div>
       </section>
 

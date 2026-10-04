@@ -58,8 +58,11 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
 
   /*
-   * Restore login session when the application starts.
+   * ============================================================
+   * RESTORE LOGIN SESSION
+   * ============================================================
    */
+
   useEffect(() => {
     const token = loginService.getToken();
     const storedUser = loginService.getUser();
@@ -72,33 +75,32 @@ export function AuthProvider({ children }) {
   }, []);
 
   /*
-   * Login using Spring Boot backend.
+   * ============================================================
+   * LOGIN
+   * ============================================================
    */
+
   const login = async (username, password) => {
     try {
-      const response = await loginService.login(
-        username,
-        password
-      );
+      const response =
+        await loginService.login(
+          username,
+          password
+        );
 
-      /*
-       * Convert backend role to the role names
-       * already used by the frontend.
-       */
-      const frontendRole = normalizeRole(response.role);
+      const frontendRole =
+        normalizeRole(response.role);
 
       if (!frontendRole) {
         return {
           success: false,
-          error: `Unsupported user role: ${response.role}`,
+          error:
+            `Unsupported user role: ${response.role}`,
         };
       }
 
       /*
        * Create the frontend session object.
-       *
-       * We keep both backendRole and role so that
-       * existing frontend components continue working.
        */
       const sessionUser = {
         id: response.userId,
@@ -171,8 +173,11 @@ export function AuthProvider({ children }) {
   };
 
   /*
-   * Logout.
+   * ============================================================
+   * LOGOUT
+   * ============================================================
    */
+
   const logout = () => {
     setUser(null);
 
@@ -180,19 +185,51 @@ export function AuthProvider({ children }) {
   };
 
   /*
-   * Temporary frontend profile update.
+   * ============================================================
+   * UPDATE PROFILE
+   * ============================================================
    *
-   * This keeps existing dashboard/profile pages
-   * working until the backend profile API is connected.
+   * IMPORTANT:
+   *
+   * Profile API data must NEVER replace authentication data.
+   *
+   * We preserve:
+   * - id
+   * - userId
+   * - username
+   * - role
+   * - backendRole
+   *
+   * Only profile fields are allowed to change.
+   * ============================================================
    */
-  const updateProfile = (updates) => {
+
+  const updateProfile = (updates = {}) => {
     if (!user) {
       return;
     }
 
     const updatedUser = {
       ...user,
+
+      /*
+       * Only profile information should be updated here.
+       */
       ...updates,
+
+      /*
+       * Authentication identity is always preserved.
+       */
+      id: user.id,
+      userId: user.userId,
+      username: user.username,
+
+      /*
+       * NEVER allow a profile API response to
+       * remove or replace the authenticated role.
+       */
+      role: user.role,
+      backendRole: user.backendRole,
     };
 
     setUser(updatedUser);
@@ -204,15 +241,11 @@ export function AuthProvider({ children }) {
   };
 
   /*
-   * Backward-compatible aliases.
-   *
-   * Existing pages can continue using:
-   *
-   * useAuth().agent
-   * useAuth().buyer
-   * useAuth().owner
-   * useAuth().admin
+   * ============================================================
+   * ROLE HELPERS
+   * ============================================================
    */
+
   const agent =
     user?.role === "agent"
       ? user
@@ -232,6 +265,12 @@ export function AuthProvider({ children }) {
     user?.role === "admin"
       ? user
       : null;
+
+  /*
+   * ============================================================
+   * PROVIDER
+   * ============================================================
+   */
 
   return (
     <AuthContext.Provider

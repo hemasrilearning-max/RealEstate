@@ -1,5 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import userService from "../services/userService";
+
 import {
   LogIn,
   LayoutDashboard,
@@ -21,27 +23,160 @@ import {
   Bell,
   Sparkles,
 } from "lucide-react";
-import { useState } from "react";
+
+import { useEffect, useRef, useState } from "react";
 import { ROLE_DASHBOARD } from "../data/users";
 
 export default function Navbar() {
-  const { user, logout, isAuthenticated, role } = useAuth();
+  const {
+    user,
+    logout,
+    isAuthenticated,
+    role,
+  } = useAuth();
+
   const navigate = useNavigate();
 
   const [open, setOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
 
+  // ============================================================
+  // BACKEND PROFILE PHOTO
+  // ============================================================
+
+  const [profilePhoto, setProfilePhoto] =
+    useState(null);
+
+  const photoObjectUrlRef =
+    useRef(null);
+
+  /*
+   * Keep the user ID stable.
+   *
+   * Updating profile fields such as:
+   * name, email, phone, occupation, city
+   *
+   * should NOT cause the Navbar to reload the profile photo.
+   */
+  const userId =
+    user?.userId ||
+    user?.id ||
+    null;
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadProfilePhoto = async () => {
+      if (!userId || !isAuthenticated) {
+        if (mounted) {
+          setProfilePhoto(null);
+        }
+
+        return;
+      }
+
+      try {
+        const blob =
+          await userService.getProfilePhotoBlob(
+            userId
+          );
+
+        if (!mounted || !blob) {
+          return;
+        }
+
+        /*
+         * Remove previous object URL
+         * before creating a new one.
+         */
+        if (
+          photoObjectUrlRef.current
+        ) {
+          URL.revokeObjectURL(
+            photoObjectUrlRef.current
+          );
+        }
+
+        const objectUrl =
+          URL.createObjectURL(blob);
+
+        photoObjectUrlRef.current =
+          objectUrl;
+
+        setProfilePhoto(objectUrl);
+      } catch (error) {
+        /*
+         * No profile photo uploaded.
+         *
+         * Keep the normal fallback avatar.
+         */
+        if (mounted) {
+          setProfilePhoto(null);
+        }
+      }
+    };
+
+    loadProfilePhoto();
+
+    return () => {
+      mounted = false;
+
+      if (
+        photoObjectUrlRef.current
+      ) {
+        URL.revokeObjectURL(
+          photoObjectUrlRef.current
+        );
+
+        photoObjectUrlRef.current =
+          null;
+      }
+    };
+  }, [
+    userId,
+    isAuthenticated,
+    user?.profilePhotoUpdatedAt,
+  ]);
+
+  // ============================================================
+  // FALLBACK AVATAR
+  // ============================================================
+
+  const fallbackAvatar =
+    `https://i.pravatar.cc/150?u=${encodeURIComponent(
+      user?.email || "user"
+    )}`;
+
+  const currentAvatar =
+    profilePhoto ||
+    user?.avatar ||
+    fallbackAvatar;
+
+  // ============================================================
+  // LOGOUT
+  // ============================================================
+
   const handleLogout = () => {
     logout();
+
     setOpen(false);
     setAccountOpen(false);
+
     navigate("/");
   };
+
+  // ============================================================
+  // CLOSE MENU
+  // ============================================================
 
   const closeMenu = () => {
     setOpen(false);
     setAccountOpen(false);
   };
+
+  // ============================================================
+  // DASHBOARD
+  // ============================================================
 
   const dashboardPath = role
     ? ROLE_DASHBOARD[role] || "/login"
@@ -113,24 +248,25 @@ export default function Navbar() {
                   <button
                     type="button"
                     onClick={() =>
-                      setAccountOpen((prev) => !prev)
+                      setAccountOpen(
+                        (prev) => !prev
+                      )
                     }
                     className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-purple-50 transition"
                   >
                     <img
-                      src={
-                        user?.avatar ||
-                        `https://i.pravatar.cc/150?u=${encodeURIComponent(
-                          user?.email || "buyer"
-                        )}`
+                      src={currentAvatar}
+                      alt={
+                        user?.name ||
+                        "Buyer"
                       }
-                      alt={user?.name || "Buyer"}
                       className="w-8 h-8 rounded-full object-cover ring-2 ring-purple-100"
                     />
 
                     <div className="text-left">
                       <div className="text-sm font-medium text-gray-700 max-w-[120px] truncate">
-                        {user?.name || "Buyer"}
+                        {user?.name ||
+                          "Buyer"}
                       </div>
 
                       <div className="text-xs text-gray-400">
@@ -140,7 +276,9 @@ export default function Navbar() {
 
                     <ChevronDown
                       className={`w-4 h-4 text-gray-400 transition-transform ${
-                        accountOpen ? "rotate-180" : ""
+                        accountOpen
+                          ? "rotate-180"
+                          : ""
                       }`}
                     />
                   </button>
@@ -156,19 +294,18 @@ export default function Navbar() {
                         <div className="flex items-center gap-3">
 
                           <img
-                            src={
-                              user?.avatar ||
-                              `https://i.pravatar.cc/150?u=${encodeURIComponent(
-                                user?.email || "buyer"
-                              )}`
+                            src={currentAvatar}
+                            alt={
+                              user?.name ||
+                              "Buyer"
                             }
-                            alt={user?.name || "Buyer"}
                             className="w-11 h-11 rounded-full object-cover"
                           />
 
                           <div className="min-w-0">
                             <p className="font-semibold text-gray-900 truncate">
-                              {user?.name || "Buyer"}
+                              {user?.name ||
+                                "Buyer"}
                             </p>
 
                             <p className="text-xs text-gray-500 truncate">
@@ -321,13 +458,11 @@ export default function Navbar() {
                   <div className="flex items-center gap-3">
 
                     <img
-                      src={
-                        user?.avatar ||
-                        `https://i.pravatar.cc/150?u=${encodeURIComponent(
-                          user?.email || "user"
-                        )}`
+                      src={currentAvatar}
+                      alt={
+                        user?.name ||
+                        "User"
                       }
-                      alt={user?.name || "User"}
                       className="w-8 h-8 rounded-full object-cover ring-2 ring-purple-100"
                     />
 
@@ -392,7 +527,9 @@ export default function Navbar() {
           <button
             type="button"
             className="md:hidden p-2 text-gray-600 hover:text-purple-600"
-            onClick={() => setOpen((prev) => !prev)}
+            onClick={() =>
+              setOpen((prev) => !prev)
+            }
             aria-label="Open navigation menu"
           >
             {open ? (
@@ -446,19 +583,18 @@ export default function Navbar() {
                   <div className="flex items-center gap-3 px-3 py-2 mb-2">
 
                     <img
-                      src={
-                        user?.avatar ||
-                        `https://i.pravatar.cc/150?u=${encodeURIComponent(
-                          user?.email || "buyer"
-                        )}`
+                      src={currentAvatar}
+                      alt={
+                        user?.name ||
+                        "Buyer"
                       }
-                      alt={user?.name || "Buyer"}
                       className="w-10 h-10 rounded-full object-cover ring-2 ring-purple-100"
                     />
 
                     <div className="min-w-0">
                       <p className="font-semibold text-gray-900 truncate">
-                        {user?.name || "Buyer"}
+                        {user?.name ||
+                          "Buyer"}
                       </p>
 
                       <p className="text-xs text-gray-500 truncate">
@@ -636,8 +772,8 @@ export default function Navbar() {
 
           </div>
         )}
+
       </div>
     </nav>
   );
 }
-
