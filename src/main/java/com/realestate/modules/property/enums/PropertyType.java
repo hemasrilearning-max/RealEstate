@@ -9,5 +9,6 @@ public enum PropertyType {
   OFFICE,
   SHOP,
   WAREHOUSE,
-  LAND
+  LAND,
+  FLAT
 }
