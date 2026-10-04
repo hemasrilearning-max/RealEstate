@@ -27,7 +27,6 @@ import ForgotPassword from "./pages/auth/ForgotPassword";
    There is NO separate Buyer Dashboard.
 ============================================================ */
 import BuyerProfile from "./pages/buyer/Profile";
-import BuyerSavedSearches from "./pages/buyer/SavedSearches";
 import BuyerViewedProperties from "./pages/buyer/ViewedProperties";
 import BuyerMessages from "./pages/buyer/Messages";
 import BuyerTours from "./pages/buyer/Tours";
@@ -93,33 +92,26 @@ function PublicLayout({ children }) {
     <div className="min-h-screen flex flex-col bg-white">
       <Navbar />
 
-      <main className="flex-1 min-h-[calc(100vh-4rem)]">
-        {children}
-      </main>
+      <main className="flex-1 min-h-[calc(100vh-4rem)]">{children}</main>
 
       <footer className="bg-slate-900 text-gray-300">
         <div className="max-w-7xl mx-auto px-4 py-12">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-
             {/* Brand */}
             <div className="md:col-span-1">
               <div className="flex items-center gap-2 mb-4">
-                <span className="text-xl font-bold text-white">
-                  HomeSpace
-                </span>
+                <span className="text-xl font-bold text-white">HomeSpace</span>
               </div>
 
               <p className="text-sm text-gray-400 leading-relaxed">
-                Your trusted partner in finding the perfect home.
-                Buy, rent or sell with confidence.
+                Your trusted partner in finding the perfect home. Buy, rent or
+                sell with confidence.
               </p>
             </div>
 
             {/* Quick Links */}
             <div>
-              <h4 className="text-white font-semibold mb-4">
-                Explore
-              </h4>
+              <h4 className="text-white font-semibold mb-4">Explore</h4>
 
               <ul className="space-y-2 text-sm">
                 <li>
@@ -162,9 +154,7 @@ function PublicLayout({ children }) {
 
             {/* Support */}
             <div>
-              <h4 className="text-white font-semibold mb-4">
-                Support
-              </h4>
+              <h4 className="text-white font-semibold mb-4">Support</h4>
 
               <ul className="space-y-2 text-sm">
                 <li>
@@ -177,10 +167,7 @@ function PublicLayout({ children }) {
                 </li>
 
                 <li>
-                  <Link
-                    to="/faq"
-                    className="hover:text-purple-400 transition"
-                  >
+                  <Link to="/faq" className="hover:text-purple-400 transition">
                     FAQs
                   </Link>
                 </li>
@@ -207,12 +194,9 @@ function PublicLayout({ children }) {
 
             {/* Contact */}
             <div>
-              <h4 className="text-white font-semibold mb-4">
-                Get in Touch
-              </h4>
+              <h4 className="text-white font-semibold mb-4">Get in Touch</h4>
 
               <ul className="space-y-3 text-sm">
-
                 <li className="flex items-center gap-2">
                   <Phone className="w-4 h-4 text-purple-400" />
                   +91 98765 43210
@@ -227,20 +211,15 @@ function PublicLayout({ children }) {
                   <MapPin className="w-4 h-4 text-purple-400 mt-0.5" />
                   Bangalore, Karnataka
                 </li>
-
               </ul>
             </div>
           </div>
 
           {/* Bottom bar */}
           <div className="border-t border-slate-700 mt-10 pt-6 flex flex-col sm:flex-row justify-between items-center gap-3 text-sm text-gray-500">
-            <p>
-              © 2026 HomeSpace. All rights reserved.
-            </p>
+            <p>© 2026 HomeSpace. All rights reserved.</p>
 
-            <p>
-              Made with ❤️ for home seekers
-            </p>
+            <p>Made with ❤️ for home seekers</p>
           </div>
         </div>
       </footer>
@@ -257,7 +236,6 @@ export default function App() {
       <DataProvider>
         <BrowserRouter>
           <Routes>
-
             {/* ==================================================
                 PUBLIC HOMESPACE WEBSITE
             ================================================== */}
@@ -311,16 +289,6 @@ export default function App() {
               element={
                 <PublicLayout>
                   <BuyerProfile />
-                </PublicLayout>
-              }
-            />
-
-            {/* Saved Searches */}
-            <Route
-              path="/saved-searches"
-              element={
-                <PublicLayout>
-                  <BuyerSavedSearches />
                 </PublicLayout>
               }
             />
@@ -441,59 +409,26 @@ export default function App() {
                 Remains separate
             ================================================== */}
 
-            <Route
-              path="/agent"
-              element={<DashboardLayout />}
-            >
-              <Route
-                path="dashboard"
-                element={<Overview />}
-              />
+            <Route path="/agent" element={<DashboardLayout />}>
+              <Route path="dashboard" element={<Overview />} />
 
-              <Route
-                path="properties"
-                element={<AgentProperties />}
-              />
+              <Route path="properties" element={<AgentProperties />} />
 
-              <Route
-                path="clients"
-                element={<Clients />}
-              />
+              <Route path="clients" element={<Clients />} />
 
-              <Route
-                path="leads"
-                element={<AgentLeads />}
-              />
+              <Route path="leads" element={<AgentLeads />} />
 
-              <Route
-                path="messages"
-                element={<Messages />}
-              />
+              <Route path="messages" element={<Messages />} />
 
-              <Route
-                path="tours"
-                element={<Tours />}
-              />
+              <Route path="tours" element={<Tours />} />
 
-              <Route
-                path="transactions"
-                element={<Transactions />}
-              />
+              <Route path="transactions" element={<Transactions />} />
 
-              <Route
-                path="reviews"
-                element={<Reviews />}
-              />
+              <Route path="reviews" element={<Reviews />} />
 
-              <Route
-                path="analytics"
-                element={<Analytics />}
-              />
+              <Route path="analytics" element={<Analytics />} />
 
-              <Route
-                path="profile"
-                element={<Profile />}
-              />
+              <Route path="profile" element={<Profile />} />
             </Route>
 
             {/* ==================================================
@@ -501,61 +436,28 @@ export default function App() {
                 Remains separate
             ================================================== */}
 
-            <Route
-              path="/owner"
-              element={<OwnerDashboardLayout />}
-            >
+            <Route path="/owner" element={<OwnerDashboardLayout />}>
               <Route index element={null} />
 
-              <Route
-                path="dashboard"
-                element={null}
-              />
+              <Route path="dashboard" element={null} />
 
-              <Route
-                path="properties"
-                element={<OwnerProperties />}
-              />
+              <Route path="properties" element={<OwnerProperties />} />
 
-              <Route
-                path="add-property"
-                element={<AddProperty />}
-              />
+              <Route path="add-property" element={<AddProperty />} />
 
-              <Route
-                path="leads"
-                element={<OwnerLeads />}
-              />
+              <Route path="leads" element={<OwnerLeads />} />
 
-              <Route
-                path="messages"
-                element={<OwnerMessages />}
-              />
+              <Route path="messages" element={<OwnerMessages />} />
 
-              <Route
-                path="tours"
-                element={<OwnerTours />}
-              />
+              <Route path="tours" element={<OwnerTours />} />
 
-              <Route
-                path="payments"
-                element={<OwnerPayments />}
-              />
+              <Route path="payments" element={<OwnerPayments />} />
 
-              <Route
-                path="reviews"
-                element={<OwnerReviews />}
-              />
+              <Route path="reviews" element={<OwnerReviews />} />
 
-              <Route
-                path="analytics"
-                element={<OwnerAnalytics />}
-              />
+              <Route path="analytics" element={<OwnerAnalytics />} />
 
-              <Route
-                path="profile"
-                element={<OwnerProfile />}
-              />
+              <Route path="profile" element={<OwnerProfile />} />
             </Route>
 
             {/* ==================================================
@@ -563,110 +465,57 @@ export default function App() {
                 Remains separate
             ================================================== */}
 
-            <Route
-              path="/admin"
-              element={<AdminLayout />}
-            >
+            <Route path="/admin" element={<AdminLayout />}>
               {/* Dashboard */}
-              <Route
-                index
-                element={<AdminDashboard />}
-              />
+              <Route index element={<AdminDashboard />} />
 
-              <Route
-                path="dashboard"
-                element={<AdminDashboard />}
-              />
+              <Route path="dashboard" element={<AdminDashboard />} />
 
               {/* Users */}
-              <Route
-                path="users"
-                element={<Users />}
-              />
+              <Route path="users" element={<Users />} />
 
               {/* Properties */}
-              <Route
-                path="properties"
-                element={<AdminProperties />}
-              />
+              <Route path="properties" element={<AdminProperties />} />
 
               {/* Agents */}
-              <Route
-                path="agents"
-                element={<AdminAgents />}
-              />
+              <Route path="agents" element={<AdminAgents />} />
 
               {/* Owners */}
-              <Route
-                path="owners"
-                element={<AdminOwners />}
-              />
+              <Route path="owners" element={<AdminOwners />} />
 
               {/* Buyers / Renters */}
-              <Route
-                path="buyers-renters"
-                element={<AdminBuyersRenters />}
-              />
+              <Route path="buyers-renters" element={<AdminBuyersRenters />} />
 
               {/* Transactions */}
-              <Route
-                path="transactions"
-                element={<AdminTransactions />}
-              />
+              <Route path="transactions" element={<AdminTransactions />} />
 
               {/* Payments */}
-              <Route
-                path="payments"
-                element={<AdminPayments />}
-              />
+              <Route path="payments" element={<AdminPayments />} />
 
               {/* Reviews */}
-              <Route
-                path="reviews"
-                element={<AdminReviews />}
-              />
+              <Route path="reviews" element={<AdminReviews />} />
 
               {/* Reports */}
-              <Route
-                path="reports"
-                element={<AdminReports />}
-              />
+              <Route path="reports" element={<AdminReports />} />
 
               {/* Disputes */}
-              <Route
-                path="disputes"
-                element={<AdminDisputes />}
-              />
+              <Route path="disputes" element={<AdminDisputes />} />
 
               {/* Fraud */}
-              <Route
-                path="fraud"
-                element={<AdminFraud />}
-              />
+              <Route path="fraud" element={<AdminFraud />} />
 
               {/* Notifications */}
-              <Route
-                path="notifications"
-                element={<AdminNotifications />}
-              />
+              <Route path="notifications" element={<AdminNotifications />} />
 
               {/* Analytics */}
-              <Route
-                path="analytics"
-                element={<AdminAnalytics />}
-              />
+              <Route path="analytics" element={<AdminAnalytics />} />
 
               {/* Settings */}
-              <Route
-                path="settings"
-                element={<AdminSettings />}
-              />
+              <Route path="settings" element={<AdminSettings />} />
             </Route>
-
           </Routes>
         </BrowserRouter>
       </DataProvider>
     </AuthProvider>
   );
 }
-
