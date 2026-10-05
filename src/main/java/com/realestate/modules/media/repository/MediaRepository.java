@@ -8,4 +8,6 @@ import java.util.List;
 public interface MediaRepository extends JpaRepository<Media, Long> {
 
   List<Media> findByPropertyId(Long propertyId);
+
+  void deleteByPropertyId(Long propertyId);
 }

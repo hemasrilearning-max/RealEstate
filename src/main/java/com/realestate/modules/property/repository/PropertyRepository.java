@@ -41,4 +41,5 @@ public interface PropertyRepository
             Long brokerId,
             Pageable pageable
     );
+    List<Property> findByCreatedById(Long createdById);
 }

@@ -54,6 +54,17 @@ public class PropertyMapper {
         + " "
         + property.getSeller().getLastName();
 
+    Long createdById = null;
+    String createdByName = null;
+
+    if (property.getCreatedBy() != null) {
+      createdById = property.getCreatedBy().getId();
+
+      createdByName = property.getCreatedBy().getFirstName()
+          + " "
+          + property.getCreatedBy().getLastName();
+    }
+
     return PropertyResponse.builder()
         .id(property.getId())
         .title(property.getTitle())
@@ -70,6 +81,8 @@ public class PropertyMapper {
         .location(locationResponse)
         .sellerId(property.getSeller().getId())
         .sellerName(sellerName)
+        .createdById(createdById)
+        .createdByName(createdByName)
         .createdAt(property.getCreatedAt())
         .updatedAt(property.getUpdatedAt())
         .build();
