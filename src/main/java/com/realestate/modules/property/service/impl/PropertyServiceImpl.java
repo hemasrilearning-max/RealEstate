@@ -12,6 +12,7 @@ import com.realestate.modules.property.entity.Property;
 import com.realestate.modules.property.mapper.PropertyMapper;
 import com.realestate.modules.property.repository.PropertyRepository;
 import com.realestate.modules.property.service.PropertyService;
+import com.realestate.modules.propertyview.service.PropertyViewService;
 import com.realestate.modules.user.entity.User;
 import com.realestate.modules.user.enums.RoleType;
 import com.realestate.modules.user.repository.UserRepository;
@@ -34,6 +35,9 @@ public class PropertyServiceImpl implements PropertyService {
 
   // Media repository used when deleting a property
   private final MediaRepository mediaRepository;
+
+  // Property view service
+  private final PropertyViewService propertyViewService;
 
   // ============================================================
   // CREATE PROPERTY
@@ -78,12 +82,15 @@ public class PropertyServiceImpl implements PropertyService {
   // ============================================================
 
   @Override
-  @Transactional(readOnly = true)
+  @Transactional
   public PropertyResponse getPropertyById(Long id) {
 
     Property property = propertyRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException(
             "Property not found with id: " + id));
+
+    // Record unique buyer view
+    propertyViewService.recordView(id);
 
     return propertyMapper.toResponse(property);
   }
@@ -121,7 +128,7 @@ public class PropertyServiceImpl implements PropertyService {
           "User with id " + sellerId + " is not a SELLER");
     }
 
-    return propertyRepository.findBySellerId(sellerId)
+    return propertyRepository.findBySeller_Id(sellerId)
         .stream()
         .map(propertyMapper::toResponse)
         .toList();

@@ -3,6 +3,7 @@ package com.realestate.modules.property.dto.request;
 import com.realestate.modules.property.enums.FurnishingStatus;
 import com.realestate.modules.property.enums.ListingType;
 import com.realestate.modules.property.enums.OwnershipType;
+import com.realestate.modules.property.enums.PropertyStatus;
 import com.realestate.modules.property.enums.PropertyType;
 import jakarta.validation.constraints.*;
 import lombok.*;
@@ -41,6 +42,10 @@ public class UpdatePropertyRequest {
   private FurnishingStatus furnishingStatus;
 
   private OwnershipType ownershipType;
+
+  private PropertyStatus status;
+
+  private Long sellerId;
 
   private Long locationId;
 }

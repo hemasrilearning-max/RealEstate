@@ -69,12 +69,9 @@ public class Property {
   @JoinColumn(name = "seller_id", nullable = false)
   private User seller;
 
-    /**
-     * Broker who manages/lists the property.
-     */
-  @ManyToOne(fetch = FetchType.LAZY)
-  @JoinColumn(name = "broker_id")
-  private User broker;
+  /**
+   * Broker who manages/lists the property.
+   */
 
   @ManyToOne(fetch = FetchType.LAZY)
   @JoinColumn(name = "location_id")
