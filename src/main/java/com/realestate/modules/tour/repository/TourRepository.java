@@ -21,4 +21,8 @@ public interface TourRepository extends JpaRepository<Tour, Long> {
       Long propertyId,
       LocalDate tourDate,
       java.time.LocalTime tourTime);
+
+  List<Tour> findByBrokerId(Long brokerId);
+  List<Tour> findByBrokerIdAndStatus(Long brokerId, TourStatus status);
+  long countByBrokerIdAndStatus(Long brokerId, TourStatus status);
 }

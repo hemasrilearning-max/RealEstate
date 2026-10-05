@@ -21,4 +21,6 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
   List<Review> findByPropertyIdAndStatusOrderByCreatedAtDesc(
       Long propertyId,
       com.realestate.modules.review.enums.ReviewStatus status);
+
+  List<Review> findByBrokerId(Long brokerId);
 }

@@ -37,6 +37,9 @@ public class Review {
   @Column(nullable = false, columnDefinition = "TEXT")
   private String comment;
 
+  @Column(name = "broker_id")
+  private Long brokerId;
+
   @Enumerated(EnumType.STRING)
   @Column(nullable = false, length = 20)
   @Builder.Default

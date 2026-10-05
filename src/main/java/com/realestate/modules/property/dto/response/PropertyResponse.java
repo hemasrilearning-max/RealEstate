@@ -36,6 +36,7 @@ public class PropertyResponse {
   private LocationResponse location;
 
   private Long sellerId;
+  private Long brokerId;
   private String sellerName;
 
   private LocalDateTime createdAt;

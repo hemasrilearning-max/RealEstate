@@ -37,6 +37,9 @@ public class Message {
   @Column(nullable = false)
   private Boolean isRead;
 
+  @Column(name = "broker_id")
+  private Long brokerId;
+
   @Column(nullable = false, updatable = false)
   private LocalDateTime createdAt;
 

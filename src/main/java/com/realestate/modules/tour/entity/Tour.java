@@ -45,6 +45,9 @@ public class Tour {
   @Column(length = 1000)
   private String notes;
 
+  @Column(name = "broker_id")
+  private Long brokerId;
+
   @Column(nullable = false, updatable = false)
   @Builder.Default
   private LocalDateTime createdAt = LocalDateTime.now();
