@@ -1,6 +1,8 @@
 package com.realestate.modules.propertyview.service.impl;
 
+import com.realestate.modules.property.dto.response.PropertyResponse;
 import com.realestate.modules.property.entity.Property;
+import com.realestate.modules.property.mapper.PropertyMapper;
 import com.realestate.modules.property.repository.PropertyRepository;
 import com.realestate.modules.propertyview.entity.PropertyView;
 import com.realestate.modules.propertyview.repository.PropertyViewRepository;
@@ -12,68 +14,105 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class PropertyViewServiceImpl implements PropertyViewService {
 
-  private final PropertyViewRepository propertyViewRepository;
+private final PropertyViewRepository propertyViewRepository;
 
-  private final PropertyRepository propertyRepository;
+private final PropertyRepository propertyRepository;
 
-  private final AuthenticatedUserService authenticatedUserService;
+private final PropertyMapper propertyMapper;
 
-  // =========================================================
-  // RECORD PROPERTY VIEW
-  // =========================================================
+private final AuthenticatedUserService authenticatedUserService;
 
-  @Override
-  @Transactional
-  public void recordView(Long propertyId) {
+// =========================================================
+// RECORD PROPERTY VIEW
+// =========================================================
 
-    Property property = propertyRepository.findById(propertyId)
-        .orElseThrow(() -> new RuntimeException(
-            "Property not found with id: " + propertyId));
+@Override
+@Transactional
+public void recordView(Long propertyId) {
 
-    User currentUser = authenticatedUserService.getCurrentUser();
 
-    // Only BUYER views are counted
-    if (currentUser.getRole() == null
-        || currentUser.getRole().getName() != RoleType.BUYER) {
+Property property = propertyRepository.findById(propertyId)
+    .orElseThrow(() -> new RuntimeException(
+        "Property not found with id: " + propertyId));
 
-      return;
-    }
+User currentUser = authenticatedUserService.getCurrentUser();
 
-    // Do not count the same buyer twice
-    boolean alreadyViewed = propertyViewRepository
-        .existsByPropertyIdAndUserId(
-            propertyId,
-            currentUser.getId());
+// Only BUYER views are counted
+if (currentUser.getRole() == null
+    || currentUser.getRole().getName() != RoleType.BUYER) {
 
-    if (alreadyViewed) {
-      return;
-    }
+  return;
+}
 
-    PropertyView propertyView = PropertyView.builder()
-        .property(property)
-        .user(currentUser)
-        .build();
+// Do not count the same buyer twice
+boolean alreadyViewed = propertyViewRepository
+    .existsByPropertyIdAndUserId(
+        propertyId,
+        currentUser.getId());
 
-    propertyViewRepository.save(propertyView);
-  }
+if (alreadyViewed) {
+  return;
+}
 
-  // =========================================================
-  // GET VIEW COUNT
-  // =========================================================
+PropertyView propertyView = PropertyView.builder()
+    .property(property)
+    .user(currentUser)
+    .build();
 
-  @Override
-  @Transactional(readOnly = true)
-  public long getViewCount(Long propertyId) {
+propertyViewRepository.save(propertyView);
 
-    if (!propertyRepository.existsById(propertyId)) {
-      throw new RuntimeException(
-          "Property not found with id: " + propertyId);
-    }
+}
 
-    return propertyViewRepository.countByPropertyId(propertyId);
-  }
+// =========================================================
+// GET VIEW COUNT
+// =========================================================
+
+@Override
+@Transactional(readOnly = true)
+public long getViewCount(Long propertyId) {
+
+
+if (!propertyRepository.existsById(propertyId)) {
+  throw new RuntimeException(
+      "Property not found with id: " + propertyId);
+}
+
+return propertyViewRepository.countByPropertyId(propertyId);
+
+
+}
+
+// =========================================================
+// GET CURRENT BUYER'S VIEWED PROPERTIES
+// =========================================================
+
+@Override
+@Transactional(readOnly = true)
+public List<PropertyResponse> getMyViewedProperties() {
+
+
+User currentUser = authenticatedUserService.getCurrentUser();
+
+// Only BUYERS have viewed-property history
+if (currentUser.getRole() == null
+    || currentUser.getRole().getName() != RoleType.BUYER) {
+
+  return List.of();
+}
+
+return propertyViewRepository
+    .findByUserIdOrderByViewedAtDesc(currentUser.getId())
+    .stream()
+    .map(PropertyView::getProperty)
+    .map(propertyMapper::toResponse)
+    .toList();
+
+
+}
 }

@@ -1,3 +1,4 @@
+
 package com.realestate.modules.lead.service.impl;
 
 import com.realestate.modules.lead.dto.request.CreateLeadRequest;
@@ -146,6 +147,23 @@ public class LeadServiceImpl implements LeadService {
         .toList();
   }
 
+  /*
+   * =========================================================
+   * GET LEAD COUNT FOR PROPERTY
+   * =========================================================
+   */
+  @Override
+  @Transactional(readOnly = true)
+  public long getLeadCount(Long propertyId) {
+
+    if (!propertyRepository.existsById(propertyId)) {
+      throw new RuntimeException(
+          "Property not found with ID: " + propertyId);
+    }
+
+    return leadRepository.countByPropertyId(propertyId);
+  }
+
   @Override
   public LeadResponse updateLeadStatus(
       Long leadId,
@@ -175,3 +193,4 @@ public class LeadServiceImpl implements LeadService {
             "Lead not found with ID: " + leadId));
   }
 }
+

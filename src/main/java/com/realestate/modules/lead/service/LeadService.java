@@ -1,3 +1,4 @@
+
 package com.realestate.modules.lead.service;
 
 import com.realestate.modules.lead.dto.request.CreateLeadRequest;
@@ -22,7 +23,15 @@ public interface LeadService {
 
   List<LeadResponse> getLeadsByStatus(LeadStatus status);
 
-  LeadResponse updateLeadStatus(Long leadId, LeadStatus status);
+  /*
+   * Total number of leads for a property.
+   */
+  long getLeadCount(Long propertyId);
+
+  LeadResponse updateLeadStatus(
+      Long leadId,
+      LeadStatus status);
 
   void deleteLead(Long leadId);
 }
+

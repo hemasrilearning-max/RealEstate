@@ -1,3 +1,4 @@
+
 package com.realestate.modules.lead.repository;
 
 import com.realestate.modules.lead.entity.Lead;
@@ -17,4 +18,10 @@ public interface LeadRepository extends JpaRepository<Lead, Long> {
   List<Lead> findByPropertyIdOrderByCreatedAtDesc(Long propertyId);
 
   List<Lead> findByStatusOrderByCreatedAtDesc(LeadStatus status);
+
+  /*
+   * Total number of leads for a property.
+   */
+  long countByPropertyId(Long propertyId);
 }
+
