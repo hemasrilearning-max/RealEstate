@@ -54,12 +54,11 @@ public class CreatePropertyRequest {
 
   /**
    * Actual owner/seller of the property.
-   *
-   * When a SELLER creates a property, this can be null
-   * because the seller is taken from the logged-in user.
-   *
-   * When a BROKER creates a property, this must contain
-   * the ID of the actual seller/owner.
    */
   private Long sellerId;
+
+  /**
+   * Optional broker assigned to the property.
+   */
+  private Long brokerId;
 }

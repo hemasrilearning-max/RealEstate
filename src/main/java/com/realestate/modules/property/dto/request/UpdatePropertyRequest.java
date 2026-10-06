@@ -48,4 +48,9 @@ public class UpdatePropertyRequest {
   private Long sellerId;
 
   private Long locationId;
+
+  /**
+   * Optional broker assigned to the property.
+   */
+  private Long brokerId;
 }

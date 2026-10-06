@@ -71,6 +71,33 @@ public class PropertyServiceImpl implements PropertyService {
     // Set the user who actually created the property
     property.setCreatedBy(seller);
 
+    // ==========================================================
+    // SET BROKER
+    // ==========================================================
+
+    if (request.getBrokerId() != null) {
+
+      User broker = userRepository.findById(request.getBrokerId())
+          .orElseThrow(() -> new ResourceNotFoundException(
+              "Broker not found with id: "
+                  + request.getBrokerId()));
+
+      // Make sure selected user is actually a BROKER
+      if (broker.getRole() == null
+          || broker.getRole().getName() != RoleType.BROKER) {
+
+        throw new IllegalArgumentException(
+            "Selected user is not a BROKER");
+      }
+
+      property.setBroker(broker);
+
+    } else {
+
+      // No broker selected
+      property.setBroker(null);
+    }
+
     // Save property
     Property savedProperty = propertyRepository.save(property);
 
@@ -204,6 +231,33 @@ public class PropertyServiceImpl implements PropertyService {
           request.getOwnershipType());
     }
 
+    // ==========================================================
+    // UPDATE BROKER
+    // ==========================================================
+
+    if (request.getBrokerId() != null) {
+
+      User broker = userRepository.findById(request.getBrokerId())
+          .orElseThrow(() -> new ResourceNotFoundException(
+              "Broker not found with id: "
+                  + request.getBrokerId()));
+
+      // Make sure selected user is actually a BROKER
+      if (broker.getRole() == null
+          || broker.getRole().getName() != RoleType.BROKER) {
+
+        throw new IllegalArgumentException(
+            "Selected user is not a BROKER");
+      }
+
+      property.setBroker(broker);
+
+    } else {
+
+      // No broker selected
+      property.setBroker(null);
+    }
+
     // Update location
     if (request.getLocationId() != null) {
 
@@ -246,6 +300,7 @@ public class PropertyServiceImpl implements PropertyService {
     // Therefore media records must be removed before
     // deleting the property.
     //
+
     mediaRepository.deleteByPropertyId(id);
 
     // ----------------------------------------------------------
