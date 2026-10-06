@@ -13,6 +13,7 @@ import { formatPrice } from "../data/mockData";
 import { useData } from "../context/DataContext";
 import { useAuth } from "../context/AuthContext";
 import wishlistService from "../services/wishlistService";
+import propertyViewService from "../services/propertyViewService";
 
 export default function PropertyCard({ property }) {
   const navigate = useNavigate();
@@ -26,7 +27,9 @@ export default function PropertyCard({ property }) {
   const { user, isAuthenticated } = useAuth();
 
   /*
-   * Get the property image from DataContext.
+   * ============================================================
+   * PROPERTY IMAGE
+   * ============================================================
    *
    * Priority:
    * 1. Backend media image
@@ -38,6 +41,11 @@ export default function PropertyCard({ property }) {
     property?.images?.[0] ||
     "https://via.placeholder.com/400x300";
 
+  /*
+   * ============================================================
+   * FAVORITE STATE
+   * ============================================================
+   */
   const localFavorite = isFavorite(property.id);
 
   const [favorite, setFavorite] =
@@ -47,8 +55,66 @@ export default function PropertyCard({ property }) {
     useState(false);
 
   /*
-   * Load the real wishlist status from backend
-   * whenever the logged-in user/property changes.
+   * ============================================================
+   * VIEW COUNT
+   * ============================================================
+   */
+  const [viewCount, setViewCount] = useState(
+    Number(property?.views || 0)
+  );
+
+  /*
+   * ============================================================
+   * LOAD VIEW COUNT FROM BACKEND
+   * ============================================================
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadViewCount = async () => {
+      if (!property?.id) {
+        setViewCount(0);
+        return;
+      }
+
+      try {
+        const count =
+          await propertyViewService.getViewCount(
+            property.id
+          );
+
+        if (!cancelled) {
+          setViewCount(Number(count || 0));
+        }
+      } catch (error) {
+        console.error(
+          "Unable to load property view count:",
+          error
+        );
+
+        /*
+         * Keep the existing property.views value
+         * as fallback if the backend request fails.
+         */
+        if (!cancelled) {
+          setViewCount(
+            Number(property?.views || 0)
+          );
+        }
+      }
+    };
+
+    loadViewCount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [property?.id, property?.views]);
+
+  /*
+   * ============================================================
+   * LOAD WISHLIST STATUS
+   * ============================================================
    */
   useEffect(() => {
     let cancelled = false;
@@ -101,7 +167,6 @@ export default function PropertyCard({ property }) {
    * FAVORITE
    * ============================================================
    */
-
   const handleFavorite = async (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -135,8 +200,7 @@ export default function PropertyCard({ property }) {
         setFavorite(false);
 
         /*
-         * Keep the existing local DataContext state
-         * synchronized.
+         * Keep DataContext synchronized.
          */
         if (localFavorite) {
           toggleFavorite(property.id);
@@ -149,6 +213,9 @@ export default function PropertyCard({ property }) {
 
         setFavorite(true);
 
+        /*
+         * Keep DataContext synchronized.
+         */
         if (!localFavorite) {
           toggleFavorite(property.id);
         }
@@ -160,8 +227,8 @@ export default function PropertyCard({ property }) {
       );
 
       /*
-       * Do not change the heart state if
-       * the backend request failed.
+       * Keep current heart state if
+       * backend request fails.
        */
       setFavorite(favorite);
     } finally {
@@ -250,7 +317,7 @@ export default function PropertyCard({ property }) {
         {/* Views */}
         <div className="absolute bottom-3 right-3 bg-black/60 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
           <Eye className="w-3 h-3" />
-          {property.views || 0}
+          {viewCount}
         </div>
       </div>
 
@@ -329,3 +396,4 @@ export default function PropertyCard({ property }) {
     </Link>
   );
 }
+

@@ -17,13 +17,14 @@ import {
   Users,
   MoreVertical,
   CheckCircle,
-  Clock,
   Trash2,
 } from "lucide-react";
 
 import { useAuth } from "../../context/AuthContext";
 import { useData } from "../../context/DataContext";
 import propertyService from "../../services/propertyService";
+import propertyViewService from "../../services/propertyViewService";
+import leadService from "../../services/leadService";
 
 const FALLBACK_PROPERTY_IMAGE =
   "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=85";
@@ -38,8 +39,12 @@ export default function OwnerProperties() {
     getPropertyImage,
   } = useData();
 
-  const [propertiesData, setPropertiesData] = useState([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [propertiesData, setPropertiesData] =
+    useState([]);
+
+  const [searchTerm, setSearchTerm] =
+    useState("");
+
   const [statusFilter, setStatusFilter] =
     useState("All");
 
@@ -62,8 +67,28 @@ export default function OwnerProperties() {
   const [deleting, setDeleting] =
     useState(false);
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [loading, setLoading] =
+    useState(true);
+
+  const [error, setError] =
+    useState("");
+
+  /*
+   * =========================================================
+   * PROPERTY ANALYTICS
+   *
+   * Stored separately from the property API.
+   *
+   * {
+   *   "1": {
+   *      views: 10,
+   *      leads: 3
+   *   }
+   * }
+   * =========================================================
+   */
+  const [propertyCounts, setPropertyCounts] =
+    useState({});
 
   /*
    * =========================================================
@@ -124,10 +149,14 @@ export default function OwnerProperties() {
     switch (
       String(status || "").toUpperCase()
     ) {
+      /*
+       * Active is intentionally not displayed.
+       * The property itself is still kept in the list.
+       */
       case "AVAILABLE":
       case "APPROVED":
       case "ACTIVE":
-        return "Active";
+        return "";
 
       case "RENTED":
         return "Rented";
@@ -135,9 +164,12 @@ export default function OwnerProperties() {
       case "SOLD":
         return "Sold";
 
+      /*
+       * Pending is intentionally not displayed.
+       */
       case "PENDING":
       case "PENDING_APPROVAL":
-        return "Pending";
+        return "";
 
       case "REJECTED":
         return "Rejected";
@@ -147,7 +179,7 @@ export default function OwnerProperties() {
         return "Inactive";
 
       default:
-        return status || "Unknown";
+        return status || "";
     }
   };
 
@@ -242,11 +274,127 @@ export default function OwnerProperties() {
 
   /*
    * =========================================================
+   * LOAD VIEW + LEAD COUNTS
+   *
+   * Both counts come directly from backend APIs.
+   * =========================================================
+   */
+
+  const loadPropertyCounts = async (
+    properties
+  ) => {
+    if (
+      !Array.isArray(properties) ||
+      properties.length === 0
+    ) {
+      setPropertyCounts({});
+      return;
+    }
+
+    const results =
+      await Promise.all(
+        properties.map(
+          async (property) => {
+            const [
+              viewResult,
+              leadResult,
+            ] =
+              await Promise.allSettled([
+                propertyViewService.getViewCount(
+                  property.id
+                ),
+
+                leadService.getLeadCount(
+                  property.id
+                ),
+              ]);
+
+            const views =
+              viewResult.status ===
+              "fulfilled"
+                ? Number(
+                    viewResult.value || 0
+                  )
+                : 0;
+
+            const leads =
+              leadResult.status ===
+              "fulfilled"
+                ? Number(
+                    leadResult.value || 0
+                  )
+                : 0;
+
+            if (
+              viewResult.status ===
+              "rejected"
+            ) {
+              console.error(
+                `Failed to load view count for property ${property.id}:`,
+                viewResult.reason
+              );
+            }
+
+            if (
+              leadResult.status ===
+              "rejected"
+            ) {
+              console.error(
+                `Failed to load lead count for property ${property.id}:`,
+                leadResult.reason
+              );
+            }
+
+            return {
+              id: property.id,
+              views: Number.isFinite(
+                views
+              )
+                ? views
+                : 0,
+              leads: Number.isFinite(
+                leads
+              )
+                ? leads
+                : 0,
+            };
+          }
+        )
+      );
+
+    const counts = {};
+
+    results.forEach(
+      ({
+        id,
+        views,
+        leads,
+      }) => {
+        counts[String(id)] = {
+          views,
+          leads,
+        };
+      }
+    );
+
+    setPropertyCounts(counts);
+  };
+
+  /*
+   * =========================================================
    * BACKEND PROPERTY -> FRONTEND PROPERTY
    * =========================================================
    */
 
   const mapProperty = (property) => {
+    const counts =
+      propertyCounts[
+        String(property.id)
+      ] || {
+        views: 0,
+        leads: 0,
+      };
+
     return {
       id: property.id,
 
@@ -263,11 +411,15 @@ export default function OwnerProperties() {
         property.listingType
       ),
 
-      views:
-        property.views ?? 0,
+      /*
+       * Real backend view count.
+       */
+      views: counts.views,
 
-      leads:
-        property.leads ?? 0,
+      /*
+       * Real backend lead count.
+       */
+      leads: counts.leads,
 
       status: formatStatus(
         property.status
@@ -314,6 +466,7 @@ export default function OwnerProperties() {
   const loadProperties = async () => {
     if (!sellerId) {
       setPropertiesData([]);
+      setPropertyCounts({});
       setLoading(false);
       setError(
         "Unable to identify the logged-in owner."
@@ -350,6 +503,13 @@ export default function OwnerProperties() {
       setPropertiesData(
         backendProperties
       );
+
+      /*
+       * Load real backend view + lead counts.
+       */
+      await loadPropertyCounts(
+        backendProperties
+      );
     } catch (err) {
       console.error(
         "Failed to load owner properties:",
@@ -362,6 +522,7 @@ export default function OwnerProperties() {
       );
 
       setPropertiesData([]);
+      setPropertyCounts({});
     } finally {
       setLoading(false);
     }
@@ -381,6 +542,7 @@ export default function OwnerProperties() {
         if (!sellerId) {
           if (mounted) {
             setPropertiesData([]);
+            setPropertyCounts({});
             setLoading(false);
             setError(
               "Unable to identify the logged-in owner."
@@ -423,6 +585,109 @@ export default function OwnerProperties() {
           setPropertiesData(
             backendProperties
           );
+
+          /*
+           * Load backend analytics.
+           *
+           * Promise.allSettled is used so a failure
+           * in one property's analytics does not
+           * break the complete property page.
+           */
+          const results =
+            await Promise.all(
+              backendProperties.map(
+                async (property) => {
+                  const [
+                    viewResult,
+                    leadResult,
+                  ] =
+                    await Promise.allSettled([
+                      propertyViewService.getViewCount(
+                        property.id
+                      ),
+
+                      leadService.getLeadCount(
+                        property.id
+                      ),
+                    ]);
+
+                  const views =
+                    viewResult.status ===
+                    "fulfilled"
+                      ? Number(
+                          viewResult.value || 0
+                        )
+                      : 0;
+
+                  const leads =
+                    leadResult.status ===
+                    "fulfilled"
+                      ? Number(
+                          leadResult.value || 0
+                        )
+                      : 0;
+
+                  if (
+                    viewResult.status ===
+                    "rejected"
+                  ) {
+                    console.error(
+                      `Failed to load view count for property ${property.id}:`,
+                      viewResult.reason
+                    );
+                  }
+
+                  if (
+                    leadResult.status ===
+                    "rejected"
+                  ) {
+                    console.error(
+                      `Failed to load lead count for property ${property.id}:`,
+                      leadResult.reason
+                    );
+                  }
+
+                  return {
+                    id: property.id,
+                    views:
+                      Number.isFinite(
+                        views
+                      )
+                        ? views
+                        : 0,
+                    leads:
+                      Number.isFinite(
+                        leads
+                      )
+                        ? leads
+                        : 0,
+                  };
+                }
+              )
+            );
+
+          if (!mounted) {
+            return;
+          }
+
+          const counts = {};
+
+          results.forEach(
+            ({
+              id,
+              views,
+              leads,
+            }) => {
+              counts[String(id)] = {
+                views,
+                leads,
+              };
+            }
+          );
+
+          setPropertyCounts(
+            counts
+          );
         } catch (err) {
           console.error(
             "Failed to load owner properties:",
@@ -436,6 +701,7 @@ export default function OwnerProperties() {
             );
 
             setPropertiesData([]);
+            setPropertyCounts({});
           }
         } finally {
           if (mounted) {
@@ -502,6 +768,20 @@ export default function OwnerProperties() {
           )
       );
 
+      setPropertyCounts(
+        (currentCounts) => {
+          const updatedCounts = {
+            ...currentCounts,
+          };
+
+          delete updatedCounts[
+            String(deletePropertyId)
+          ];
+
+          return updatedCounts;
+        }
+      );
+
       setDeletePropertyId(null);
     } catch (err) {
       console.error(
@@ -538,11 +818,15 @@ export default function OwnerProperties() {
       propertiesData,
       propertyImages,
       getPropertyImage,
+      propertyCounts,
     ]);
 
   /*
    * =========================================================
    * SEARCH + STATUS FILTER
+   *
+   * Active and Pending are intentionally
+   * NOT included.
    * =========================================================
    */
 
@@ -584,17 +868,11 @@ export default function OwnerProperties() {
     status
   ) => {
     switch (status) {
-      case "Active":
-        return "bg-emerald-50 text-emerald-700 border border-emerald-100";
-
       case "Rented":
         return "bg-purple-50 text-purple-700 border border-purple-100";
 
       case "Sold":
         return "bg-gray-100 text-gray-700 border border-gray-200";
-
-      case "Pending":
-        return "bg-amber-50 text-amber-700 border border-amber-100";
 
       case "Rejected":
         return "bg-red-50 text-red-700 border border-red-100";
@@ -616,15 +894,6 @@ export default function OwnerProperties() {
   const getStatusIcon = (
     status
   ) => {
-    if (
-      status === "Active" ||
-      status === "Pending"
-    ) {
-      return (
-        <Clock className="w-3 h-3" />
-      );
-    }
-
     return (
       <CheckCircle className="w-3 h-3" />
     );
@@ -717,7 +986,6 @@ export default function OwnerProperties() {
 
           {[
             "All",
-            "Active",
             "Rented",
             "Sold",
           ].map((status) => (
@@ -888,21 +1156,25 @@ export default function OwnerProperties() {
 
                         <div className="flex justify-between items-start gap-2">
 
-                          <span
-                            className={`text-[10px] font-bold px-2 py-1 rounded-full inline-flex items-center gap-1 ${getStatusStyle(
-                              property.status
-                            )}`}
-                          >
+                          {property.status ? (
+                            <span
+                              className={`text-[10px] font-bold px-2 py-1 rounded-full inline-flex items-center gap-1 ${getStatusStyle(
+                                property.status
+                              )}`}
+                            >
 
-                            {getStatusIcon(
-                              property.status
-                            )}
+                              {getStatusIcon(
+                                property.status
+                              )}
 
-                            {
-                              property.status
-                            }
+                              {
+                                property.status
+                              }
 
-                          </span>
+                            </span>
+                          ) : (
+                            <span />
+                          )}
 
                           {/* EDIT + DELETE */}
 
@@ -1022,7 +1294,12 @@ export default function OwnerProperties() {
 
                         <div className="flex items-center gap-2 text-xs font-semibold text-gray-500 shrink-0">
 
-                          <span className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-md border border-slate-100 shadow-sm">
+                          {/* BACKEND VIEW COUNT */}
+
+                          <span
+                            className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-md border border-slate-100 shadow-sm"
+                            title="Property views"
+                          >
 
                             <Eye className="w-3.5 h-3.5 text-gray-400" />
 
@@ -1032,7 +1309,12 @@ export default function OwnerProperties() {
 
                           </span>
 
-                          <span className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-md border border-slate-100 shadow-sm">
+                          {/* BACKEND LEAD COUNT */}
+
+                          <span
+                            className="flex items-center gap-1 bg-slate-50 px-2 py-1 rounded-md border border-slate-100 shadow-sm"
+                            title="Buyer leads"
+                          >
 
                             <Users className="w-3.5 h-3.5 text-gray-400" />
 
