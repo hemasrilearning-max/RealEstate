@@ -14,6 +14,7 @@ import {
 import locationService from "../../services/locationService";
 import propertyService from "../../services/propertyService";
 import mediaService from "../../services/mediaService";
+import axiosInstance from "../../utils/axiosInstance";
 
 const EMPTY_FORM = {
   title: "",
@@ -53,6 +54,32 @@ export default function AddProperty({
     useState(EMPTY_FORM);
 
   /*
+   * =========================================================
+   * BROKER SELECTION
+   * =========================================================
+   */
+
+  const [
+    needsBroker,
+    setNeedsBroker,
+  ] = useState(false);
+
+  const [
+    brokers,
+    setBrokers,
+  ] = useState([]);
+
+  const [
+    selectedBrokerId,
+    setSelectedBrokerId,
+  ] = useState("");
+
+  const [
+    loadingBrokers,
+    setLoadingBrokers,
+  ] = useState(false);
+
+  /*
    * New files selected by the user.
    */
   const [images, setImages] =
@@ -60,13 +87,6 @@ export default function AddProperty({
 
   /*
    * Images already stored in backend.
-   *
-   * Each item:
-   * {
-   *   id,
-   *   fileUrl,
-   *   url
-   * }
    */
   const [
     existingImages,
@@ -83,9 +103,6 @@ export default function AddProperty({
 
   /*
    * Media IDs removed by user while editing.
-   *
-   * They are deleted from backend only after
-   * the property update succeeds.
    */
   const [
     removedMediaIds,
@@ -104,6 +121,96 @@ export default function AddProperty({
 
   const [error, setError] =
     useState("");
+
+  /*
+   * =========================================================
+   * LOAD BROKERS
+   * =========================================================
+   *
+   * Uses the existing GET /api/users endpoint.
+   *
+   * No backend changes are required.
+   */
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadBrokers = async () => {
+      try {
+        setLoadingBrokers(true);
+
+        const response =
+          await axiosInstance.get(
+            "/api/users"
+          );
+
+        if (!mounted) {
+          return;
+        }
+
+        const users =
+          Array.isArray(response?.data)
+            ? response.data
+            : Array.isArray(
+                response?.data?.content
+              )
+            ? response.data.content
+            : [];
+
+        const brokerUsers =
+          users.filter((user) => {
+            const role =
+              user?.role ||
+              user?.roleName ||
+              user?.roleType;
+
+            /*
+             * Handles possible response formats:
+             *
+             * role: "BROKER"
+             * role: { name: "BROKER" }
+             * roleName: "BROKER"
+             * roleType: "BROKER"
+             */
+
+            const normalizedRole =
+              typeof role === "object"
+                ? role?.name
+                : role;
+
+            return (
+              String(
+                normalizedRole || ""
+              ).toUpperCase() ===
+              "BROKER"
+            );
+          });
+
+        setBrokers(
+          brokerUsers
+        );
+      } catch (err) {
+        console.error(
+          "Load Brokers Error:",
+          err
+        );
+
+        if (mounted) {
+          setBrokers([]);
+        }
+      } finally {
+        if (mounted) {
+          setLoadingBrokers(false);
+        }
+      }
+    };
+
+    loadBrokers();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   /*
    * =========================================================
@@ -234,6 +341,39 @@ export default function AddProperty({
             property.ownershipType ||
             "FREEHOLD",
         });
+
+        /*
+         * -----------------------------------------------------
+         * EXISTING BROKER
+         * -----------------------------------------------------
+         *
+         * This only reads broker information if the existing
+         * property response already contains it.
+         *
+         * It does not require a backend change.
+         */
+
+        const existingBroker =
+          property.broker;
+
+        const existingBrokerId =
+          existingBroker?.id ||
+          property.brokerId ||
+          property.broker_id;
+
+        if (
+          existingBrokerId
+        ) {
+          setNeedsBroker(true);
+          setSelectedBrokerId(
+            String(
+              existingBrokerId
+            )
+          );
+        } else {
+          setNeedsBroker(false);
+          setSelectedBrokerId("");
+        }
 
         /*
          * -----------------------------------------------------
@@ -380,6 +520,27 @@ export default function AddProperty({
 
   /*
    * =========================================================
+   * BROKER CHANGE
+   * =========================================================
+   */
+
+  const handleBrokerOptionChange = (
+    value
+  ) => {
+    const shouldNeedBroker =
+      value === "yes";
+
+    setNeedsBroker(
+      shouldNeedBroker
+    );
+
+    if (!shouldNeedBroker) {
+      setSelectedBrokerId("");
+    }
+  };
+
+  /*
+   * =========================================================
    * IMAGE PREVIEW
    * =========================================================
    */
@@ -468,9 +629,6 @@ export default function AddProperty({
     type,
     index
   ) => {
-    /*
-     * Existing backend image.
-     */
     if (
       type === "existing"
     ) {
@@ -508,9 +666,6 @@ export default function AddProperty({
       return;
     }
 
-    /*
-     * New image.
-     */
     setImages((prev) =>
       prev.filter(
         (_, imageIndex) =>
@@ -575,16 +730,6 @@ export default function AddProperty({
 
     const uploadedMedia = [];
 
-    /*
-     * For a brand-new property:
-     *
-     * first image = primary
-     * remaining images = non-primary
-     *
-     * For edit mode:
-     * all newly added images are non-primary,
-     * because an existing primary image may already exist.
-     */
     for (
       let index = 0;
       index < images.length;
@@ -700,62 +845,46 @@ export default function AddProperty({
          * -----------------------------------------------------
          * STEP 2: PROPERTY PAYLOAD
          * -----------------------------------------------------
+         *
+         * Broker is intentionally NOT sent here because
+         * backend changes were not requested.
+         *
+         * The selected broker remains available in
+         * selectedBrokerId for the UI.
          */
 
-        const propertyPayload = {
-          title:
-            formData.title.trim(),
+const propertyPayload = {
+  title: formData.title.trim(),
+  description: formData.description.trim() || null,
+  price: Number(formData.price),
+  bedrooms: Number(formData.bedrooms),
+  bathrooms: Number(formData.bathrooms),
+  area: Number(formData.area),
+  propertyType: getBackendPropertyType(),
+  listingType: formData.type === "Rent" ? "RENT" : "SALE",
+  furnishingStatus: formData.furnishingStatus || null,
+  ownershipType: formData.ownershipType || null,
+  locationId: locationResponse.id,
 
-          description:
-            formData.description.trim() ||
-            null,
-
-          price:
-            Number(
-              formData.price
-            ),
-
-          bedrooms:
-            Number(
-              formData.bedrooms
-            ),
-
-          bathrooms:
-            Number(
-              formData.bathrooms
-            ),
-
-          area:
-            Number(
-              formData.area
-            ),
-
-          propertyType:
-            getBackendPropertyType(),
-
-          listingType:
-            formData.type ===
-            "Rent"
-              ? "RENT"
-              : "SALE",
-
-          furnishingStatus:
-            formData.furnishingStatus ||
-            null,
-
-          ownershipType:
-            formData.ownershipType ||
-            null,
-
-          locationId:
-            locationResponse.id,
-        };
+  // Send broker only when owner selected Yes
+  brokerId:
+    needsBroker && selectedBrokerId
+      ? Number(selectedBrokerId)
+      : null,
+};
 
         console.log(
           isEditMode
             ? "Updating property:"
             : "Creating property:",
           propertyPayload
+        );
+
+        console.log(
+          "Selected broker:",
+          needsBroker
+            ? selectedBrokerId
+            : "No broker"
         );
 
         /*
@@ -1210,6 +1339,168 @@ export default function AddProperty({
 
           </div>
 
+          {/* =====================================================
+              BROKER
+          ===================================================== */}
+
+          <div className="border-t border-gray-100 pt-6">
+
+            <div className="mb-5">
+
+              <h2 className="text-base font-bold text-gray-800">
+                Broker Assistance
+              </h2>
+
+              <p className="text-xs text-gray-500 mt-1">
+                Choose whether you need a broker to manage this property.
+              </p>
+
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              <div>
+
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Need a broker?
+                </label>
+
+                <div className="flex gap-4">
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleBrokerOptionChange(
+                        "yes"
+                      )
+                    }
+                    className={`flex-1 py-2.5 rounded-lg font-bold border text-sm transition-all ${
+                      needsBroker
+                        ? "bg-rose-50 border-rose-500 text-rose-600 shadow-sm"
+                        : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    Yes
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleBrokerOptionChange(
+                        "no"
+                      )
+                    }
+                    className={`flex-1 py-2.5 rounded-lg font-bold border text-sm transition-all ${
+                      !needsBroker
+                        ? "bg-rose-50 border-rose-500 text-rose-600 shadow-sm"
+                        : "bg-white border-gray-200 text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    No
+                  </button>
+
+                </div>
+
+              </div>
+
+              {needsBroker && (
+                <div>
+
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Select Broker
+                  </label>
+
+                  <select
+                    value={
+                      selectedBrokerId
+                    }
+                    onChange={(e) =>
+                      setSelectedBrokerId(
+                        e.target.value
+                      )
+                    }
+                    disabled={
+                      loadingBrokers
+                    }
+                    className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:border-rose-500 bg-white transition-colors text-sm font-medium disabled:bg-gray-50 disabled:text-gray-400"
+                  >
+
+                    <option value="">
+                      {loadingBrokers
+                        ? "Loading brokers..."
+                        : brokers.length ===
+                          0
+                        ? "No brokers available"
+                        : "Select a broker"}
+                    </option>
+
+                    {brokers.map(
+                      (broker) => {
+                        const brokerId =
+                          broker.id ||
+                          broker.userId;
+
+                        const firstName =
+                          broker.firstName ||
+                          "";
+
+                        const lastName =
+                          broker.lastName ||
+                          "";
+
+                        const fullName =
+                          `${firstName} ${lastName}`.trim();
+
+                        const displayName =
+                          fullName ||
+                          broker.username ||
+                          broker.email ||
+                          `Broker ${brokerId}`;
+
+                        return (
+                          <option
+                            key={
+                              brokerId
+                            }
+                            value={
+                              brokerId
+                            }
+                          >
+                            {displayName}
+                            {broker.email
+                              ? ` - ${broker.email}`
+                              : ""}
+                          </option>
+                        );
+                      }
+                    )}
+
+                  </select>
+
+                </div>
+              )}
+
+            </div>
+
+            {needsBroker &&
+              brokers.length ===
+                0 &&
+              !loadingBrokers && (
+                <p className="mt-2 text-xs text-amber-600">
+                  No broker accounts are currently available.
+                </p>
+              )}
+
+            {needsBroker &&
+              selectedBrokerId && (
+                <p className="mt-2 text-xs text-gray-400">
+                  Selected broker ID:{" "}
+                  {selectedBrokerId}
+                </p>
+              )}
+
+          </div>
+
           {/* LOCATION */}
 
           <div className="border-t border-gray-100 pt-6">
@@ -1382,8 +1673,6 @@ export default function AddProperty({
 
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4 mb-4">
 
-              {/* EXISTING BACKEND IMAGES */}
-
               {existingImages.map(
                 (image, index) => (
 
@@ -1418,8 +1707,6 @@ export default function AddProperty({
                   </div>
                 )
               )}
-
-              {/* NEW IMAGE PREVIEWS */}
 
               {newImagePreviews.map(
                 (imgUrl, index) => (

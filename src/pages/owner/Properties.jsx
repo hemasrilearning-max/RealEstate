@@ -145,43 +145,34 @@ export default function OwnerProperties() {
     )}`;
   };
 
-  const formatStatus = (status) => {
-    switch (
-      String(status || "").toUpperCase()
-    ) {
-      /*
-       * Active is intentionally not displayed.
-       * The property itself is still kept in the list.
-       */
-      case "AVAILABLE":
-      case "APPROVED":
-      case "ACTIVE":
-        return "";
+ const formatStatus = (status) => {
+  switch (String(status || "").toUpperCase()) {
+    case "AVAILABLE":
+    case "APPROVED":
+    case "ACTIVE":
+      return "Active";
 
-      case "RENTED":
-        return "Rented";
+    case "RENTED":
+      return "Rented";
 
-      case "SOLD":
-        return "Sold";
+    case "SOLD":
+      return "Sold";
 
-      /*
-       * Pending is intentionally not displayed.
-       */
-      case "PENDING":
-      case "PENDING_APPROVAL":
-        return "";
+    case "PENDING":
+    case "PENDING_APPROVAL":
+      return "Pending";
 
-      case "REJECTED":
-        return "Rejected";
+    case "REJECTED":
+      return "Rejected";
 
-      case "INACTIVE":
-      case "ARCHIVED":
-        return "Inactive";
+    case "INACTIVE":
+    case "ARCHIVED":
+      return "Inactive";
 
-      default:
-        return status || "";
-    }
-  };
+    default:
+      return status || "";
+  }
+};
 
   const formatListingType = (
     listingType
@@ -864,26 +855,30 @@ export default function OwnerProperties() {
    * =========================================================
    */
 
-  const getStatusStyle = (
-    status
-  ) => {
-    switch (status) {
-      case "Rented":
-        return "bg-purple-50 text-purple-700 border border-purple-100";
+const getStatusStyle = (status) => {
+  switch (status) {
+    case "Active":
+      return "bg-green-50 text-green-700 border border-green-100";
 
-      case "Sold":
-        return "bg-gray-100 text-gray-700 border border-gray-200";
+    case "Rented":
+      return "bg-purple-50 text-purple-700 border border-purple-100";
 
-      case "Rejected":
-        return "bg-red-50 text-red-700 border border-red-100";
+    case "Sold":
+      return "bg-gray-100 text-gray-700 border border-gray-200";
 
-      case "Inactive":
-        return "bg-gray-100 text-gray-700 border border-gray-200";
+    case "Pending":
+      return "bg-amber-50 text-amber-700 border border-amber-100";
 
-      default:
-        return "bg-gray-100 text-gray-700 border border-gray-200";
-    }
-  };
+    case "Rejected":
+      return "bg-red-50 text-red-700 border border-red-100";
+
+    case "Inactive":
+      return "bg-gray-100 text-gray-700 border border-gray-200";
+
+    default:
+      return "bg-gray-100 text-gray-700 border border-gray-200";
+  }
+};
 
   /*
    * =========================================================
@@ -985,10 +980,12 @@ export default function OwnerProperties() {
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
 
           {[
-            "All",
-            "Rented",
-            "Sold",
-          ].map((status) => (
+  "All",
+  "Active",
+  "Rented",
+  "Sold",
+  "Pending",
+].map((status) => (
 
             <button
               key={status}

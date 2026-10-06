@@ -32,6 +32,22 @@ async function parseResponse(response) {
 
 const tourService = {
   /*
+   * Create a new tour
+   */
+  async createTour(tourData) {
+    const response = await fetch(`${API_BASE_URL}/tours`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getAuthHeaders(),
+      },
+      body: JSON.stringify(tourData),
+    });
+
+    return parseResponse(response);
+  },
+
+  /*
    * Get all tours for a buyer
    */
   async getToursByBuyer(buyerId) {
