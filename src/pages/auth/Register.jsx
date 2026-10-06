@@ -430,7 +430,7 @@ export default function Register() {
         form.email.trim(),
         otp.trim()
       );
-      form.email_verified = true;
+      
       /*
        * OTP verification successful
        */
@@ -551,11 +551,7 @@ export default function Register() {
        *
        * Those belong to fetch().
        */
-      const payload = {
-        ...registerData,
-        email_verified: true,
-      };
-      const response = await authService.register(payload);
+      const response = await authService.register(registerData);
 
       setSuccessMessage(
         response?.message ||

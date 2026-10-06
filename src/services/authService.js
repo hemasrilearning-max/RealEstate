@@ -11,9 +11,10 @@ const login = async (loginData) => {
 };
 
 const register = async (registerData) => {
-console.log("Sending registration:", registerData);
+    console.log("Sending registration:", registerData);
+
     const response = await axiosInstance.post(
-        "/api/users",
+        "/api/auth/register",
         registerData
     );
 
