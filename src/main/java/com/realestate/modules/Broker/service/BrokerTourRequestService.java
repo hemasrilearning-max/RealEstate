@@ -113,19 +113,36 @@ public class BrokerTourRequestService {
     }
 
     private BrokerTourRequestDTO mapToDTO(Tour tour) {
+        String buyerName = null;
+        String buyerEmail = null;
+        String buyerPhone = null;
+        Long buyerId = null;
+
+        if (tour.getBuyer() != null) {
+            buyerId = tour.getBuyer().getId();
+            String first = tour.getBuyer().getFirstName() != null ? tour.getBuyer().getFirstName() : "";
+            String last = tour.getBuyer().getLastName() != null ? tour.getBuyer().getLastName() : "";
+            buyerName = (first + " " + last).trim();
+            buyerEmail = tour.getBuyer().getEmail();
+            buyerPhone = tour.getBuyer().getPhone();
+        }
+
         return BrokerTourRequestDTO.builder()
                 .id(tour.getId())
-                .buyerId(tour.getBuyer() != null ? tour.getBuyer().getId() : null)
+                .buyerId(buyerId)
+                .buyerName(buyerName)
+                .buyerEmail(buyerEmail)
+                .buyerPhone(buyerPhone)
                 .propertyId(tour.getProperty() != null ? tour.getProperty().getId() : null)
                 .propertyTitle(tour.getProperty() != null ? tour.getProperty().getTitle() : null)
                 .brokerId(tour.getBrokerId())
                 .tourDate(tour.getTourDate())
                 .tourTime(tour.getTourTime())
                 .notes(tour.getNotes())
-                .status(tour.getStatus() != null ? 
-                        tour.getStatus() : null)
+                .status(tour.getStatus())
                 .createdAt(tour.getCreatedAt())
                 .updatedAt(tour.getUpdatedAt())
                 .build();
     }
 }
+

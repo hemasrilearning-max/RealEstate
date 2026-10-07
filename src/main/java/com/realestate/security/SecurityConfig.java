@@ -1,7 +1,6 @@
 package com.realestate.security;
 
 import lombok.RequiredArgsConstructor;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -18,81 +17,93 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-        private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-        @Bean
-        public PasswordEncoder passwordEncoder() {
-                return new BCryptPasswordEncoder();
-        }
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
 
-        @Bean
-        public AuthenticationManager authenticationManager(
-                        AuthenticationConfiguration configuration) throws Exception {
-                return configuration.getAuthenticationManager();
-        }
+    @Bean
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration configuration) throws Exception {
 
-        @Bean
-        public SecurityFilterChain securityFilterChain(
-                        HttpSecurity http) throws Exception {
+        return configuration.getAuthenticationManager();
+    }
 
-                http
-                                .cors(cors -> {
-                                })
+    @Bean
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http) throws Exception {
 
-                                .csrf(csrf -> csrf.disable())
+        http
+            .cors(cors -> {})
+            .csrf(csrf -> csrf.disable())
 
-                                .sessionManagement(session -> session.sessionCreationPolicy(
-                                                SessionCreationPolicy.STATELESS))
+            .sessionManagement(session ->
+                session.sessionCreationPolicy(
+                    SessionCreationPolicy.STATELESS
+                )
+            )
 
-                                .authorizeHttpRequests(auth -> auth
+            .authorizeHttpRequests(auth -> auth
 
-                                                .requestMatchers(
-                                                                HttpMethod.OPTIONS,
-                                                                "/**")
-                                                .permitAll()
+                // ========================================
+                // OPTIONS
+                // ========================================
+                .requestMatchers(HttpMethod.OPTIONS, "/**")
+                .permitAll()
 
-                                                .requestMatchers(
-                                                                "/api/auth/**")
-                                                .permitAll()
+                // ========================================
+                // PUBLIC APIs
+                // ========================================
+                .requestMatchers("/api/auth/**")
+                .permitAll()
 
-                                                .requestMatchers(
-                                                                HttpMethod.POST,
-                                                                "/api/users")
-                                                .permitAll()
+                .requestMatchers(HttpMethod.POST, "/api/users")
+                .permitAll()
 
-                                                .requestMatchers(
-                                                                "/actuator/**")
-                                                .permitAll()
+                .requestMatchers("/actuator/**")
+                .permitAll()
 
-                                                .requestMatchers(
-                                                                "/api/test-email/**")
-                                                .permitAll()
+                .requestMatchers("/api/test-email/**")
+                .permitAll()
 
-                                                .requestMatchers(
-                                                                "/api/admin/**")
-                                                .hasRole("SUPER_ADMIN")
+                // ========================================
+                // ADMIN
+                // ========================================
+                .requestMatchers("/api/admin/**")
+                .hasRole("SUPER_ADMIN")
 
-                                                .requestMatchers(
-                                                                HttpMethod.GET,
-                                                                "/api/properties/**")
-                                                .permitAll()
+                // ========================================
+                // BROKER
+                // ========================================
+                .requestMatchers("/api/broker/**")
+                .hasRole("BROKER")
 
-                                                .requestMatchers(
-                                                                HttpMethod.GET,
-                                                                "/api/media/**")
-                                                .permitAll()
+                // ========================================
+                // PUBLIC PROPERTY APIs
+                // ========================================
+                .requestMatchers(HttpMethod.GET, "/api/properties/**")
+                .permitAll()
 
-                                                .requestMatchers(
-                                                                HttpMethod.GET,
-                                                                "/uploads/**")
-                                                .permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/media/**")
+                .permitAll()
 
-                                                .anyRequest().authenticated())
+                .requestMatchers(HttpMethod.GET, "/uploads/**")
+                .permitAll()
 
-                                .addFilterBefore(
-                                                jwtAuthenticationFilter,
-                                                UsernamePasswordAuthenticationFilter.class);
+                // ========================================
+                // EVERYTHING ELSE
+                // ========================================
+                .anyRequest()
+                .authenticated()
+            )
 
-                return http.build();
-        }
+            .addFilterBefore(
+                jwtAuthenticationFilter,
+                UsernamePasswordAuthenticationFilter.class
+            );
+
+        return http.build();
+    }
 }

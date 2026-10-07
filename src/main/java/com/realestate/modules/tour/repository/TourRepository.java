@@ -25,4 +25,7 @@ public interface TourRepository extends JpaRepository<Tour, Long> {
   List<Tour> findByBrokerId(Long brokerId);
   List<Tour> findByBrokerIdAndStatus(Long brokerId, TourStatus status);
   long countByBrokerIdAndStatus(Long brokerId, TourStatus status);
+
+  /* * Used by BrokerAnalyticsService. * * Counts all tours belonging to a broker's properties. * * Tour.property -> Property.id */ 
+  long countByProperty_IdIn(List<Long> propertyIds);
 }

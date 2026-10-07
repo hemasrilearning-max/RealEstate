@@ -8,11 +8,17 @@ import org.springframework.web.filter.CorsFilter;
 
 import java.util.List;
 
-@Configuration
+/**
+ * Optional CORS helper for Broker module.
+ * Bean names are unique to avoid clash with any BrokerOld package.
+ *
+ * Prefer deleting the BrokerOld package from the project entirely.
+ */
+@Configuration("brokerModuleCorsConfiguration")
 public class BrokerCorsConfig {
 
-    @Bean
-    public CorsFilter brokerCorsFilter() {
+    @Bean(name = "brokerModuleCorsFilter")
+    public CorsFilter brokerModuleCorsFilter() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowCredentials(true);
         config.setAllowedOriginPatterns(List.of("*"));
@@ -20,7 +26,7 @@ public class BrokerCorsConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", config);
+        source.registerCorsConfiguration("/api/broker/**", config);
         return new CorsFilter(source);
     }
 }

@@ -1,35 +1,39 @@
 package com.realestate.modules.Broker.dto;
 
-import com.realestate.modules.tour.enums.TourStatus;
 import lombok.*;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.LocalTime;
 
+/**
+ * A pending (or accepted) message request from a buyer on a property.
+ * Same shared conversation the owner sees.
+ */
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class BrokerTourRequestDTO {
+public class BrokerMessageRequestDTO {
 
-    private Long id;
+    private Long conversationId;
 
     private Long buyerId;
     private String buyerName;
     private String buyerEmail;
     private String buyerPhone;
 
+    private Long sellerId;
+    private String sellerName;
+
     private Long propertyId;
     private String propertyTitle;
 
     private Long brokerId;
 
-    private LocalDate tourDate;
-    private LocalTime tourTime;
-    private String notes;
-    private TourStatus status;
+    /** PENDING | ACCEPTED | REJECTED */
+    private String status;
 
     private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
+
+    private String lastMessage;
+    private LocalDateTime lastMessageAt;
 }
