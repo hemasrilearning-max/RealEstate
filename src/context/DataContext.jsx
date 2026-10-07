@@ -1,3 +1,4 @@
+
 import {
   createContext,
   useContext,
@@ -943,10 +944,12 @@ export function DataProvider({ children }) {
     const savedFavorites =
       load(key, []);
 
+    /*
+     * FIX:
+     * Load the actual saved favorites.
+     */
     setFavoriteIds(
-      Array.isArray(
-        savedFavorites
-      )
+      Array.isArray(savedFavorites)
         ? savedFavorites
         : []
     );
@@ -1045,290 +1048,6 @@ export function DataProvider({ children }) {
 
   /*
    * ============================================================
-   * BUYER SAVED SEARCHES
-   * ============================================================
-   */
-
-  const [savedSearches, setSavedSearches] =
-    useState([]);
-
-  useEffect(() => {
-    if (authLoading) {
-      return;
-    }
-
-    if (!user?.email) {
-      setSavedSearches([]);
-      return;
-    }
-
-    const email =
-      user.email
-        .toLowerCase()
-        .trim();
-
-    const key =
-      `re_saved_searches_${email}`;
-
-    const storedSearches =
-      load(key, []);
-
-    setSavedSearches(
-      Array.isArray(
-        storedSearches
-      )
-        ? storedSearches
-        : []
-    );
-  }, [
-    user?.email,
-    authLoading,
-  ]);
-
-  useEffect(() => {
-    if (
-      authLoading ||
-      !user?.email
-    ) {
-      return;
-    }
-
-    const email =
-      user.email
-        .toLowerCase()
-        .trim();
-
-    const key =
-      `re_saved_searches_${email}`;
-
-    save(
-      key,
-      savedSearches
-    );
-  }, [
-    savedSearches,
-    user?.email,
-    authLoading,
-  ]);
-
-  const addSavedSearch = (
-    search
-  ) => {
-    if (!user?.email) {
-      return {
-        success: false,
-        requiresLogin: true,
-      };
-    }
-
-    const now =
-      new Date().toISOString();
-
-    const newSearch = {
-      ...search,
-
-      id: Date.now(),
-
-      alerts:
-        typeof search.alerts ===
-        "boolean"
-          ? search.alerts
-          : true,
-
-      createdAt: now,
-
-      updatedAt: now,
-    };
-
-    setSavedSearches(
-      (prev) => [
-        newSearch,
-        ...prev,
-      ]
-    );
-
-    return {
-      success: true,
-      search: newSearch,
-    };
-  };
-
-  const updateSavedSearch = (
-    id,
-    updates
-  ) => {
-    setSavedSearches(
-      (prev) =>
-        prev.map(
-          (item) =>
-            String(item.id) ===
-            String(id)
-              ? {
-                  ...item,
-                  ...updates,
-                  updatedAt:
-                    new Date().toISOString(),
-                }
-              : item
-        )
-    );
-  };
-
-  const deleteSavedSearch = (
-    id
-  ) => {
-    setSavedSearches(
-      (prev) =>
-        prev.filter(
-          (item) =>
-            String(item.id) !==
-            String(id)
-        )
-    );
-  };
-
-  const toggleSavedSearchAlert = (
-    id
-  ) => {
-    setSavedSearches(
-      (prev) =>
-        prev.map(
-          (item) =>
-            String(item.id) ===
-            String(id)
-              ? {
-                  ...item,
-                  alerts:
-                    !item.alerts,
-                  updatedAt:
-                    new Date().toISOString(),
-                }
-              : item
-        )
-    );
-  };
-
-  /*
-   * ============================================================
-   * BUYER VIEWED PROPERTIES
-   * ============================================================
-   */
-
-  const [
-    viewedPropertyIds,
-    setViewedPropertyIds,
-  ] = useState([]);
-
-  useEffect(() => {
-    if (authLoading) {
-      return;
-    }
-
-    if (!user?.email) {
-      setViewedPropertyIds([]);
-      return;
-    }
-
-    const email =
-      user.email
-        .toLowerCase()
-        .trim();
-
-    const key =
-      `re_viewed_properties_${email}`;
-
-    const storedViewed =
-      load(key, []);
-
-    setViewedPropertyIds(
-      Array.isArray(
-        storedViewed
-      )
-        ? storedViewed
-        : []
-    );
-  }, [
-    user?.email,
-    authLoading,
-  ]);
-
-  useEffect(() => {
-    if (
-      authLoading ||
-      !user?.email
-    ) {
-      return;
-    }
-
-    const email =
-      user.email
-        .toLowerCase()
-        .trim();
-
-    const key =
-      `re_viewed_properties_${email}`;
-
-    save(
-      key,
-      viewedPropertyIds
-    );
-  }, [
-    viewedPropertyIds,
-    user?.email,
-    authLoading,
-  ]);
-
-  const addViewedProperty = (
-    propertyId
-  ) => {
-    if (!user?.email) {
-      return {
-        success: false,
-        requiresLogin: true,
-      };
-    }
-
-    setViewedPropertyIds(
-      (prev) => {
-        const withoutCurrent =
-          prev.filter(
-            (id) =>
-              String(id) !==
-              String(propertyId)
-          );
-
-        return [
-          propertyId,
-          ...withoutCurrent,
-        ].slice(0, 20);
-      }
-    );
-
-    return {
-      success: true,
-    };
-  };
-
-  const removeViewedProperty = (
-    propertyId
-  ) => {
-    setViewedPropertyIds(
-      (prev) =>
-        prev.filter(
-          (id) =>
-            String(id) !==
-            String(propertyId)
-        )
-    );
-  };
-
-  const clearViewedProperties =
-    () => {
-      setViewedPropertyIds([]);
-    };
-
-  /*
-   * ============================================================
    * PROPERTY CRUD
    * ============================================================
    */
@@ -1414,17 +1133,10 @@ export function DataProvider({ children }) {
     );
 
     /*
-     * Also remove deleted property
-     * from viewed history.
+     * Viewed properties are now stored
+     * in the backend, so there is no
+     * local viewed state to update here.
      */
-    setViewedPropertyIds(
-      (prev) =>
-        prev.filter(
-          (propertyId) =>
-            String(propertyId) !==
-            String(id)
-        )
-    );
   };
 
   /*
@@ -1735,30 +1447,6 @@ export function DataProvider({ children }) {
         isFavorite,
 
         removeFavorite,
-
-        /*
-         * Saved Searches
-         */
-        savedSearches,
-
-        addSavedSearch,
-
-        updateSavedSearch,
-
-        deleteSavedSearch,
-
-        toggleSavedSearchAlert,
-
-        /*
-         * Viewed Properties
-         */
-        viewedPropertyIds,
-
-        addViewedProperty,
-
-        removeViewedProperty,
-
-        clearViewedProperties,
 
         /*
          * Property functions

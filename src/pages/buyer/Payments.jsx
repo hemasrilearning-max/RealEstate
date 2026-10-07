@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   CreditCard,
   ArrowUpRight,
@@ -10,57 +10,165 @@ import {
   Home,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import axiosInstance from "../../utils/axiosInstance";
+
+function formatDate(dateValue) {
+  if (!dateValue) {
+    return "—";
+  }
+
+  try {
+    const date = new Date(dateValue);
+
+    if (Number.isNaN(date.getTime())) {
+      return "—";
+    }
+
+    return date.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function mapPaymentStatus(status) {
+  const normalized = String(status || "").toUpperCase();
+
+  if (normalized === "SUCCESS" || normalized === "PAID") {
+    return "Paid";
+  }
+
+  if (
+    normalized === "CREATED" ||
+    normalized === "PENDING" ||
+    normalized === "PROCESSING"
+  ) {
+    return "Pending";
+  }
+
+  if (normalized === "FAILED") {
+    return "Failed";
+  }
+
+  return status || "Pending";
+}
+
+function getStatusClasses(status) {
+  if (status === "Paid") {
+    return "bg-green-50 text-green-700 border-green-100";
+  }
+
+  if (status === "Pending") {
+    return "bg-amber-50 text-amber-700 border-amber-100";
+  }
+
+  if (status === "Failed") {
+    return "bg-red-50 text-red-700 border-red-100";
+  }
+
+  return "bg-gray-50 text-gray-600 border-gray-100";
+}
 
 export default function BuyerPayments() {
   const navigate = useNavigate();
 
-  const [ledgers] = useState([
-    {
-      id: "PAY-1104",
-      type: "Security Deposit",
-      property: "Modern 3 BHK Apartment - Whitefield",
-      amount: "₹1,50,000",
-      numericAmount: 150000,
-      method: "NetBanking Transfer",
-      status: "Paid",
-      date: "Sep 05, 2026",
-    },
-    {
-      id: "PAY-0982",
-      type: "Token Booking Fee",
-      property: "Luxury 4 BHK Villa - Sarjapur",
-      amount: "₹25,000",
-      numericAmount: 25000,
-      method: "UPI AutoPay",
-      status: "Paid",
-      date: "Aug 28, 2026",
-    },
-    {
-      id: "PAY-0411",
-      type: "Application Verification Fee",
-      property: "3 BHK House - HSR Layout",
-      amount: "₹1,200",
-      numericAmount: 1200,
-      method: "Credit Card",
-      status: "Paid",
-      date: "Aug 15, 2026",
-    },
-  ]);
+  const [ledgers, setLedgers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const totalPaid = ledgers.reduce(
-    (total, item) => total + item.numericAmount,
-    0
-  );
+  useEffect(() => {
+    let mounted = true;
 
-  const pendingAmount = 0;
+    const loadPayments = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const response = await axiosInstance.get("/api/payments/my");
+
+        if (!mounted) {
+          return;
+        }
+
+        const payments = Array.isArray(response.data)
+          ? response.data
+          : [];
+
+        const mappedPayments = payments.map((payment) => {
+          const status = mapPaymentStatus(payment.status);
+
+          return {
+            id: `PAY-${payment.id}`,
+            type: "Property Payment",
+            property: payment.propertyId
+              ? `Property #${payment.propertyId}`
+              : "Property Payment",
+            amount: Number(payment.amount || 0),
+            method: payment.paymentMethod || "Razorpay",
+            status,
+            date: formatDate(payment.createdAt),
+            razorpayOrderId: payment.razorpayOrderId,
+            razorpayPaymentId: payment.razorpayPaymentId,
+            propertyId: payment.propertyId,
+          };
+        });
+
+        setLedgers(mappedPayments);
+      } catch (err) {
+        console.error("Failed to load buyer payments:", err);
+
+        if (!mounted) {
+          return;
+        }
+
+        setError(
+          err.response?.data?.message ||
+            "Unable to load your payment history."
+        );
+
+        setLedgers([]);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadPayments();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const totalPaid = ledgers.reduce((total, item) => {
+    if (item.status !== "Paid") {
+      return total;
+    }
+
+    return total + item.amount;
+  }, 0);
+
+  const pendingAmount = ledgers.reduce((total, item) => {
+    if (item.status !== "Pending") {
+      return total;
+    }
+
+    return total + item.amount;
+  }, 0);
 
   const verifiedPayments = ledgers.filter(
     (item) => item.status === "Paid"
   ).length;
 
-  const handleReceipt = (paymentId) => {
+  const handleReceipt = (payment) => {
     window.alert(
-      `Receipt ${paymentId} will be available once payment documents are connected to the backend.`
+      `Receipt ${payment.id}\n\nReceipt documents are not connected to the backend yet.\n\nRazorpay Payment ID: ${
+        payment.razorpayPaymentId || "Not available"
+      }`
     );
   };
 
@@ -122,7 +230,8 @@ export default function BuyerPayments() {
             </div>
 
             <p className="text-[11px] text-gray-400 mt-3">
-              Across {ledgers.length} recorded transactions
+              Across {ledgers.filter((item) => item.status === "Paid").length}{" "}
+              successful transactions
             </p>
           </div>
 
@@ -144,7 +253,9 @@ export default function BuyerPayments() {
             </div>
 
             <p className="text-[11px] text-gray-400 mt-3">
-              No outstanding payment demands
+              {pendingAmount > 0
+                ? "Pending payment transactions"
+                : "No outstanding payment demands"}
             </p>
           </div>
 
@@ -191,179 +302,223 @@ export default function BuyerPayments() {
             </div>
           </div>
 
-          {/* DESKTOP TABLE */}
-          <div className="hidden lg:block overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-400 font-bold">
-                  <th className="py-4 pl-6">
-                    Payment Reference
-                  </th>
-
-                  <th className="py-4">
-                    Description
-                  </th>
-
-                  <th className="py-4">
-                    Payment Method
-                  </th>
-
-                  <th className="py-4">
-                    Amount
-                  </th>
-
-                  <th className="py-4">
-                    Status
-                  </th>
-
-                  <th className="py-4">
-                    Date
-                  </th>
-
-                  <th className="py-4 pr-6 text-right">
-                    Receipt
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-50 text-xs font-medium text-gray-700">
-                {ledgers.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="hover:bg-gray-50/50 transition-colors"
-                  >
-                    <td className="py-4 pl-6">
-                      <div className="font-bold text-gray-900 font-mono">
-                        {item.id}
-                      </div>
-
-                      <div className="text-[10px] text-gray-400 truncate max-w-[190px] mt-1">
-                        {item.property}
-                      </div>
-                    </td>
-
-                    <td className="py-4">
-                      <span className="font-semibold text-gray-900">
-                        {item.type}
-                      </span>
-                    </td>
-
-                    <td className="py-4 text-gray-500">
-                      {item.method}
-                    </td>
-
-                    <td className="py-4 font-bold text-gray-900">
-                      {item.amount}
-                    </td>
-
-                    <td className="py-4">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold bg-green-50 text-green-700 border border-green-100">
-                        <CheckCircle2 className="h-3 w-3" />
-                        {item.status}
-                      </span>
-                    </td>
-
-                    <td className="py-4 text-gray-500">
-                      {item.date}
-                    </td>
-
-                    <td className="py-4 pr-6 text-right">
-                      <button
-                        onClick={() => handleReceipt(item.id)}
-                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 font-semibold hover:bg-gray-50 hover:text-emerald-600 transition-colors"
-                      >
-                        <Receipt className="h-3.5 w-3.5" />
-                        Receipt
-                        <ArrowUpRight className="h-3 w-3" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          {/* MOBILE / TABLET CARDS */}
-          <div className="lg:hidden p-4 space-y-4">
-            {ledgers.map((item) => (
-              <div
-                key={item.id}
-                className="border border-gray-100 rounded-xl p-4 bg-gray-50/30"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-bold text-gray-900 font-mono text-sm">
-                      {item.id}
-                    </p>
-
-                    <p className="text-[11px] text-gray-400 mt-1">
-                      {item.date}
-                    </p>
-                  </div>
-
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold bg-green-50 text-green-700 border border-green-100">
-                    <CheckCircle2 className="h-3 w-3" />
-                    {item.status}
-                  </span>
-                </div>
-
-                <div className="mt-4">
-                  <p className="text-sm font-bold text-gray-900">
-                    {item.type}
-                  </p>
-
-                  <p className="text-xs text-gray-500 mt-1">
-                    {item.property}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
-                  <div>
-                    <p className="text-[10px] text-gray-400 uppercase font-semibold">
-                      Amount
-                    </p>
-
-                    <p className="text-sm font-bold text-gray-900 mt-1">
-                      {item.amount}
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-[10px] text-gray-400 uppercase font-semibold">
-                      Method
-                    </p>
-
-                    <p className="text-xs font-semibold text-gray-700 mt-1">
-                      {item.method}
-                    </p>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => handleReceipt(item.id)}
-                  className="w-full mt-4 inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-600 text-xs font-semibold hover:bg-gray-50 hover:text-emerald-600 transition-colors"
-                >
-                  <Receipt className="h-3.5 w-3.5" />
-                  View Receipt
-                  <ArrowUpRight className="h-3 w-3" />
-                </button>
-              </div>
-            ))}
-          </div>
-
-          {/* EMPTY STATE */}
-          {ledgers.length === 0 && (
+          {loading && (
             <div className="py-16 text-center">
-              <CreditCard className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+              <CreditCard className="h-10 w-10 text-gray-300 mx-auto mb-3 animate-pulse" />
 
               <h3 className="font-semibold text-gray-900">
-                No payments found
+                Loading payments...
               </h3>
 
               <p className="text-sm text-gray-500 mt-1">
-                Your property payment history will appear here.
+                Fetching your payment history.
               </p>
             </div>
+          )}
+
+          {!loading && error && (
+            <div className="py-16 text-center px-6">
+              <CreditCard className="h-10 w-10 text-red-300 mx-auto mb-3" />
+
+              <h3 className="font-semibold text-gray-900">
+                Unable to load payments
+              </h3>
+
+              <p className="text-sm text-gray-500 mt-1">
+                {error}
+              </p>
+            </div>
+          )}
+
+          {!loading && !error && (
+            <>
+              {/* DESKTOP TABLE */}
+              <div className="hidden lg:block overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-gray-100 text-[10px] uppercase tracking-wider text-gray-400 font-bold">
+                      <th className="py-4 pl-6">
+                        Payment Reference
+                      </th>
+
+                      <th className="py-4">
+                        Description
+                      </th>
+
+                      <th className="py-4">
+                        Payment Method
+                      </th>
+
+                      <th className="py-4">
+                        Amount
+                      </th>
+
+                      <th className="py-4">
+                        Status
+                      </th>
+
+                      <th className="py-4">
+                        Date
+                      </th>
+
+                      <th className="py-4 pr-6 text-right">
+                        Receipt
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-gray-50 text-xs font-medium text-gray-700">
+                    {ledgers.map((item) => (
+                      <tr
+                        key={item.id}
+                        className="hover:bg-gray-50/50 transition-colors"
+                      >
+                        <td className="py-4 pl-6">
+                          <div className="font-bold text-gray-900 font-mono">
+                            {item.id}
+                          </div>
+
+                          <div className="text-[10px] text-gray-400 truncate max-w-[190px] mt-1">
+                            {item.property}
+                          </div>
+                        </td>
+
+                        <td className="py-4">
+                          <span className="font-semibold text-gray-900">
+                            {item.type}
+                          </span>
+                        </td>
+
+                        <td className="py-4 text-gray-500">
+                          {item.method}
+                        </td>
+
+                        <td className="py-4 font-bold text-gray-900">
+                          ₹{item.amount.toLocaleString("en-IN")}
+                        </td>
+
+                        <td className="py-4">
+                          <span
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-bold border ${getStatusClasses(
+                              item.status
+                            )}`}
+                          >
+                            {item.status === "Paid" && (
+                              <CheckCircle2 className="h-3 w-3" />
+                            )}
+                            {item.status}
+                          </span>
+                        </td>
+
+                        <td className="py-4 text-gray-500">
+                          {item.date}
+                        </td>
+
+                        <td className="py-4 pr-6 text-right">
+                          <button
+                            onClick={() => handleReceipt(item)}
+                            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 bg-white text-gray-600 font-semibold hover:bg-gray-50 hover:text-emerald-600 transition-colors"
+                          >
+                            <Receipt className="h-3.5 w-3.5" />
+                            Receipt
+                            <ArrowUpRight className="h-3 w-3" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* MOBILE / TABLET CARDS */}
+              <div className="lg:hidden p-4 space-y-4">
+                {ledgers.map((item) => (
+                  <div
+                    key={item.id}
+                    className="border border-gray-100 rounded-xl p-4 bg-gray-50/30"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-bold text-gray-900 font-mono text-sm">
+                          {item.id}
+                        </p>
+
+                        <p className="text-[11px] text-gray-400 mt-1">
+                          {item.date}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold border ${getStatusClasses(
+                          item.status
+                        )}`}
+                      >
+                        {item.status === "Paid" && (
+                          <CheckCircle2 className="h-3 w-3" />
+                        )}
+                        {item.status}
+                      </span>
+                    </div>
+
+                    <div className="mt-4">
+                      <p className="text-sm font-bold text-gray-900">
+                        {item.type}
+                      </p>
+
+                      <p className="text-xs text-gray-500 mt-1">
+                        {item.property}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-gray-100">
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase font-semibold">
+                          Amount
+                        </p>
+
+                        <p className="text-sm font-bold text-gray-900 mt-1">
+                          ₹{item.amount.toLocaleString("en-IN")}
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="text-[10px] text-gray-400 uppercase font-semibold">
+                          Method
+                        </p>
+
+                        <p className="text-xs font-semibold text-gray-700 mt-1">
+                          {item.method}
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleReceipt(item)}
+                      className="w-full mt-4 inline-flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-gray-600 text-xs font-semibold hover:bg-gray-50 hover:text-emerald-600 transition-colors"
+                    >
+                      <Receipt className="h-3.5 w-3.5" />
+                      View Receipt
+                      <ArrowUpRight className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              {/* EMPTY STATE */}
+              {ledgers.length === 0 && (
+                <div className="py-16 text-center">
+                  <CreditCard className="h-10 w-10 text-gray-300 mx-auto mb-3" />
+
+                  <h3 className="font-semibold text-gray-900">
+                    No payments found
+                  </h3>
+
+                  <p className="text-sm text-gray-500 mt-1">
+                    Your property payment history will appear here.
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
 
@@ -379,10 +534,9 @@ export default function BuyerPayments() {
 
               <p className="text-xs text-emerald-700 mt-1 leading-relaxed">
                 Payment information and transaction records are
-                intended to be securely handled through the HomeSpace
-                payment system. Actual gateway processing and receipt
-                downloads will be connected to the backend payment
-                service.
+                securely handled through the HomeSpace payment
+                system. Gateway processing is handled through
+                Razorpay and verified by the backend payment service.
               </p>
             </div>
           </div>

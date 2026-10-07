@@ -108,6 +108,53 @@ const leadService = {
 
   /*
    * ============================================================
+   * GET LEAD COUNT FOR PROPERTY
+   * GET /api/leads/property/{propertyId}/count
+   *
+   * Used by Owner Properties page to display
+   * the real backend lead count.
+   * ============================================================
+   */
+  async getLeadCount(propertyId) {
+    if (!propertyId) {
+      return 0;
+    }
+
+    const response = await fetch(
+      `${API_BASE_URL}/leads/property/${propertyId}/count`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+      }
+    );
+
+    if (!response.ok) {
+      let message = "Failed to load lead count.";
+
+      try {
+        const data = await response.json();
+
+        message =
+          data.message ||
+          data.error ||
+          message;
+      } catch {
+        // Ignore invalid response body
+      }
+
+      throw new Error(message);
+    }
+
+    const data = await response.json();
+
+    return Number(data || 0);
+  },
+
+  /*
+   * ============================================================
    * UPDATE LEAD STATUS
    * PATCH /api/leads/{leadId}/status
    * ============================================================
@@ -149,6 +196,7 @@ const leadService = {
   /*
    * ============================================================
    * GET SINGLE LEAD
+   * GET /api/leads/{leadId}
    * ============================================================
    */
   async getLeadById(leadId) {
@@ -173,6 +221,7 @@ const leadService = {
   /*
    * ============================================================
    * DELETE LEAD
+   * DELETE /api/leads/{leadId}
    * ============================================================
    */
   async deleteLead(leadId) {

@@ -2,14 +2,19 @@
 import axios from "axios";
 
 const axiosInstance = axios.create({
-    baseURL: "http://localhost:8080",
+  baseURL: "http://localhost:8080",
 });
 
 // ========================================
 // REQUEST INTERCEPTOR
 // ========================================
 axiosInstance.interceptors.request.use(
-    (config) => {
+  (config) => {
+    // Support the token keys currently used by the application.
+    const token =
+      localStorage.getItem("token") ||
+      localStorage.getItem("accessToken") ||
+      localStorage.getItem("re_access_token");
 
         // Get the CURRENT logged-in user's token.
         // Every login can have a different JWT.
@@ -38,9 +43,14 @@ axiosInstance.interceptors.request.use(
 // RESPONSE INTERCEPTOR
 // ========================================
 axiosInstance.interceptors.response.use(
-    (response) => response,
+  (response) => response,
 
-    (error) => {
+  (error) => {
+    if (error.response?.status === 401) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("re_access_token");
+      localStorage.removeItem("user");
 
         if (error.response?.status === 401) {
 
@@ -53,6 +63,9 @@ axiosInstance.interceptors.response.use(
 
         return Promise.reject(error);
     }
+
+    return Promise.reject(error);
+  }
 );
 
 export default axiosInstance;

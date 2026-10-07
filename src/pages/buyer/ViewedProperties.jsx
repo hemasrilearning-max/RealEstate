@@ -1,36 +1,144 @@
-import { Eye, MapPin, ArrowRight, Heart, Home } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
+import React, {
+  useEffect,
+  useState,
+} from "react";
 
-import { useData } from "../../context/DataContext";
+import {
+  ArrowLeft,
+  Eye,
+  Heart,
+  MapPin,
+} from "lucide-react";
+
+import { useNavigate } from "react-router-dom";
+
 import { useAuth } from "../../context/AuthContext";
-import { formatPrice } from "../../data/mockData";
+import { useData } from "../../context/DataContext";
+import propertyViewService from "../../services/propertyViewService";
 
 export default function ViewedProperties() {
   const navigate = useNavigate();
 
   const {
     properties,
-    viewedPropertyIds,
     isFavorite,
     toggleFavorite,
   } = useData();
 
-  const { isAuthenticated } = useAuth();
+  const {
+    isAuthenticated,
+    user,
+  } = useAuth();
+
+  const [
+    viewedPropertyIds,
+    setViewedPropertyIds,
+  ] = useState([]);
+
+  const [loading, setLoading] =
+    useState(true);
 
   /*
-   * viewedPropertyIds is stored with the newest property first.
-   *
-   * We map those IDs back to the real properties from DataContext.
+   * ============================================================
+   * LOAD VIEWED PROPERTIES FROM BACKEND
+   * ============================================================
    */
-  const viewedProperties = viewedPropertyIds
-    .map((id) =>
-      properties.find(
-        (property) => String(property.id) === String(id)
-      )
-    )
-    .filter(Boolean);
 
-  const handleFavorite = (propertyId) => {
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadViewedProperties =
+      async () => {
+        if (
+          !isAuthenticated ||
+          user?.role !== "buyer"
+        ) {
+          setViewedPropertyIds([]);
+          setLoading(false);
+          return;
+        }
+
+        try {
+          setLoading(true);
+
+          const response =
+            await propertyViewService.getMyViewedProperties();
+
+          if (cancelled) {
+            return;
+          }
+
+          const list =
+            Array.isArray(response)
+              ? response
+              : response?.content ||
+                response?.data ||
+                response?.properties ||
+                [];
+
+          const ids = list
+            .map(
+              (property) =>
+                property?.id
+            )
+            .filter(
+              (propertyId) =>
+                propertyId != null
+            );
+
+          setViewedPropertyIds(ids);
+        } catch (error) {
+          console.error(
+            "Failed to load viewed properties:",
+            error
+          );
+
+          if (!cancelled) {
+            setViewedPropertyIds([]);
+          }
+        } finally {
+          if (!cancelled) {
+            setLoading(false);
+          }
+        }
+      };
+
+    loadViewedProperties();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isAuthenticated,
+    user?.role,
+  ]);
+
+  /*
+   * ============================================================
+   * MATCH BACKEND VIEWED IDS WITH FRONTEND PROPERTIES
+   * ============================================================
+   */
+
+  const viewedProperties =
+    viewedPropertyIds
+      .map((id) =>
+        properties?.find(
+          (property) =>
+            String(property.id) ===
+            String(id)
+        )
+      )
+      .filter(Boolean);
+
+  /*
+   * ============================================================
+   * FAVORITE
+   * ============================================================
+   */
+
+  const handleFavorite = (
+    propertyId
+  ) => {
     if (!isAuthenticated) {
       navigate("/login");
       return;
@@ -39,225 +147,358 @@ export default function ViewedProperties() {
     toggleFavorite(propertyId);
   };
 
-  return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
+  /*
+   * ============================================================
+   * PROPERTY HELPERS
+   * ============================================================
+   */
 
-      {/* =========================================================
-          PAGE HEADER
-      ========================================================= */}
-      <div className="mb-8">
+  const formatPrice = (property) => {
+    const price =
+      Number(property?.price);
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    if (!Number.isFinite(price)) {
+      return "₹0";
+    }
+
+    if (
+      String(
+        property?.listingType || ""
+      ).toUpperCase() === "RENT"
+    ) {
+      return `₹${price.toLocaleString(
+        "en-IN"
+      )} /mo`;
+    }
+
+    if (price >= 10000000) {
+      return `₹${(
+        price / 10000000
+      ).toFixed(2)} Cr`;
+    }
+
+    if (price >= 100000) {
+      return `₹${(
+        price / 100000
+      ).toFixed(2)} L`;
+    }
+
+    return `₹${price.toLocaleString(
+      "en-IN"
+    )}`;
+  };
+
+  const getPropertyImage = (
+    property
+  ) => {
+    if (
+      Array.isArray(
+        property?.images
+      ) &&
+      property.images.length > 0
+    ) {
+      return property.images[0];
+    }
+
+    return (
+      "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=85"
+    );
+  };
+
+  const getLocation = (
+    property
+  ) => {
+    if (
+      typeof property?.location ===
+      "string"
+    ) {
+      return property.location;
+    }
+
+    const location =
+      property?.location || {};
+
+    return [
+      location.area,
+      location.city,
+      location.state,
+    ]
+      .filter(Boolean)
+      .join(", ") ||
+      property?.city ||
+      "Location not available";
+  };
+
+  /*
+   * ============================================================
+   * LOADING
+   * ============================================================
+   */
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() =>
+              navigate(-1)
+            }
+            className="p-2 rounded-lg hover:bg-gray-100 transition"
+          >
+            <ArrowLeft className="w-5 h-5 text-gray-600" />
+          </button>
 
           <div>
-            <div className="flex items-center gap-2">
-              <Eye className="w-6 h-6 text-emerald-600" />
+            <h1 className="text-xl font-bold text-gray-900">
+              Viewed Properties
+            </h1>
 
-              <h1 className="text-2xl font-bold text-gray-900">
-                Viewed Properties
-              </h1>
-            </div>
-
-            <p className="text-gray-500 mt-1">
-              Properties you recently viewed on HomeSpace.
+            <p className="text-sm text-gray-500 mt-1">
+              Properties you have recently viewed
             </p>
           </div>
+        </div>
 
-          {viewedProperties.length > 0 && (
-            <span className="inline-flex items-center gap-2 bg-gray-50 border border-gray-200 text-gray-600 px-4 py-2 rounded-lg text-sm font-semibold">
-              <Eye className="w-4 h-4" />
-              {viewedProperties.length}{" "}
-              {viewedProperties.length === 1
-                ? "Property"
-                : "Properties"}
-            </span>
-          )}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm py-16 text-center">
+          <div className="w-8 h-8 mx-auto border-2 border-rose-200 border-t-rose-600 rounded-full animate-spin" />
 
+          <p className="mt-4 text-sm font-semibold text-gray-700">
+            Loading viewed properties...
+          </p>
+
+          <p className="mt-1 text-xs text-gray-500">
+            Fetching your viewing history.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  /*
+   * ============================================================
+   * PAGE
+   * ============================================================
+   */
+
+  return (
+    <div className="space-y-6">
+      {/* HEADER */}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() =>
+            navigate(-1)
+          }
+          className="p-2 rounded-lg hover:bg-gray-100 transition"
+        >
+          <ArrowLeft className="w-5 h-5 text-gray-600" />
+        </button>
+
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">
+            Viewed Properties
+          </h1>
+
+          <p className="text-sm text-gray-500 mt-1">
+            Properties you have recently viewed
+          </p>
         </div>
       </div>
 
-      {/* =========================================================
-          EMPTY STATE
-      ========================================================= */}
-      {viewedProperties.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-2xl py-20 px-6 text-center shadow-sm">
+      {/* COUNT */}
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-gray-500">
+          Showing{" "}
+          <span className="font-semibold text-gray-800">
+            {viewedProperties.length}
+          </span>{" "}
+          {viewedProperties.length ===
+          1
+            ? "property"
+            : "properties"}
+        </p>
+      </div>
 
-          <div className="w-16 h-16 mx-auto rounded-full bg-emerald-50 flex items-center justify-center mb-5">
-            <Eye className="w-8 h-8 text-emerald-500" />
+      {/* EMPTY STATE */}
+      {viewedProperties.length ===
+      0 ? (
+        <div className="bg-white border border-gray-200 rounded-xl shadow-sm py-16 px-6 text-center">
+          <div className="w-16 h-16 mx-auto rounded-full bg-gray-100 flex items-center justify-center">
+            <Eye className="w-7 h-7 text-gray-400" />
           </div>
 
-          <h2 className="text-xl font-semibold text-gray-900">
+          <h3 className="mt-5 text-base font-bold text-gray-900">
             No viewed properties yet
-          </h2>
+          </h3>
 
-          <p className="text-gray-500 mt-2 max-w-md mx-auto">
-            Properties you open while browsing HomeSpace will
-            automatically appear here.
+          <p className="mt-2 text-sm text-gray-500 max-w-md mx-auto">
+            Properties you view will appear here so
+            you can easily find them again.
           </p>
 
-          <Link
-            to="/properties"
-            className="inline-flex items-center gap-2 mt-6 bg-purple-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-purple-700 transition"
+          <button
+            type="button"
+            onClick={() =>
+              navigate(
+                "/properties"
+              )
+            }
+            className="mt-5 inline-flex items-center gap-2 bg-rose-600 hover:bg-rose-700 text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition"
           >
             Browse Properties
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-
+          </button>
         </div>
       ) : (
-        /* =======================================================
-           PROPERTY GRID
-        ======================================================= */
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-
-          {viewedProperties.map((property) => {
-
-            const favorite = isFavorite(property.id);
-
-            const image =
-              property.images?.[0] ||
-              "https://via.placeholder.com/800x500";
-
-            return (
+        /* PROPERTY GRID */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {viewedProperties.map(
+            (property) => (
               <div
                 key={property.id}
-                className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition"
+                className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition group"
               >
-
-                {/* =================================================
-                    IMAGE
-                ================================================= */}
-                <div className="relative aspect-[16/10] bg-gray-100">
-
+                {/* IMAGE */}
+                <div className="relative h-52 bg-gray-100 overflow-hidden">
                   <img
-                    src={image}
-                    alt={property.title}
-                    className="w-full h-full object-cover"
+                    src={getPropertyImage(
+                      property
+                    )}
+                    alt={
+                      property.title
+                    }
+                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                    onError={(event) => {
+                      event.currentTarget.src =
+                        "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1000&q=85";
+                    }}
                   />
 
-                  {/* Listing type */}
-                  <span
-                    className={`absolute top-3 left-3 px-3 py-1 text-xs font-semibold rounded-full ${
-                      property.listingType === "Rent"
-                        ? "bg-blue-600 text-white"
-                        : "bg-red-600 text-white"
-                    }`}
-                  >
-                    For {property.listingType}
+                  {/* VIEWED BADGE */}
+                  <span className="absolute top-3 left-3 flex items-center gap-1 bg-black/65 text-white px-2.5 py-1 rounded-full text-[10px] font-semibold">
+                    <Eye className="w-3 h-3" />
+                    Viewed
                   </span>
 
-                  {/* Favorite */}
+                  {/* FAVORITE */}
                   <button
                     type="button"
                     onClick={() =>
-                      handleFavorite(property.id)
+                      handleFavorite(
+                        property.id
+                      )
                     }
+                    className={`absolute top-3 right-3 w-9 h-9 rounded-full flex items-center justify-center backdrop-blur-sm transition ${
+                      isFavorite(
+                        property.id
+                      )
+                        ? "bg-rose-600 text-white"
+                        : "bg-white/90 text-gray-600 hover:text-rose-600"
+                    }`}
                     aria-label={
-                      favorite
+                      isFavorite(
+                        property.id
+                      )
                         ? "Remove from favorites"
                         : "Add to favorites"
                     }
-                    className="absolute top-3 right-3 w-10 h-10 rounded-full bg-white/95 shadow-md flex items-center justify-center hover:bg-white transition"
                   >
                     <Heart
-                      className={`w-5 h-5 ${
-                        favorite
-                          ? "text-red-500 fill-red-500"
-                          : "text-gray-600"
-                      }`}
+                      className="w-4 h-4"
+                      fill={
+                        isFavorite(
+                          property.id
+                        )
+                          ? "currentColor"
+                          : "none"
+                      }
                     />
                   </button>
                 </div>
 
-                {/* =================================================
-                    PROPERTY INFORMATION
-                ================================================= */}
-                <div className="p-5">
+                {/* CONTENT */}
+                <div className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-bold text-gray-900 line-clamp-2 group-hover:text-rose-600 transition-colors">
+                        {
+                          property.title
+                        }
+                      </h3>
 
-                  <h2 className="font-bold text-gray-900 text-lg line-clamp-1">
-                    {property.title}
-                  </h2>
+                      <p className="mt-1 text-xs text-gray-500 flex items-center gap-1 truncate">
+                        <MapPin className="w-3 h-3 shrink-0" />
 
-                  <div className="flex items-center gap-1 mt-2 text-sm text-gray-500">
-                    <MapPin className="w-4 h-4 shrink-0" />
-
-                    <span className="truncate">
-                      {property.location}
-                    </span>
+                        {getLocation(
+                          property
+                        )}
+                      </p>
+                    </div>
                   </div>
 
-                  {/* Price */}
-                  <div className="mt-3 text-xl font-bold text-purple-600">
-                    {formatPrice(
-                      property.price,
-                      property.listingType
-                    )}
+                  {/* PRICE */}
+                  <div className="mt-4">
+                    <p className="text-lg font-extrabold text-gray-900">
+                      {formatPrice(
+                        property
+                      )}
+                    </p>
                   </div>
 
-                  {/* Specifications */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 text-xs text-gray-500">
-
-                    {property.bhk && (
+                  {/* SPECS */}
+                  <div className="mt-3 flex items-center gap-3 text-xs text-gray-500 border-t border-gray-100 pt-3">
+                    {property.bedrooms !=
+                      null && (
                       <span>
-                        {property.bhk} Bedrooms
+                        {
+                          property.bedrooms
+                        }{" "}
+                        Beds
                       </span>
                     )}
 
-                    {property.bathrooms && (
+                    {property.bathrooms !=
+                      null && (
                       <span>
-                        {property.bathrooms} Bathrooms
+                        {
+                          property.bathrooms
+                        }{" "}
+                        Baths
                       </span>
                     )}
 
-                    {property.area && (
+                    {property.area !=
+                      null && (
                       <span>
-                        {property.area}{" "}
-                        {property.areaUnit || "sqft"}
+                        {
+                          property.area
+                        }{" "}
+                        {
+                          property.areaUnit ||
+                          "sq.ft"
+                        }
                       </span>
                     )}
-
                   </div>
 
-                  {/* Divider */}
-                  <div className="border-t border-gray-100 mt-5 pt-4">
-
-                    <Link
-                      to={`/properties/${property.id}`}
-                      className="w-full inline-flex items-center justify-center gap-2 bg-gray-900 text-white px-4 py-2.5 rounded-lg text-sm font-semibold hover:bg-gray-800 transition"
-                    >
-                      Open Listing
-                      <ArrowRight className="w-4 h-4" />
-                    </Link>
-
-                  </div>
-
+                  {/* VIEW PROPERTY */}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      navigate(
+                        `/properties/${property.id}`
+                      )
+                    }
+                    className="mt-4 w-full bg-gray-900 hover:bg-gray-800 text-white py-2.5 rounded-lg text-xs font-semibold transition"
+                  >
+                    View Property
+                  </button>
                 </div>
               </div>
-            );
-          })}
-
+            )
+          )}
         </div>
       )}
-
-      {/* =========================================================
-          BOTTOM BROWSE LINK
-      ========================================================= */}
-      {viewedProperties.length > 0 && (
-        <div className="mt-10 text-center">
-
-          <Link
-            to="/properties"
-            className="inline-flex items-center gap-2 text-purple-600 font-semibold hover:text-purple-700 transition"
-          >
-            <Home className="w-4 h-4" />
-            Continue Browsing Properties
-            <ArrowRight className="w-4 h-4" />
-          </Link>
-
-        </div>
-      )}
-
     </div>
   );
 }
-

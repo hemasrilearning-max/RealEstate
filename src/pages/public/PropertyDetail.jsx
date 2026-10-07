@@ -22,10 +22,14 @@ import {
 import { useData } from "../../context/DataContext";
 import { formatPrice } from "../../data/mockData";
 import { useAuth } from "../../context/AuthContext";
+
 import reviewService from "../../services/reviewService";
 import messagingService from "../../services/messagingService";
 import leadService from "../../services/leadService";
 import mediaService from "../../services/mediaService";
+import propertyViewService from "../../services/propertyViewService";
+import tourService from "../../services/tourService";
+import paymentService from "../../services/paymentService";
 
 export default function PropertyDetail() {
   const { id } = useParams();
@@ -33,8 +37,6 @@ export default function PropertyDetail() {
 
   const {
     properties,
-    addTourRequest,
-    addViewedProperty,
     isFavorite,
     toggleFavorite,
   } = useData();
@@ -50,6 +52,7 @@ export default function PropertyDetail() {
    * IMAGE STATE
    * ============================================================
    */
+
   const [propertyImages, setPropertyImages] = useState([]);
   const [imagesLoading, setImagesLoading] = useState(true);
   const [imgIdx, setImgIdx] = useState(0);
@@ -70,6 +73,7 @@ export default function PropertyDetail() {
    * LEADS
    * ============================================================
    */
+
   const [leadSubmitting, setLeadSubmitting] = useState(false);
   const [leadError, setLeadError] = useState("");
 
@@ -78,15 +82,25 @@ export default function PropertyDetail() {
    * MESSAGE OWNER
    * ============================================================
    */
+
   const [messageLoading, setMessageLoading] = useState(false);
   const [messageSuccess, setMessageSuccess] = useState("");
   const [messageError, setMessageError] = useState("");
+/*
+ * ============================================================
+ * PROPERTY PAYMENT
+ * ============================================================
+ */
 
+const [paymentLoading, setPaymentLoading] = useState(false);
+const [paymentError, setPaymentError] = useState("");
+const [paymentSuccess, setPaymentSuccess] = useState("");
   /*
    * ============================================================
    * REVIEWS
    * ============================================================
    */
+
   const [reviews, setReviews] = useState([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [reviewsError, setReviewsError] = useState("");
@@ -101,6 +115,7 @@ export default function PropertyDetail() {
    * LOAD PROPERTY IMAGES FROM BACKEND
    * ============================================================
    */
+
   useEffect(() => {
     let cancelled = false;
 
@@ -114,9 +129,6 @@ export default function PropertyDetail() {
       try {
         setImagesLoading(true);
 
-        /*
-         * Get all media records belonging to this property.
-         */
         const response =
           await mediaService.getMediaByProperty(property.id);
 
@@ -139,6 +151,7 @@ export default function PropertyDetail() {
         /*
          * Keep only images.
          */
+
         const imageMedia = mediaList.filter((media) => {
           const mediaType = String(
             media?.mediaType ||
@@ -156,6 +169,7 @@ export default function PropertyDetail() {
         /*
          * Primary image first.
          */
+
         imageMedia.sort((a, b) => {
           const primaryA = Boolean(
             a?.primary ??
@@ -175,6 +189,7 @@ export default function PropertyDetail() {
         /*
          * Convert backend file URLs into browser URLs.
          */
+
         const urls = imageMedia
           .map((media) => {
             const fileUrl =
@@ -189,9 +204,9 @@ export default function PropertyDetail() {
           .filter(Boolean);
 
         /*
-         * Fallback to old property.images if backend
-         * does not have media.
+         * Fallback to property.images.
          */
+
         if (urls.length === 0) {
           const fallbackImages =
             Array.isArray(property.images)
@@ -210,9 +225,6 @@ export default function PropertyDetail() {
           error
         );
 
-        /*
-         * Fallback to existing property.images.
-         */
         const fallbackImages =
           Array.isArray(property.images)
             ? property.images
@@ -236,22 +248,70 @@ export default function PropertyDetail() {
 
   /*
    * ============================================================
-   * RECORD VIEWED PROPERTY
+   * AUTOMATIC IMAGE SLIDESHOW
+   * ============================================================
+   *
+   * Images automatically move every 4 seconds.
+   *
+   * The user can still use:
+   * - Previous button
+   * - Next button
+   * - Thumbnail buttons
+   *
    * ============================================================
    */
+
   useEffect(() => {
-    if (!property || !isAuthenticated) {
+    if (imagesLoading || propertyImages.length <= 1) {
       return;
     }
 
-    addViewedProperty(property.id);
-  }, [property?.id, isAuthenticated]);
+    const slideshow = setInterval(() => {
+      setImgIdx((current) => {
+        return (current + 1) % propertyImages.length;
+      });
+    }, 4000);
+
+    return () => {
+      clearInterval(slideshow);
+    };
+  }, [propertyImages, imagesLoading]);
+
+  /*
+   * ============================================================
+   * RECORD VIEWED PROPERTY IN BACKEND
+   * ============================================================
+   */
+
+  useEffect(() => {
+    if (
+      !property ||
+      !isAuthenticated ||
+      user?.role !== "buyer"
+    ) {
+      return;
+    }
+
+    propertyViewService
+      .recordView(property.id)
+      .catch((error) => {
+        console.error(
+          "Failed to record property view:",
+          error
+        );
+      });
+  }, [
+    property?.id,
+    isAuthenticated,
+    user?.role,
+  ]);
 
   /*
    * ============================================================
    * LOAD USER INFORMATION INTO FORM
    * ============================================================
    */
+
   useEffect(() => {
     if (!user) {
       return;
@@ -270,6 +330,7 @@ export default function PropertyDetail() {
    * LOAD PROPERTY REVIEWS
    * ============================================================
    */
+
   useEffect(() => {
     let cancelled = false;
 
@@ -329,6 +390,7 @@ export default function PropertyDetail() {
    * PROPERTY NOT FOUND
    * ============================================================
    */
+
   if (!property) {
     return (
       <div className="max-w-7xl mx-auto px-4 py-20 text-center">
@@ -351,6 +413,7 @@ export default function PropertyDetail() {
    * USE BACKEND IMAGES
    * ============================================================
    */
+
   const images =
     propertyImages.length > 0
       ? propertyImages
@@ -363,6 +426,7 @@ export default function PropertyDetail() {
    * FIND SELLER ID
    * ============================================================
    */
+
   const sellerId =
     property.sellerId ||
     property.ownerId ||
@@ -377,6 +441,7 @@ export default function PropertyDetail() {
    * IMAGE CONTROLS
    * ============================================================
    */
+
   const nextImg = () => {
     if (images.length === 0) {
       return;
@@ -405,6 +470,7 @@ export default function PropertyDetail() {
    * FAVORITE
    * ============================================================
    */
+
   const favorite = isFavorite(property.id);
 
   const handleFavorite = () => {
@@ -421,6 +487,7 @@ export default function PropertyDetail() {
    * MESSAGE OWNER
    * ============================================================
    */
+
   const handleMessageOwner = async () => {
     setMessageSuccess("");
     setMessageError("");
@@ -479,12 +546,148 @@ export default function PropertyDetail() {
       setMessageLoading(false);
     }
   };
+/*
+ * ============================================================
+ * BUY PROPERTY
+ * ============================================================
+ */
 
+const handleBuyProperty = async () => {
+  setPaymentError("");
+  setPaymentSuccess("");
+
+  if (!isAuthenticated) {
+    navigate("/login");
+    return;
+  }
+
+  if (user?.role !== "buyer") {
+    setPaymentError(
+      "Only buyers can purchase a property."
+    );
+    return;
+  }
+
+  if (!property?.id) {
+    setPaymentError(
+      "Property information is not available."
+    );
+    return;
+  }
+
+  const listingType = String(
+  property.listingType || ""
+).toLowerCase();
+
+if (!["buy", "sale", "for sale"].includes(listingType)) {
+  setPaymentError(
+    "Only properties listed for sale can be purchased."
+  );
+  return;
+}
+
+  if (
+    String(property.status || "").toUpperCase() !==
+    "AVAILABLE"
+  ) {
+    setPaymentError(
+      "This property is currently not available for purchase."
+    );
+    return;
+  }
+
+  try {
+    setPaymentLoading(true);
+
+    /*
+     * Step 1:
+     * Ask backend to create the payment and
+     * Razorpay order.
+     *
+     * POST /api/payments
+     */
+    const payment =
+      await paymentService.createPayment(
+        property.id
+      );
+
+    if (!payment?.razorpayOrderId) {
+      throw new Error(
+        "Payment order was not created successfully."
+      );
+    }
+
+    /*
+     * Step 2:
+     * Open Razorpay Checkout.
+     */
+    await paymentService.openCheckout({
+      payment,
+      user,
+      property,
+
+      /*
+       * Step 3:
+       * Razorpay returns payment details.
+       * paymentService verifies them with backend.
+       */
+      onSuccess: (verifiedPayment) => {
+        setPaymentLoading(false);
+
+        setPaymentSuccess(
+          "Payment successful! The property has been purchased successfully."
+        );
+
+        console.log(
+          "Payment verified successfully:",
+          verifiedPayment
+        );
+
+        /*
+         * Give the backend a moment to finish
+         * the related transaction/invoice work,
+         * then open Buyer Payments.
+         */
+        setTimeout(() => {
+          navigate("/buyer/dashboard/payments");
+        }, 1500);
+      },
+
+      onFailure: (error) => {
+        setPaymentLoading(false);
+
+        console.error(
+          "Payment failed:",
+          error
+        );
+
+        setPaymentError(
+          error?.message ||
+            "Payment could not be completed. Please try again."
+        );
+      },
+    });
+  } catch (error) {
+    console.error(
+      "Failed to start property payment:",
+      error
+    );
+
+    setPaymentLoading(false);
+
+    setPaymentError(
+      error?.response?.data?.message ||
+        error?.message ||
+        "Unable to start payment. Please try again."
+    );
+  }
+};
   /*
    * ============================================================
    * OPEN INTEREST FORM
    * ============================================================
    */
+
   const handleInterested = () => {
     setLeadError("");
     setSubmitted(false);
@@ -516,6 +719,7 @@ export default function PropertyDetail() {
    * LEAD SUBMISSION
    * ============================================================
    */
+
   const handleLeadSubmit = async (e) => {
     e.preventDefault();
 
@@ -618,40 +822,73 @@ export default function PropertyDetail() {
    * ============================================================
    * TOUR REQUEST
    * ============================================================
+   *
+   * This now creates the tour through:
+   *
+   * POST /api/tours
+   *
+   * No backend file changes are required.
+   *
+   * ============================================================
    */
-  const handleTourRequest = () => {
+
+  const handleTourRequest = async () => {
     if (!isAuthenticated) {
       navigate("/login");
       return;
     }
 
-    if (!leadForm.name) {
-      setShowLeadForm(true);
+    if (user?.role !== "buyer") {
+      alert(
+        "Only buyers can request a property tour."
+      );
       return;
     }
 
-    addTourRequest({
-      propertyId: property.id,
-      name: leadForm.name,
-      email: leadForm.email,
-      phone: leadForm.phone,
+    try {
+      const tourData = {
+        propertyId: property.id,
 
-      preferredDate: new Date(
-        Date.now() + 86400000 * 2
-      )
-        .toISOString()
-        .slice(0, 10),
+        tourDate: new Date(
+          Date.now() + 86400000 * 2
+        )
+          .toISOString()
+          .slice(0, 10),
 
-      preferredTime: "11:00 AM",
+        tourTime: "11:00:00",
 
-      notes: "Requested from property page",
+        notes: "Requested from property page",
+      };
 
-      agentId: property.agentId || 1,
-    });
+      console.log(
+        "Creating tour:",
+        tourData
+      );
 
-    alert(
-      "Tour request submitted! Agent will contact you soon."
-    );
+      const createdTour =
+        await tourService.createTour(
+          tourData
+        );
+
+      console.log(
+        "Tour created successfully:",
+        createdTour
+      );
+
+      alert(
+        "Tour request submitted! Agent will contact you soon."
+      );
+    } catch (error) {
+      console.error(
+        "Failed to create tour request:",
+        error
+      );
+
+      alert(
+        error.message ||
+          "Failed to submit tour request. Please try again."
+      );
+    }
   };
 
   /*
@@ -659,6 +896,7 @@ export default function PropertyDetail() {
    * REVIEW SUBMISSION
    * ============================================================
    */
+
   const handleReviewSubmit = async (e) => {
     e.preventDefault();
 
@@ -727,6 +965,7 @@ export default function PropertyDetail() {
    * REVIEW DATE
    * ============================================================
    */
+
   const formatReviewDate = (date) => {
     if (!date) {
       return "-";
@@ -734,7 +973,9 @@ export default function PropertyDetail() {
 
     const parsedDate = new Date(date);
 
-    if (Number.isNaN(parsedDate.getTime())) {
+    if (
+      Number.isNaN(parsedDate.getTime())
+    ) {
       return date;
     }
 
@@ -753,6 +994,7 @@ export default function PropertyDetail() {
    * REVIEW AVERAGE
    * ============================================================
    */
+
   const averageReviewRating =
     reviews.length > 0
       ? (
@@ -771,6 +1013,7 @@ export default function PropertyDetail() {
       {/* ========================================================
           BACK TO LISTINGS
       ======================================================== */}
+
       <Link
         to="/properties"
         className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-purple-600 mb-4 transition"
@@ -784,11 +1027,13 @@ export default function PropertyDetail() {
         {/* ======================================================
             LEFT SIDE
         ====================================================== */}
+
         <div className="lg:col-span-2 space-y-6">
 
           {/* ====================================================
               IMAGE GALLERY
           ==================================================== */}
+
           <div>
 
             <div className="relative rounded-xl overflow-hidden bg-gray-100 aspect-[16/10]">
@@ -817,6 +1062,7 @@ export default function PropertyDetail() {
               )}
 
               {/* FAVORITE */}
+
               <button
                 type="button"
                 onClick={handleFavorite}
@@ -837,6 +1083,7 @@ export default function PropertyDetail() {
               </button>
 
               {/* IMAGE NAVIGATION */}
+
               {images.length > 1 && (
                 <>
                   <button
@@ -880,6 +1127,7 @@ export default function PropertyDetail() {
               )}
 
               {/* BUY / RENT BADGE */}
+
               <div className="absolute top-3 left-3">
                 <span
                   className={`px-3 py-1 text-sm font-semibold rounded-full ${
@@ -896,6 +1144,7 @@ export default function PropertyDetail() {
             {/* ==================================================
                 IMAGE THUMBNAILS
             ================================================== */}
+
             {images.length > 1 && (
               <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
                 {images.map((image, index) => (
@@ -934,6 +1183,7 @@ export default function PropertyDetail() {
           {/* ====================================================
               TITLE & PRICE
           ==================================================== */}
+
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">
               {property.title}
@@ -967,6 +1217,7 @@ export default function PropertyDetail() {
           {/* ====================================================
               KEY SPECIFICATIONS
           ==================================================== */}
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
 
             {property.bhk && (
@@ -1001,7 +1252,8 @@ export default function PropertyDetail() {
               <Maximize className="w-5 h-5 mx-auto text-gray-500 mb-1" />
 
               <div className="font-semibold">
-                {property.area} {property.areaUnit}
+                {property.area}{" "}
+                {property.areaUnit}
               </div>
 
               <div className="text-xs text-gray-500">
@@ -1022,12 +1274,12 @@ export default function PropertyDetail() {
                 </div>
               </div>
             )}
-
           </div>
 
           {/* ====================================================
               DESCRIPTION
           ==================================================== */}
+
           <div>
             <h2 className="text-lg font-semibold mb-2">
               Description
@@ -1041,6 +1293,7 @@ export default function PropertyDetail() {
           {/* ====================================================
               PROPERTY DETAILS
           ==================================================== */}
+
           <div>
             <h2 className="text-lg font-semibold mb-3">
               Property Details
@@ -1110,13 +1363,13 @@ export default function PropertyDetail() {
                   </span>
                 </div>
               )}
-
             </div>
           </div>
 
           {/* ====================================================
               AMENITIES
           ==================================================== */}
+
           {property.amenities?.length > 0 && (
             <div>
               <h2 className="text-lg font-semibold mb-3">
@@ -1124,15 +1377,17 @@ export default function PropertyDetail() {
               </h2>
 
               <div className="flex flex-wrap gap-2">
-                {property.amenities.map((amenity) => (
-                  <span
-                    key={amenity}
-                    className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-sm px-3 py-1.5 rounded-full"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    {amenity}
-                  </span>
-                ))}
+                {property.amenities.map(
+                  (amenity) => (
+                    <span
+                      key={amenity}
+                      className="inline-flex items-center gap-1.5 bg-green-50 text-green-700 text-sm px-3 py-1.5 rounded-full"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      {amenity}
+                    </span>
+                  )
+                )}
               </div>
             </div>
           )}
@@ -1140,6 +1395,7 @@ export default function PropertyDetail() {
           {/* ====================================================
               REVIEWS
           ==================================================== */}
+
           <div className="border-t border-gray-200 pt-6">
 
             <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
@@ -1289,7 +1545,9 @@ export default function PropertyDetail() {
 
                 <button
                   type="button"
-                  onClick={() => navigate("/login")}
+                  onClick={() =>
+                    navigate("/login")
+                  }
                   className="mt-3 text-sm font-semibold text-purple-600 hover:text-purple-700"
                 >
                   Login to Review
@@ -1397,6 +1655,7 @@ export default function PropertyDetail() {
         {/* ======================================================
             RIGHT SIDE
         ====================================================== */}
+
         <div className="space-y-4">
 
           <div className="bg-white border border-gray-200 rounded-xl p-5 sticky top-24 shadow-sm">
@@ -1404,7 +1663,27 @@ export default function PropertyDetail() {
             <h3 className="font-semibold text-lg mb-4">
               Contact Agent/Seller
             </h3>
+{paymentSuccess && (
+  <div className="mb-4 bg-green-50 border border-green-100 text-green-700 rounded-lg px-3 py-3 text-sm flex items-start gap-2">
+    <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
 
+    <div>
+      <p className="font-medium">
+        Payment Successful
+      </p>
+
+      <p className="text-xs mt-0.5">
+        {paymentSuccess}
+      </p>
+    </div>
+  </div>
+)}
+
+{paymentError && (
+  <div className="mb-4 bg-red-50 border border-red-100 text-red-600 rounded-lg px-3 py-3 text-sm">
+    {paymentError}
+  </div>
+)}
             {messageSuccess && (
               <div className="mb-4 bg-green-50 border border-green-100 text-green-700 rounded-lg px-3 py-3 text-sm flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
@@ -1593,7 +1872,22 @@ export default function PropertyDetail() {
             ) : (
 
               <div className="space-y-3">
-
+{["buy", "sale", "for sale"].includes(
+  String(property.listingType || "").toLowerCase()
+) &&
+String(property.status || "").toUpperCase() === "AVAILABLE" &&
+user?.role === "buyer" && (
+    <button
+      type="button"
+      onClick={handleBuyProperty}
+      disabled={paymentLoading}
+      className="w-full bg-purple-600 text-white py-2.5 rounded-lg font-semibold hover:bg-purple-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      {paymentLoading
+        ? "Processing Payment..."
+        : "Buy Property"}
+    </button>
+  )}
                 <button
                   type="button"
                   onClick={handleInterested}
@@ -1668,3 +1962,4 @@ export default function PropertyDetail() {
     </div>
   );
 }
+

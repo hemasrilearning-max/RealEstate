@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import propertyService from "../../services/propertyService";
 import leadService from "../../services/leadService";
+import propertyViewService from "../../services/propertyViewService";
 
 export default function OwnerAnalytics() {
   const { user } = useAuth();
@@ -12,7 +13,9 @@ export default function OwnerAnalytics() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (!user?.userId) {
+    const userId = user?.userId || user?.id;
+
+    if (!userId) {
       setProperties([]);
       setLeads([]);
       setLoading(false);
@@ -20,21 +23,25 @@ export default function OwnerAnalytics() {
     }
 
     loadAnalytics();
-  }, [user?.userId]);
+  }, [user?.userId, user?.id]);
 
   const loadAnalytics = async () => {
     try {
       setLoading(true);
       setError("");
 
+      const userId = user?.userId || user?.id;
+
+      if (!userId) {
+        setProperties([]);
+        setLeads([]);
+        return;
+      }
+
       const [propertyResponse, leadResponse] =
         await Promise.all([
-          propertyService.getPropertiesBySeller(
-            user.userId
-          ),
-          leadService.getLeadsBySeller(
-            user.userId
-          ),
+          propertyService.getPropertiesBySeller(userId),
+          leadService.getLeadsBySeller(userId),
         ]);
 
       /*
@@ -51,28 +58,80 @@ export default function OwnerAnalytics() {
             propertyResponse?.properties ||
             [];
 
-      const normalizedProperties =
-        ownerProperties.map((property) => ({
-          ...property,
+      /*
+       * ---------------------------------------------------------
+       * PROPERTY VIEWS
+       *
+       * property.views is not necessarily returned by the
+       * property API.
+       *
+       * Use the existing propertyViewService that is already
+       * used by OwnerProperties.jsx.
+       * ---------------------------------------------------------
+       */
 
-          id: property.id,
+      const normalizedProperties = await Promise.all(
+        ownerProperties.map(async (property) => {
+          let views = 0;
 
-          title:
-            property.title ||
-            "Untitled Property",
+          try {
+            const viewResponse =
+              await propertyViewService.getViewCount(
+                property.id
+              );
 
-          /*
-           * Small project/demo numbers.
-           *
-           * Maximum 60 views per property.
-           * This prevents production-sized numbers
-           * from appearing in the project demo.
-           */
-          views: Math.min(
-            Number(property.views) || 0,
-            60
-          ),
-        }));
+            /*
+             * Support the possible response formats.
+             */
+            if (typeof viewResponse === "number") {
+              views = viewResponse;
+            } else if (
+              typeof viewResponse === "string"
+            ) {
+              views = Number(viewResponse) || 0;
+            } else if (viewResponse) {
+              views =
+                Number(
+                  viewResponse.count ??
+                    viewResponse.viewCount ??
+                    viewResponse.views ??
+                    viewResponse.data ??
+                    0
+                ) || 0;
+            }
+          } catch (viewError) {
+            console.warn(
+              `Unable to load views for property ${property.id}:`,
+              viewError
+            );
+
+            /*
+             * Fallback in case the property response itself
+             * contains a views field.
+             */
+            views =
+              Number(property.views) || 0;
+          }
+
+          return {
+            ...property,
+
+            id: property.id,
+
+            title:
+              property.title ||
+              "Untitled Property",
+
+            /*
+             * Real backend property view count.
+             *
+             * Maximum 60 is retained from the existing
+             * project/demo behaviour.
+             */
+            views: Math.min(views, 60),
+          };
+        })
+      );
 
       setProperties(normalizedProperties);
 
@@ -90,10 +149,6 @@ export default function OwnerAnalytics() {
             leadResponse?.leads ||
             [];
 
-      /*
-       * Keep the actual backend lead records.
-       * We do not create fake leads.
-       */
       setLeads(
         ownerLeads.map((lead) => ({
           ...lead,
@@ -147,9 +202,6 @@ export default function OwnerAnalytics() {
     0
   );
 
-  /*
-   * Keep lead count based on actual backend leads.
-   */
   const totalLeads = leads.length;
 
   /*
@@ -249,14 +301,7 @@ export default function OwnerAnalytics() {
    * ---------------------------------------------------------
    */
 
-  const highestViews = properties.reduce(
-    (highest, property) =>
-      Math.max(
-        highest,
-        Number(property.views) || 0
-      ),
-    0
-  );
+  const MAX_VIEWS = 10;
 
   const assetPerformance =
     properties.map((property) => {
@@ -280,27 +325,17 @@ export default function OwnerAnalytics() {
         leads:
           propertyLeads,
 
-        /*
-         * Bar represents property views.
-         *
-         * Highest-viewed property = 100%
-         */
-        performance:
-          highestViews > 0
-            ? Math.round(
-                ((Number(
-                  property.views
-                ) || 0) /
-                  highestViews) *
-                  100
-              )
-            : 0,
+        performance: Math.min(
+  Math.round(
+    ((Number(property.views) || 0) /
+      MAX_VIEWS) *
+      15
+  ),
+  15
+),
       };
     });
 
-  /*
-   * Highest traffic properties first.
-   */
   assetPerformance.sort(
     (a, b) =>
       b.views - a.views
