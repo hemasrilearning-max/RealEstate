@@ -1,3 +1,4 @@
+
 package com.realestate.modules.lead.controller;
 
 import com.realestate.modules.lead.dto.request.CreateLeadRequest;
@@ -75,6 +76,19 @@ public class LeadController {
         leadService.getLeadsByProperty(propertyId));
   }
 
+  /*
+   * =========================================================
+   * LEAD COUNT FOR PROPERTY
+   * =========================================================
+   */
+  @GetMapping("/property/{propertyId}/count")
+  public ResponseEntity<Long> getLeadCount(
+      @PathVariable Long propertyId) {
+
+    return ResponseEntity.ok(
+        leadService.getLeadCount(propertyId));
+  }
+
   // Leads by status
   @GetMapping("/status/{status}")
   public ResponseEntity<List<LeadResponse>> getLeadsByStatus(
@@ -91,7 +105,9 @@ public class LeadController {
       @RequestParam LeadStatus status) {
 
     return ResponseEntity.ok(
-        leadService.updateLeadStatus(leadId, status));
+        leadService.updateLeadStatus(
+            leadId,
+            status));
   }
 
   // Delete lead
@@ -104,3 +120,4 @@ public class LeadController {
     return ResponseEntity.noContent().build();
   }
 }
+

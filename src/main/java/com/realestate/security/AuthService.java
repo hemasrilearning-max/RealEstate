@@ -2,15 +2,8 @@ package com.realestate.security;
 
 import java.time.LocalDateTime;
 
-import lombok.RequiredArgsConstructor;
-
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-
 import com.realestate.common.exception.RegistrationException;
+import com.realestate.modules.user.dto.request.CreateUserRequest;
 import com.realestate.modules.user.entity.Role;
 import com.realestate.modules.user.entity.User;
 import com.realestate.modules.user.enums.RoleType;
@@ -21,26 +14,26 @@ import com.realestate.otp.OtpService;
 import com.realestate.otp.OtpVerification;
 import com.realestate.otp.OtpVerificationRepository;
 
+import lombok.RequiredArgsConstructor;
+
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
 
     private final AuthenticationManager authenticationManager;
-
     private final CustomUserDetailsService userDetailsService;
-
     private final UserRepository userRepository;
-
     private final JwtService jwtService;
-
     private final RoleRepository roleRepository;
-
     private final PasswordEncoder passwordEncoder;
-
     private final OtpService otpService;
-
     private final OtpVerificationRepository otpVerificationRepository;
-
 
     // ============================================================
     // CHECK EMAIL
@@ -57,7 +50,6 @@ public class AuthService {
 
         return "Email is available.";
     }
-
 
     // ============================================================
     // LOGIN
@@ -104,12 +96,11 @@ public class AuthService {
                 .build();
     }
 
-
     // ============================================================
     // FINAL REGISTRATION
     // ============================================================
 
-    public String register(RegisterRequest request) {
+    public String register(CreateUserRequest request) {
 
         // --------------------------------------------------------
         // 1. Check whether email already exists
@@ -121,7 +112,6 @@ public class AuthService {
                     "Email is already registered. Please use a different email."
             );
         }
-
 
         // --------------------------------------------------------
         // 2. Find latest registration OTP
@@ -139,9 +129,8 @@ public class AuthService {
                                 )
                         );
 
-
         // --------------------------------------------------------
-        // 3. Check whether registration OTP was verified
+        // 3. Check whether OTP was verified
         // --------------------------------------------------------
 
         if (!registrationOtp.isVerified()) {
@@ -150,7 +139,6 @@ public class AuthService {
                     "Please verify the registration OTP before completing registration."
             );
         }
-
 
         // --------------------------------------------------------
         // 4. Check OTP expiry
@@ -164,7 +152,6 @@ public class AuthService {
             );
         }
 
-
         // --------------------------------------------------------
         // 5. Determine username
         // --------------------------------------------------------
@@ -172,10 +159,8 @@ public class AuthService {
         String username = request.getUsername();
 
         if (username == null || username.trim().isEmpty()) {
-
             username = request.getEmail();
         }
-
 
         // --------------------------------------------------------
         // 6. Check username uniqueness
@@ -188,19 +173,18 @@ public class AuthService {
             );
         }
 
-
         // --------------------------------------------------------
-        // 7. Allow only BUYER or SELLER
+        // 7. Allow BUYER, SELLER and BROKER
         // --------------------------------------------------------
 
         if (request.getRole() != RoleType.BUYER
-                && request.getRole() != RoleType.SELLER) {
+                && request.getRole() != RoleType.SELLER
+                && request.getRole() != RoleType.BROKER) {
 
             throw new RegistrationException(
-                    "Only BUYER or SELLER registration is allowed."
+                    "Only BUYER, SELLER or BROKER registration is allowed."
             );
         }
-
 
         // --------------------------------------------------------
         // 8. Find selected role
@@ -214,9 +198,8 @@ public class AuthService {
                         )
                 );
 
-
         // --------------------------------------------------------
-        // 9. Create User
+        // 9. Create user
         // --------------------------------------------------------
 
         User user = User.builder()
@@ -230,24 +213,24 @@ public class AuthService {
                         )
                 )
                 .phone(request.getPhone())
-                .address(request.getAddress())
-                .profilePhotoPath(request.getProfilePhotoPath())
                 .accountType(request.getAccountType())
                 .role(role)
+
+                // IMPORTANT:
+                // OTP was successfully verified,
+                // therefore email is verified.
                 .emailVerified(true)
+
                 .build();
 
-
         // --------------------------------------------------------
-        // 10. Save User
+        // 10. Save user
         // --------------------------------------------------------
 
         userRepository.save(user);
 
-
         return "Registration successful. You can now login.";
     }
-
 
     // ============================================================
     // FORGOT PASSWORD
@@ -264,19 +247,15 @@ public class AuthService {
                         )
                 );
 
-
         // Generate PASSWORD_RESET OTP
-
         otpService.generateAndSendOtp(
                 user.getEmail(),
                 user.getFirstName(),
                 OtpPurpose.PASSWORD_RESET
         );
 
-
         return "Password reset OTP has been sent to your email.";
     }
-
 
     // ============================================================
     // RESET PASSWORD
@@ -292,7 +271,6 @@ public class AuthService {
                                 "No account found with this email."
                         )
                 );
-
 
         // --------------------------------------------------------
         // Find latest PASSWORD_RESET OTP
@@ -310,7 +288,6 @@ public class AuthService {
                                 )
                         );
 
-
         // --------------------------------------------------------
         // OTP must be verified
         // --------------------------------------------------------
@@ -322,7 +299,6 @@ public class AuthService {
             );
         }
 
-
         // --------------------------------------------------------
         // OTP must not be expired
         // --------------------------------------------------------
@@ -331,10 +307,9 @@ public class AuthService {
                 .isBefore(LocalDateTime.now())) {
 
             throw new RegistrationException(
-                    "Password reset OTP has expired. Please request a new OTP."
+                    "Password reset OTP has expired. Please request a new password."
             );
         }
-
 
         // --------------------------------------------------------
         // Update password
@@ -347,7 +322,6 @@ public class AuthService {
         );
 
         userRepository.save(user);
-
 
         return "Password reset successfully. You can now login with your new password.";
     }

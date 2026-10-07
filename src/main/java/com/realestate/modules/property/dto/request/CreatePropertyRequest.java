@@ -52,10 +52,13 @@ public class CreatePropertyRequest {
   @NotNull(message = "Location ID is required")
   private Long locationId;
 
-   /**
-     * Actual owner/seller of the property.
-     */
-  @NotNull(message = "Seller ID is required")
+  /**
+   * Actual owner/seller of the property.
+   */
   private Long sellerId;
 
+  /**
+   * Optional broker assigned to the property.
+   */
+  private Long brokerId;
 }

@@ -9,9 +9,11 @@ import com.realestate.modules.property.dto.request.CreatePropertyRequest;
 import com.realestate.modules.property.dto.request.UpdatePropertyRequest;
 import com.realestate.modules.property.dto.response.PropertyResponse;
 import com.realestate.modules.property.entity.Property;
+import com.realestate.modules.property.enums.PropertyStatus;
 import com.realestate.modules.property.mapper.PropertyMapper;
 import com.realestate.modules.property.repository.PropertyRepository;
 import com.realestate.modules.property.service.PropertyService;
+import com.realestate.modules.propertyview.service.PropertyViewService;
 import com.realestate.modules.user.entity.User;
 import com.realestate.modules.user.enums.RoleType;
 import com.realestate.modules.user.repository.UserRepository;
@@ -27,13 +29,20 @@ import java.util.List;
 public class PropertyServiceImpl implements PropertyService {
 
   private final PropertyRepository propertyRepository;
+
   private final UserRepository userRepository;
+
   private final LocationRepository locationRepository;
+
   private final PropertyMapper propertyMapper;
+
   private final AuthenticatedUserService authenticatedUserService;
 
   // Media repository used when deleting a property
   private final MediaRepository mediaRepository;
+
+  // Property view service
+  private final PropertyViewService propertyViewService;
 
   // ============================================================
   // CREATE PROPERTY
@@ -67,6 +76,33 @@ public class PropertyServiceImpl implements PropertyService {
     // Set the user who actually created the property
     property.setCreatedBy(seller);
 
+    // ==========================================================
+    // SET BROKER
+    // ==========================================================
+
+    if (request.getBrokerId() != null) {
+
+      User broker = userRepository.findById(request.getBrokerId())
+          .orElseThrow(() -> new ResourceNotFoundException(
+              "Broker not found with id: "
+                  + request.getBrokerId()));
+
+      // Make sure selected user is actually a BROKER
+      if (broker.getRole() == null
+          || broker.getRole().getName() != RoleType.BROKER) {
+
+        throw new IllegalArgumentException(
+            "Selected user is not a BROKER");
+      }
+
+      property.setBroker(broker);
+
+    } else {
+
+      // No broker selected
+      property.setBroker(null);
+    }
+
     // Save property
     Property savedProperty = propertyRepository.save(property);
 
@@ -78,12 +114,15 @@ public class PropertyServiceImpl implements PropertyService {
   // ============================================================
 
   @Override
-  @Transactional(readOnly = true)
+  @Transactional
   public PropertyResponse getPropertyById(Long id) {
 
     Property property = propertyRepository.findById(id)
         .orElseThrow(() -> new ResourceNotFoundException(
             "Property not found with id: " + id));
+
+    // Record unique buyer view
+    propertyViewService.recordView(id);
 
     return propertyMapper.toResponse(property);
   }
@@ -121,7 +160,7 @@ public class PropertyServiceImpl implements PropertyService {
           "User with id " + sellerId + " is not a SELLER");
     }
 
-    return propertyRepository.findBySellerId(sellerId)
+    return propertyRepository.findBySeller_Id(sellerId)
         .stream()
         .map(propertyMapper::toResponse)
         .toList();
@@ -197,6 +236,33 @@ public class PropertyServiceImpl implements PropertyService {
           request.getOwnershipType());
     }
 
+    // ==========================================================
+    // UPDATE BROKER
+    // ==========================================================
+
+    if (request.getBrokerId() != null) {
+
+      User broker = userRepository.findById(request.getBrokerId())
+          .orElseThrow(() -> new ResourceNotFoundException(
+              "Broker not found with id: "
+                  + request.getBrokerId()));
+
+      // Make sure selected user is actually a BROKER
+      if (broker.getRole() == null
+          || broker.getRole().getName() != RoleType.BROKER) {
+
+        throw new IllegalArgumentException(
+            "Selected user is not a BROKER");
+      }
+
+      property.setBroker(broker);
+
+    } else {
+
+      // No broker selected
+      property.setBroker(null);
+    }
+
     // Update location
     if (request.getLocationId() != null) {
 
@@ -213,6 +279,46 @@ public class PropertyServiceImpl implements PropertyService {
     Property updatedProperty = propertyRepository.save(property);
 
     return propertyMapper.toResponse(updatedProperty);
+  }
+
+  // ============================================================
+  // APPROVE PROPERTY
+  // ============================================================
+
+  @Override
+  @Transactional
+  public PropertyResponse approveProperty(Long id) {
+
+    // Get currently logged-in user from JWT
+    User currentUser = authenticatedUserService.getCurrentUser();
+
+    // Only ADMIN or SUPER_ADMIN can approve properties
+    if (currentUser.getRole() == null
+        || (currentUser.getRole().getName() != RoleType.ADMIN
+            && currentUser.getRole().getName() != RoleType.SUPER_ADMIN)) {
+
+      throw new AccessDeniedException(
+          "Only ADMIN or SUPER_ADMIN users can approve properties");
+    }
+
+    // Find property
+    Property property = propertyRepository.findById(id)
+        .orElseThrow(() -> new ResourceNotFoundException(
+            "Property not found with id: " + id));
+
+    // Only PENDING properties can be approved
+    if (property.getStatus() != PropertyStatus.PENDING) {
+      throw new IllegalStateException(
+          "Only PENDING properties can be approved");
+    }
+
+    // Change status from PENDING to AVAILABLE
+    property.setStatus(PropertyStatus.AVAILABLE);
+
+    // Save approved property
+    Property approvedProperty = propertyRepository.save(property);
+
+    return propertyMapper.toResponse(approvedProperty);
   }
 
   // ============================================================
@@ -234,11 +340,11 @@ public class PropertyServiceImpl implements PropertyService {
     // ----------------------------------------------------------
     // DELETE MEDIA FIRST
     // ----------------------------------------------------------
-    //
+
     // media.property_id references properties.id.
     // Therefore media records must be removed before
     // deleting the property.
-    //
+
     mediaRepository.deleteByPropertyId(id);
 
     // ----------------------------------------------------------

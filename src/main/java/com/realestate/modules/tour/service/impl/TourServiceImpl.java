@@ -1,5 +1,7 @@
 package com.realestate.modules.tour.service.impl;
 
+import com.realestate.modules.notification.dto.request.CreateNotificationRequest;
+import com.realestate.modules.notification.service.NotificationService;
 import com.realestate.modules.property.entity.Property;
 import com.realestate.modules.property.repository.PropertyRepository;
 import com.realestate.modules.tour.dto.request.CreateTourRequest;
@@ -29,6 +31,9 @@ public class TourServiceImpl implements TourService {
   private final PropertyRepository propertyRepository;
   private final TourMapper tourMapper;
   private final AuthenticatedUserService authenticatedUserService;
+
+  // Notification service
+  private final NotificationService notificationService;
 
   // ============================================================
   // CREATE TOUR
@@ -79,6 +84,58 @@ public class TourServiceImpl implements TourService {
 
     // Save tour
     Tour savedTour = tourRepository.save(tour);
+
+    // ==========================================================
+    // NOTIFY SELLER
+    // ==========================================================
+
+    User seller = property.getSeller();
+
+    if (seller != null) {
+
+      CreateNotificationRequest sellerNotification = CreateNotificationRequest.builder()
+          .title("New Tour Request")
+          .message(
+              "A buyer has requested a property tour for "
+                  + property.getTitle()
+                  + " on "
+                  + request.getTourDate()
+                  + " at "
+                  + request.getTourTime()
+                  + ".")
+          .type("TOUR_REQUEST")
+          .build();
+
+      notificationService.createNotification(
+          seller,
+          sellerNotification);
+    }
+
+    // ==========================================================
+    // NOTIFY BROKER
+    // ==========================================================
+
+    User broker = property.getBroker();
+
+    if (broker != null) {
+
+      CreateNotificationRequest brokerNotification = CreateNotificationRequest.builder()
+          .title("New Tour Request")
+          .message(
+              "A buyer has requested a property tour for "
+                  + property.getTitle()
+                  + " on "
+                  + request.getTourDate()
+                  + " at "
+                  + request.getTourTime()
+                  + ".")
+          .type("TOUR_REQUEST")
+          .build();
+
+      notificationService.createNotification(
+          broker,
+          brokerNotification);
+    }
 
     return tourMapper.toResponse(savedTour);
   }
@@ -205,22 +262,94 @@ public class TourServiceImpl implements TourService {
 
     User currentUser = authenticatedUserService.getCurrentUser();
 
-    /*
-     * For now, allow the buyer who owns the tour to update it.
-     * Later, when Agent/Admin functionality is implemented,
-     * Agent/Admin authorization can be added here.
-     */
-    if (!tour.getBuyer()
-        .getId()
-        .equals(currentUser.getId())) {
+    Property property = tour.getProperty();
+
+    // Check whether current user is the property seller
+    boolean isSeller = property.getSeller() != null
+        && property.getSeller()
+            .getId()
+            .equals(currentUser.getId());
+
+    // Check whether current user is the assigned broker
+    boolean isBroker = property.getBroker() != null
+        && property.getBroker()
+            .getId()
+            .equals(currentUser.getId());
+
+    // Only seller OR broker can approve/reject
+    if (!isSeller && !isBroker) {
 
       throw new AccessDeniedException(
-          "You are not authorized to update this tour status");
+          "Only the property seller or assigned broker "
+              + "can update the tour status");
     }
 
+    // Only pending tours can be approved/rejected
+    if (tour.getStatus() != TourStatus.PENDING) {
+
+      throw new IllegalStateException(
+          "Only pending tours can be approved or rejected");
+    }
+
+    // Seller/Broker can only confirm or reject
+    if (status != TourStatus.CONFIRMED
+        && status != TourStatus.REJECTED) {
+
+      throw new IllegalArgumentException(
+          "Seller or broker can only CONFIRM or REJECT a tour");
+    }
+
+    // Update status
     tour.setStatus(status);
 
     Tour updatedTour = tourRepository.save(tour);
+
+    // ==========================================================
+    // NOTIFY BUYER
+    // ==========================================================
+
+    User buyer = tour.getBuyer();
+
+    if (buyer != null) {
+
+      String title;
+      String message;
+
+      if (status == TourStatus.CONFIRMED) {
+
+        title = "Tour Confirmed";
+
+        message = "Your tour request for "
+            + property.getTitle()
+            + " on "
+            + tour.getTourDate()
+            + " at "
+            + tour.getTourTime()
+            + " has been confirmed.";
+
+      } else {
+
+        title = "Tour Rejected";
+
+        message = "Your tour request for "
+            + property.getTitle()
+            + " on "
+            + tour.getTourDate()
+            + " at "
+            + tour.getTourTime()
+            + " has been rejected.";
+      }
+
+      CreateNotificationRequest buyerNotification = CreateNotificationRequest.builder()
+          .title(title)
+          .message(message)
+          .type("TOUR_STATUS")
+          .build();
+
+      notificationService.createNotification(
+          buyer,
+          buyerNotification);
+    }
 
     return tourMapper.toResponse(updatedTour);
   }
@@ -252,6 +381,7 @@ public class TourServiceImpl implements TourService {
 
     // Only BUYER can modify their own tour
     if (currentUser.getRole().getName() != RoleType.BUYER) {
+
       throw new AccessDeniedException(
           "Only BUYER users can modify tours");
     }

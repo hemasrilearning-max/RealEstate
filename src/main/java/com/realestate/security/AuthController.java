@@ -1,16 +1,17 @@
 package com.realestate.security;
 
+import com.realestate.modules.user.dto.request.CreateUserRequest;
+import com.realestate.otp.OtpPurpose;
+import com.realestate.otp.OtpRequest;
+import com.realestate.otp.OtpService;
+import com.realestate.otp.OtpVerificationRequest;
+
 import jakarta.validation.Valid;
 
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import com.realestate.otp.OtpRequest;
-import com.realestate.otp.OtpService;
-import com.realestate.otp.OtpVerificationRequest;
-import com.realestate.otp.OtpPurpose;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -19,7 +20,6 @@ public class AuthController {
 
     private final AuthService authService;
     private final OtpService otpService;
-
 
     // ============================================================
     // CHECK EMAIL
@@ -34,20 +34,18 @@ public class AuthController {
         );
     }
 
-
     // ============================================================
     // REGISTER
     // ============================================================
 
     @PostMapping("/register")
     public ResponseEntity<String> register(
-            @Valid @RequestBody RegisterRequest request) {
+            @Valid @RequestBody CreateUserRequest request) {
 
         return ResponseEntity.ok(
                 authService.register(request)
         );
     }
-
 
     // ============================================================
     // LOGIN
@@ -61,7 +59,6 @@ public class AuthController {
                 authService.login(request)
         );
     }
-
 
     // ============================================================
     // GENERATE OTP
@@ -82,7 +79,6 @@ public class AuthController {
         );
     }
 
-
     // ============================================================
     // VERIFY OTP
     // ============================================================
@@ -102,7 +98,6 @@ public class AuthController {
         );
     }
 
-
     // ============================================================
     // FORGOT PASSWORD
     // ============================================================
@@ -116,7 +111,6 @@ public class AuthController {
         );
     }
 
-
     // ============================================================
     // RESET PASSWORD
     // ============================================================
@@ -129,7 +123,6 @@ public class AuthController {
                 authService.resetPassword(request)
         );
     }
-
 
     // ============================================================
     // HEALTH CHECK
