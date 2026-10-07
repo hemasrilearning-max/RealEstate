@@ -11,10 +11,10 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   (config) => {
     // Support the token keys currently used by the application.
-    const token =
-      localStorage.getItem("token") ||
-      localStorage.getItem("accessToken") ||
-      localStorage.getItem("re_access_token");
+    // const token =
+    //   localStorage.getItem("token") ||
+    //   localStorage.getItem("accessToken") ||
+    //   localStorage.getItem("re_access_token");
 
         // Get the CURRENT logged-in user's token.
         // Every login can have a different JWT.
