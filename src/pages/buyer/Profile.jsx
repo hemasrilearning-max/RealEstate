@@ -1,107 +1,93 @@
-import React, {
-  useEffect,
-  useRef,
-  useState,
-} from "react";
 
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
-import userService from "../../services/userService";
+import brokerService from "../../services/brokerService";
 
 import {
+  Star,
   Phone,
   Mail,
-  User,
+  Calendar,
   Camera,
   Upload,
   Trash2,
   CheckCircle2,
-  Pencil,
-  X,
-  Save,
+  User,
   LockKeyhole,
   Eye,
   EyeOff,
+  X,
 } from "lucide-react";
+
+// ============================================================
+// CONSTANTS
+// ============================================================
 
 const MAX_SIZE_MB = 2;
 
 const ACCEPT =
   "image/jpeg,image/png,image/webp,image/gif";
 
-/* ============================================================
-   HELPERS
-============================================================ */
+// ============================================================
+// BROKER PROFILE
+// ============================================================
 
-function getProfileName(profile) {
-  if (profile?.name) {
-    return profile.name;
-  }
-
-  return [
-    profile?.firstName,
-    profile?.lastName,
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
-function mapBackendProfile(profile) {
-  const name = getProfileName(profile);
-
-  return {
-    ...profile,
-
-    id:
-      profile?.id ||
-      profile?.userId,
-
-    userId:
-      profile?.userId ||
-      profile?.id,
-
-    username:
-      profile?.username ||
-      "",
-
-    firstName:
-      profile?.firstName ||
-      "",
-
-    lastName:
-      profile?.lastName ||
-      "",
-
-    name:
-      name || "",
-
-    email:
-      profile?.email ||
-      "",
-
-    phone:
-      profile?.phone ||
-      profile?.phoneNumber ||
-      "",
-  };
-}
-
-/* ============================================================
-   COMPONENT
-============================================================ */
-
-export default function BuyerProfile() {
+export default function BrokerProfile() {
   const {
-    buyer,
+    agent,
     user,
     updateProfile,
   } = useAuth();
 
-  const profile = buyer || user;
+  // ============================================================
+  // BROKER PROFILE
+  // ============================================================
+
+  const brokerProfile = agent || user;
+
+  // ============================================================
+  // BROKER ID
+  // ============================================================
+
+  const brokerId =
+    brokerProfile?.userId ||
+    brokerProfile?.id;
+
+  // ============================================================
+  // REFS
+  // ============================================================
 
   const fileRef = useRef(null);
 
-  const [backendProfile, setBackendProfile] =
-    useState(profile || null);
+  const photoObjectUrlRef = useRef(null);
+
+  // ============================================================
+  // PROFILE STATE
+  // ============================================================
+
+  const [profileData, setProfileData] =
+    useState(brokerProfile);
+
+  const [originalProfile, setOriginalProfile] =
+    useState(brokerProfile);
+
+  const [editForm, setEditForm] = useState({
+    firstName:
+      brokerProfile?.firstName || "",
+    lastName:
+      brokerProfile?.lastName || "",
+    email:
+      brokerProfile?.email || "",
+    phone:
+      brokerProfile?.phone || "",
+  });
+
+  const [editing, setEditing] =
+    useState(false);
+
+  // ============================================================
+  // PHOTO STATE
+  // ============================================================
 
   const [preview, setPreview] =
     useState(null);
@@ -109,8 +95,12 @@ export default function BuyerProfile() {
   const [selectedFile, setSelectedFile] =
     useState(null);
 
-  const [profilePhotoUrl, setProfilePhotoUrl] =
+  const [photoUrl, setPhotoUrl] =
     useState(null);
+
+  // ============================================================
+  // GENERAL STATE
+  // ============================================================
 
   const [error, setError] =
     useState("");
@@ -118,63 +108,33 @@ export default function BuyerProfile() {
   const [success, setSuccess] =
     useState("");
 
-  const [loading, setLoading] =
-    useState(true);
-
   const [saving, setSaving] =
     useState(false);
 
-  const [editing, setEditing] =
-    useState(false);
+  const [loading, setLoading] =
+    useState(true);
 
-  const effectiveProfile =
-    backendProfile || profile;
-
-  const [form, setForm] = useState({
-    username:
-      effectiveProfile?.username ||
-      "",
-
-    name:
-      getProfileName(effectiveProfile) ||
-      "",
-
-    email:
-      effectiveProfile?.email ||
-      "",
-
-    phone:
-      effectiveProfile?.phone ||
-      effectiveProfile?.phoneNumber ||
-      "",
-  });
-
-  const userId =
-    effectiveProfile?.userId ||
-    effectiveProfile?.id;
-
-  /* ============================================================
-     CHANGE PASSWORD STATE
-  ============================================================ */
+  // ============================================================
+  // PASSWORD STATE
+  // ============================================================
 
   const [showChangePassword, setShowChangePassword] =
     useState(false);
 
-  const [passwordForm, setPasswordForm] =
-    useState({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
-
-  const [passwordSaving, setPasswordSaving] =
-    useState(false);
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
 
   const [passwordError, setPasswordError] =
     useState("");
 
   const [passwordSuccess, setPasswordSuccess] =
     useState("");
+
+  const [changingPassword, setChangingPassword] =
+    useState(false);
 
   const [showCurrentPassword, setShowCurrentPassword] =
     useState(false);
@@ -185,15 +145,70 @@ export default function BuyerProfile() {
   const [showConfirmPassword, setShowConfirmPassword] =
     useState(false);
 
-  /* ============================================================
-     LOAD PROFILE FROM BACKEND
-  ============================================================ */
+  // ============================================================
+  // LOAD BROKER PROFILE PHOTO
+  //
+  // GET:
+  // /api/users/{brokerId}/profile-photo
+  // ============================================================
+
+  const loadProfilePhoto = async (userId) => {
+    if (!userId) {
+      return;
+    }
+
+    try {
+      const blob =
+        await brokerService.getBrokerProfilePhoto(
+          userId
+        );
+
+      if (!blob) {
+        setPhotoUrl(null);
+        return;
+      }
+
+      // Revoke old object URL
+      if (photoObjectUrlRef.current) {
+        URL.revokeObjectURL(
+          photoObjectUrlRef.current
+        );
+      }
+
+      const objectUrl =
+        URL.createObjectURL(blob);
+
+      photoObjectUrlRef.current =
+        objectUrl;
+
+      setPhotoUrl(objectUrl);
+    } catch (err) {
+      console.log(
+        "No broker profile photo available:",
+        err.message
+      );
+
+      if (photoObjectUrlRef.current) {
+        URL.revokeObjectURL(
+          photoObjectUrlRef.current
+        );
+
+        photoObjectUrlRef.current = null;
+      }
+
+      setPhotoUrl(null);
+    }
+  };
+
+  // ============================================================
+  // LOAD BROKER PROFILE
+  // ============================================================
 
   useEffect(() => {
-    let cancelled = false;
+    let mounted = true;
 
     const loadProfile = async () => {
-      if (!userId) {
+      if (!brokerId) {
         setLoading(false);
         return;
       }
@@ -202,47 +217,134 @@ export default function BuyerProfile() {
         setLoading(true);
         setError("");
 
-        const response =
-          await userService.getUserById(
-            userId
+        const data =
+          await brokerService.getBrokerProfile(
+            brokerId
           );
 
-        if (cancelled) {
+        if (!mounted) {
           return;
         }
 
-        const normalized =
-          mapBackendProfile(response);
+        const fullName =
+          [
+            data.firstName,
+            data.lastName,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
 
-        setBackendProfile(normalized);
+        const updatedProfile = {
+          ...brokerProfile,
 
-        setForm({
-          username:
-            normalized.username || "",
+          id:
+            data.id ||
+            brokerId,
+
+          userId:
+            data.id ||
+            brokerId,
+
+          firstName:
+            data.firstName || "",
+
+          lastName:
+            data.lastName || "",
 
           name:
-            normalized.name || "",
+            fullName ||
+            data.username ||
+            brokerProfile?.name ||
+            "Broker",
+
+          username:
+            data.username,
 
           email:
-            normalized.email || "",
+            data.email,
 
           phone:
-            normalized.phone || "",
+            data.phone,
+
+          role:
+            data.role ||
+            "BROKER",
+
+          backendRole:
+            data.role ||
+            "BROKER",
+
+          status:
+            data.status,
+
+          accountType:
+            data.accountType,
+
+          profilePhotoUrl:
+            data.profilePhotoUrl,
+
+          createdAt:
+            data.createdAt,
+
+          updatedAt:
+            data.updatedAt,
+
+          rating:
+            data.rating ??
+            brokerProfile?.rating,
+
+          totalDeals:
+            data.totalDeals ??
+            brokerProfile?.totalDeals,
+        };
+
+        setProfileData(
+          updatedProfile
+        );
+
+        setOriginalProfile(
+          updatedProfile
+        );
+
+        setEditForm({
+          firstName:
+            data.firstName || "",
+
+          lastName:
+            data.lastName || "",
+
+          email:
+            data.email || "",
+
+          phone:
+            data.phone || "",
         });
+
+        updateProfile(
+          updatedProfile
+        );
+
+        // Load image directly from:
+        // /api/users/{brokerId}/profile-photo
+
+        await loadProfilePhoto(
+          data.id || brokerId
+        );
       } catch (err) {
         console.error(
-          "Failed to load buyer profile:",
+          "Failed to load broker profile:",
           err
         );
 
-        if (!cancelled) {
+        if (mounted) {
           setError(
             err.message ||
-              "Unable to load profile details."
+              "Failed to load broker profile."
           );
         }
       } finally {
-        if (!cancelled) {
+        if (mounted) {
           setLoading(false);
         }
       }
@@ -251,112 +353,570 @@ export default function BuyerProfile() {
     loadProfile();
 
     return () => {
-      cancelled = true;
+      mounted = false;
     };
-  }, [userId]);
+  }, [brokerId]);
 
-  /* ============================================================
-     LOAD PROFILE PHOTO
-  ============================================================ */
+  // ============================================================
+  // CLEANUP OBJECT URL
+  // ============================================================
 
   useEffect(() => {
-    let cancelled = false;
-    let objectUrl = null;
-
-    const loadProfilePhoto = async () => {
-      if (!userId) {
-        return;
-      }
-
-      try {
-        const blob =
-          await userService.getProfilePhotoBlob(
-            userId
-          );
-
-        if (cancelled) {
-          return;
-        }
-
-        objectUrl =
-          URL.createObjectURL(blob);
-
-        setProfilePhotoUrl(objectUrl);
-      } catch (err) {
-        console.debug(
-          "No backend profile photo available:",
-          err
-        );
-      }
-    };
-
-    loadProfilePhoto();
-
     return () => {
-      cancelled = true;
+      if (photoObjectUrlRef.current) {
+        URL.revokeObjectURL(
+          photoObjectUrlRef.current
+        );
 
-      if (objectUrl) {
-        URL.revokeObjectURL(objectUrl);
+        photoObjectUrlRef.current = null;
       }
     };
-  }, [userId]);
+  }, []);
 
-  if (!effectiveProfile) {
-    return null;
-  }
+  // ============================================================
+  // FORM CHANGE
+  // ============================================================
 
-  /* ============================================================
-     CURRENT AVATAR
-  ============================================================ */
-
-  const currentAvatar =
-    preview ||
-    profilePhotoUrl ||
-    effectiveProfile.avatar ||
-    `https://ui-avatars.com/api/?name=${encodeURIComponent(
-      effectiveProfile.name || "User"
-    )}&background=10b981&color=fff&size=150`;
-
-  /* ============================================================
-     FORM CHANGE
-  ============================================================ */
-
-  const handleChange = (e) => {
+  const handleFormChange = (e) => {
     const {
       name,
       value,
     } = e.target;
 
-    setForm((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
-  };
-
-  /* ============================================================
-     PASSWORD FORM CHANGE
-  ============================================================ */
-
-  const handlePasswordChange = (e) => {
-    const {
-      name,
-      value,
-    } = e.target;
-
-    setPasswordForm((previous) => ({
-      ...previous,
+    setEditForm((current) => ({
+      ...current,
       [name]: value,
     }));
 
-    setPasswordError("");
-    setPasswordSuccess("");
+    setError("");
+    setSuccess("");
   };
 
-  /* ============================================================
-     OPEN CHANGE PASSWORD
-  ============================================================ */
+  // ============================================================
+  // START EDIT
+  // ============================================================
 
-  const openChangePassword = () => {
+  const handleStartEditing = () => {
+    setEditForm({
+      firstName:
+        profileData?.firstName || "",
+
+      lastName:
+        profileData?.lastName || "",
+
+      email:
+        profileData?.email || "",
+
+      phone:
+        profileData?.phone || "",
+    });
+
+    setEditing(true);
+    setError("");
+    setSuccess("");
+  };
+
+  // ============================================================
+  // CANCEL EDIT
+  // ============================================================
+
+  const handleCancelEdit = () => {
+    setEditForm({
+      firstName:
+        originalProfile?.firstName || "",
+
+      lastName:
+        originalProfile?.lastName || "",
+
+      email:
+        originalProfile?.email || "",
+
+      phone:
+        originalProfile?.phone || "",
+    });
+
+    setEditing(false);
+    setError("");
+    setSuccess("");
+  };
+
+  // ============================================================
+  // SAVE PROFILE
+  //
+  // PUT:
+  // /api/users/{brokerId}
+  // ============================================================
+
+  const handleSaveProfile = async () => {
+    if (!brokerId) {
+      setError(
+        "Broker ID is missing. Please log in again."
+      );
+      return;
+    }
+
+    const firstName =
+      editForm.firstName.trim();
+
+    const lastName =
+      editForm.lastName.trim();
+
+    const email =
+      editForm.email.trim();
+
+    const phone =
+      editForm.phone.trim();
+
+    if (!firstName) {
+      setError(
+        "First name is required."
+      );
+      return;
+    }
+
+    if (!lastName) {
+      setError(
+        "Last name is required."
+      );
+      return;
+    }
+
+    if (!email) {
+      setError(
+        "Email is required."
+      );
+      return;
+    }
+
+    // Correct email regex
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        email
+      )
+    ) {
+      setError(
+        "Please enter a valid email address."
+      );
+      return;
+    }
+
+    if (!phone) {
+      setError(
+        "Phone number is required."
+      );
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+
+      const updatedData =
+        await brokerService.updateBrokerProfile(
+          brokerId,
+          {
+            firstName,
+            lastName,
+            email,
+            phone,
+          }
+        );
+
+      const fullName =
+        [
+          updatedData.firstName ||
+            firstName,
+
+          updatedData.lastName ||
+            lastName,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+
+      const updatedProfile = {
+        ...profileData,
+
+        id:
+          updatedData.id ||
+          brokerId,
+
+        userId:
+          updatedData.id ||
+          brokerId,
+
+        firstName:
+          updatedData.firstName ||
+          firstName,
+
+        lastName:
+          updatedData.lastName ||
+          lastName,
+
+        name:
+          fullName ||
+          profileData?.name ||
+          "Broker",
+
+        username:
+          updatedData.username ||
+          profileData?.username,
+
+        email:
+          updatedData.email ||
+          email,
+
+        phone:
+          updatedData.phone ||
+          phone,
+
+        role:
+          updatedData.role ||
+          profileData?.role ||
+          "BROKER",
+
+        backendRole:
+          updatedData.role ||
+          profileData?.backendRole ||
+          "BROKER",
+
+        status:
+          updatedData.status ||
+          profileData?.status,
+
+        accountType:
+          updatedData.accountType ||
+          profileData?.accountType,
+
+        profilePhotoUrl:
+          updatedData.profilePhotoUrl ??
+          profileData?.profilePhotoUrl,
+
+        createdAt:
+          updatedData.createdAt ||
+          profileData?.createdAt,
+
+        updatedAt:
+          updatedData.updatedAt ||
+          profileData?.updatedAt,
+      };
+
+      setProfileData(
+        updatedProfile
+      );
+
+      setOriginalProfile(
+        updatedProfile
+      );
+
+      setEditForm({
+        firstName:
+          updatedProfile.firstName ||
+          "",
+
+        lastName:
+          updatedProfile.lastName ||
+          "",
+
+        email:
+          updatedProfile.email ||
+          "",
+
+        phone:
+          updatedProfile.phone ||
+          "",
+      });
+
+      updateProfile(
+        updatedProfile
+      );
+
+      setEditing(false);
+
+      setSuccess(
+        "Profile updated successfully!"
+      );
+
+      setTimeout(() => {
+        setSuccess("");
+      }, 3000);
+    } catch (err) {
+      console.error(
+        "Broker profile update failed:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Failed to update profile."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ============================================================
+  // FILE SELECT
+  // ============================================================
+
+  const handleFileSelect = (e) => {
+    setError("");
+    setSuccess("");
+
+    const file =
+      e.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (
+      !file.type.startsWith("image/")
+    ) {
+      setError(
+        "Please select an image file (JPG, PNG, WebP or GIF)."
+      );
+
+      e.target.value = "";
+
+      return;
+    }
+
+    if (
+      file.size >
+      MAX_SIZE_MB * 1024 * 1024
+    ) {
+      setError(
+        `Image must be smaller than ${MAX_SIZE_MB}MB.`
+      );
+
+      e.target.value = "";
+
+      return;
+    }
+
+    setSelectedFile(file);
+
+    const reader =
+      new FileReader();
+
+    reader.onload = () => {
+      setPreview(
+        reader.result
+      );
+    };
+
+    reader.onerror = () => {
+      setError(
+        "Failed to read image. Try another file."
+      );
+    };
+
+    reader.readAsDataURL(file);
+  };
+
+  // ============================================================
+  // SAVE PROFILE PHOTO
+  //
+  // IMPORTANT:
+  //
+  // Existing backend API:
+  //
+  // POST /api/users/me/profile-photo
+  //
+  // The backend gets the authenticated broker automatically.
+  //
+  // DO NOT send brokerId here.
+  // ============================================================
+
+  const handleSaveAvatar = async () => {
+    if (!selectedFile) {
+      return;
+    }
+
+    if (!brokerId) {
+      setError(
+        "Broker ID is missing."
+      );
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+
+      // IMPORTANT:
+      // Upload through the existing authenticated-user
+      // profile-photo API.
+      //
+      // OLD:
+      // updateBrokerProfilePhoto(brokerId, selectedFile)
+      //
+      // NEW:
+      // updateBrokerProfilePhoto(selectedFile)
+
+      await brokerService.updateBrokerProfilePhoto(
+        selectedFile
+      );
+
+      // Reload photo from backend
+      await loadProfilePhoto(
+        brokerId
+      );
+
+      // Update local profile state
+      const updatedProfile = {
+        ...profileData,
+
+        profilePhotoUrl:
+          `/api/users/${brokerId}/profile-photo`,
+
+        profilePhotoUpdatedAt:
+          Date.now(),
+      };
+
+      setProfileData(
+        updatedProfile
+      );
+
+      setOriginalProfile(
+        updatedProfile
+      );
+
+      updateProfile(
+        updatedProfile
+      );
+
+      setPreview(null);
+      setSelectedFile(null);
+
+      if (fileRef.current) {
+        fileRef.current.value = "";
+      }
+
+      setSuccess(
+        "Profile photo updated successfully!"
+      );
+
+      setTimeout(() => {
+        setSuccess("");
+      }, 3000);
+    } catch (err) {
+      console.error(
+        "Broker profile photo upload failed:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Failed to upload profile photo."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ============================================================
+  // REMOVE PHOTO
+  //
+  // Existing backend API:
+  //
+  // DELETE /api/users/me/profile-photo
+  //
+  // This works for the authenticated broker as well.
+  // ============================================================
+
+  const handleRemoveAvatar = async () => {
+    if (!photoUrl) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+
+      await brokerService.deleteBrokerProfilePhoto();
+
+      if (photoObjectUrlRef.current) {
+        URL.revokeObjectURL(
+          photoObjectUrlRef.current
+        );
+
+        photoObjectUrlRef.current = null;
+      }
+
+      setPhotoUrl(null);
+      setPreview(null);
+      setSelectedFile(null);
+
+      if (fileRef.current) {
+        fileRef.current.value = "";
+      }
+
+      const updatedProfile = {
+        ...profileData,
+        profilePhotoUrl: null,
+        profilePhotoUpdatedAt:
+          Date.now(),
+      };
+
+      setProfileData(
+        updatedProfile
+      );
+
+      setOriginalProfile(
+        updatedProfile
+      );
+
+      updateProfile(
+        updatedProfile
+      );
+
+      setSuccess(
+        "Profile photo removed successfully!"
+      );
+
+      setTimeout(() => {
+        setSuccess("");
+      }, 3000);
+    } catch (err) {
+      console.error(
+        "Broker profile photo removal failed:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Failed to remove profile photo."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ============================================================
+  // CANCEL PHOTO PREVIEW
+  // ============================================================
+
+  const handleCancelPreview = () => {
+    setPreview(null);
+    setSelectedFile(null);
+
+    if (fileRef.current) {
+      fileRef.current.value = "";
+    }
+
+    setError("");
+  };
+
+  // ============================================================
+  // PASSWORD - OPEN
+  // ============================================================
+
+  const handleOpenChangePassword = () => {
     setPasswordForm({
       currentPassword: "",
       newPassword: "",
@@ -373,12 +933,12 @@ export default function BuyerProfile() {
     setShowChangePassword(true);
   };
 
-  /* ============================================================
-     CLOSE CHANGE PASSWORD
-  ============================================================ */
+  // ============================================================
+  // PASSWORD - CLOSE
+  // ============================================================
 
-  const closeChangePassword = () => {
-    if (passwordSaving) {
+  const handleCloseChangePassword = () => {
+    if (changingPassword) {
       return;
     }
 
@@ -398,410 +958,38 @@ export default function BuyerProfile() {
     setShowConfirmPassword(false);
   };
 
-  /* ============================================================
-     EDIT PROFILE
-  ============================================================ */
-
-  const handleEdit = () => {
-    setError("");
-    setSuccess("");
-
-    setForm({
-      username:
-        effectiveProfile.username || "",
-
-      name:
-        getProfileName(effectiveProfile) ||
-        "",
-
-      email:
-        effectiveProfile.email || "",
-
-      phone:
-        effectiveProfile.phone ||
-        effectiveProfile.phoneNumber ||
-        "",
-    });
-
-    setEditing(true);
-  };
-
-  /* ============================================================
-     CANCEL EDIT
-  ============================================================ */
-
-  const handleCancelEdit = () => {
-    setEditing(false);
-    setError("");
-
-    setForm({
-      username:
-        effectiveProfile.username || "",
-
-      name:
-        getProfileName(effectiveProfile) ||
-        "",
-
-      email:
-        effectiveProfile.email || "",
-
-      phone:
-        effectiveProfile.phone ||
-        effectiveProfile.phoneNumber ||
-        "",
-    });
-  };
-
-  /* ============================================================
-     SAVE PROFILE DETAILS
-  ============================================================ */
-
-  const handleSaveProfile = async () => {
-    setError("");
-    setSuccess("");
-
-    if (!form.username.trim()) {
-      setError("Username is required.");
-      return;
-    }
-
-    if (!form.name.trim()) {
-      setError("Name is required.");
-      return;
-    }
-
-    if (!form.email.trim()) {
-      setError("Email is required.");
-      return;
-    }
-
-    if (!form.phone.trim()) {
-      setError(
-        "Phone number is required."
-      );
-      return;
-    }
-
-    if (!userId) {
-      setError(
-        "Unable to identify your user account."
-      );
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      const nameParts =
-        form.name
-          .trim()
-          .split(/\s+/);
-
-      const firstName =
-        nameParts.shift() || "";
-
-      const lastName =
-        nameParts.join(" ");
-
-      const updatedProfile =
-        await userService.updateUser(
-          userId,
-          {
-            username:
-              form.username.trim(),
-
-            firstName,
-
-            lastName,
-
-            email:
-              form.email.trim(),
-
-            phone:
-              form.phone.trim(),
-          }
-        );
-
-      const normalized =
-        mapBackendProfile({
-          ...effectiveProfile,
-          ...updatedProfile,
-
-          username:
-            form.username.trim(),
-
-          firstName,
-
-          lastName,
-
-          name:
-            form.name.trim(),
-
-          email:
-            form.email.trim(),
-
-          phone:
-            form.phone.trim(),
-        });
-
-      setBackendProfile(normalized);
-
-      setForm({
-        username:
-          normalized.username ||
-          form.username.trim(),
-
-        name:
-          normalized.name ||
-          form.name.trim(),
-
-        email:
-          normalized.email ||
-          form.email.trim(),
-
-        phone:
-          normalized.phone ||
-          form.phone.trim(),
-      });
-
-      updateProfile({
-        username:
-          normalized.username,
-
-        firstName:
-          normalized.firstName,
-
-        lastName:
-          normalized.lastName,
-
-        name:
-          normalized.name,
-
-        email:
-          normalized.email,
-
-        phone:
-          normalized.phone,
-      });
-
-      setEditing(false);
-
-      setSuccess(
-        "Profile details updated successfully."
-      );
-
-      setTimeout(() => {
-        setSuccess("");
-      }, 3000);
-    } catch (err) {
-      console.error(
-        "Failed to update profile:",
-        err
-      );
-
-      setError(
-        err.message ||
-          "Unable to update profile. Please try again."
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /* ============================================================
-     SELECT PHOTO
-  ============================================================ */
-
-  const handleFileSelect = (e) => {
-    setError("");
-    setSuccess("");
-
-    const file =
-      e.target.files?.[0];
-
-    if (!file) {
-      return;
-    }
-
-    if (!file.type.startsWith("image/")) {
-      setError(
-        "Please select an image file (JPG, PNG, WebP or GIF)."
-      );
-      return;
-    }
-
-    if (
-      file.size >
-      MAX_SIZE_MB * 1024 * 1024
-    ) {
-      setError(
-        `Image must be smaller than ${MAX_SIZE_MB}MB.`
-      );
-      return;
-    }
-
-    setSelectedFile(file);
-
-    const reader =
-      new FileReader();
-
-    reader.onload = () => {
-      setPreview(reader.result);
-    };
-
-    reader.onerror = () => {
-      setError(
-        "Failed to read image. Try another file."
-      );
-
-      setSelectedFile(null);
-    };
-
-    reader.readAsDataURL(file);
-  };
-
-  /* ============================================================
-     SAVE PROFILE PHOTO
-  ============================================================ */
-
-  const handleSaveAvatar = async () => {
-    if (!selectedFile) {
-      return;
-    }
-
-    if (!userId) {
-      setError(
-        "Unable to identify your user account."
-      );
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-    setSuccess("");
-
-    try {
-      await userService.uploadProfilePhoto(
-        selectedFile
-      );
-
-      const blob =
-        await userService.getProfilePhotoBlob(
-          userId
-        );
-
-      const newObjectUrl =
-        URL.createObjectURL(blob);
-
-      setProfilePhotoUrl(
-        newObjectUrl
-      );
-
-      setPreview(null);
-      setSelectedFile(null);
-
-      updateProfile({
-        avatar: null,
-      });
-
-      setSuccess(
-        "Profile photo updated successfully."
-      );
-
-      if (fileRef.current) {
-        fileRef.current.value = "";
-      }
-
-      setTimeout(() => {
-        setSuccess("");
-      }, 3000);
-    } catch (err) {
-      console.error(
-        "Failed to upload profile photo:",
-        err
-      );
-
-      setError(
-        err.message ||
-          "Failed to upload profile photo."
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /* ============================================================
-     REMOVE PROFILE PHOTO
-  ============================================================ */
-
-  const handleRemoveAvatar = async () => {
-    setError("");
-    setSuccess("");
-
-    if (!userId) {
-      setError(
-        "Unable to identify your user account."
-      );
-      return;
-    }
-
-    try {
-      setSaving(true);
-
-      await userService.deleteProfilePhoto();
-
-      setPreview(null);
-      setSelectedFile(null);
-      setProfilePhotoUrl(null);
-
-      updateProfile({
-        avatar: null,
-      });
-
-      if (fileRef.current) {
-        fileRef.current.value = "";
-      }
-
-      setSuccess(
-        "Profile photo removed."
-      );
-
-      setTimeout(() => {
-        setSuccess("");
-      }, 3000);
-    } catch (err) {
-      console.error(
-        "Failed to remove profile photo:",
-        err
-      );
-
-      setError(
-        err.message ||
-          "Failed to remove profile photo."
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  /* ============================================================
-     CHANGE PASSWORD
-  ============================================================ */
-
-  const handleChangePassword = async (e) => {
-    e.preventDefault();
+  // ============================================================
+  // PASSWORD - FORM CHANGE
+  // ============================================================
+
+  const handlePasswordFormChange = (e) => {
+    const {
+      name,
+      value,
+    } = e.target;
+
+    setPasswordForm((current) => ({
+      ...current,
+      [name]: value,
+    }));
 
     setPasswordError("");
     setPasswordSuccess("");
+  };
 
+  // ============================================================
+  // PASSWORD - SUBMIT
+  // ============================================================
+
+  const handleChangePassword = async () => {
     const currentPassword =
-      passwordForm.currentPassword;
+      passwordForm.currentPassword.trim();
 
     const newPassword =
-      passwordForm.newPassword;
+      passwordForm.newPassword.trim();
 
     const confirmPassword =
-      passwordForm.confirmPassword;
+      passwordForm.confirmPassword.trim();
 
     if (!currentPassword) {
       setPasswordError(
@@ -826,7 +1014,7 @@ export default function BuyerProfile() {
 
     if (newPassword.length > 100) {
       setPasswordError(
-        "New password must not exceed 100 characters."
+        "New password cannot exceed 100 characters."
       );
       return;
     }
@@ -859,9 +1047,11 @@ export default function BuyerProfile() {
     }
 
     try {
-      setPasswordSaving(true);
+      setChangingPassword(true);
+      setPasswordError("");
+      setPasswordSuccess("");
 
-      await userService.changePassword(
+      await brokerService.changeBrokerPassword(
         currentPassword,
         newPassword
       );
@@ -873,76 +1063,133 @@ export default function BuyerProfile() {
       });
 
       setPasswordSuccess(
-        "Password changed successfully."
+        "Password changed successfully!"
       );
-
-      setTimeout(() => {
-        setShowChangePassword(false);
-        setPasswordSuccess("");
-      }, 1500);
     } catch (err) {
       console.error(
-        "Failed to change password:",
+        "Password change failed:",
         err
       );
 
       setPasswordError(
         err.message ||
-          "Unable to change password. Please check your current password."
+          "Failed to change password."
       );
     } finally {
-      setPasswordSaving(false);
+      setChangingPassword(false);
     }
   };
 
-  /* ============================================================
-     UI
-  ============================================================ */
+  // ============================================================
+  // NO PROFILE
+  // ============================================================
+
+  if (!profileData) {
+    return null;
+  }
+
+  // ============================================================
+  // DISPLAY NAME
+  // ============================================================
+
+  const displayName =
+    [
+      profileData.firstName,
+      profileData.lastName,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
+    profileData.name ||
+    profileData.username ||
+    "Broker";
+
+  // ============================================================
+  // FALLBACK AVATAR
+  // ============================================================
+
+  const fallbackAvatar =
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      displayName
+    )}&background=6F01B9&color=fff&size=150`;
+
+  // ============================================================
+  // CURRENT AVATAR
+  // ============================================================
+
+  const currentAvatar =
+    preview ||
+    photoUrl ||
+    fallbackAvatar;
+
+  // ============================================================
+  // JOINED DATE
+  // ============================================================
+
+  const joinedDate =
+    profileData.createdAt
+      ? new Date(
+          profileData.createdAt
+        ).toLocaleDateString(
+          "en-IN",
+          {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          }
+        )
+      : "—";
+
+  // ============================================================
+  // RETURN
+  // ============================================================
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto p-4 font-sans">
 
-      {/* Header */}
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
 
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div>
+        <span className="text-xs font-bold text-purple-600 tracking-wider uppercase block mb-1">
+          Agent Dashboard
+        </span>
 
-        <div>
-          <h2 className="text-xl font-bold text-gray-900">
-            Profile
-          </h2>
+        <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
+          Broker Profile
+        </h2>
 
-          <p className="text-sm text-gray-500 mt-0.5">
-            Manage your buyer profile details and photo
-          </p>
-        </div>
-
-        {!editing && (
-          <button
-            type="button"
-            onClick={handleEdit}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition shadow-sm"
-          >
-            <Pencil className="w-4 h-4" />
-            Edit Profile
-          </button>
-        )}
+        <p className="text-sm text-gray-500 mt-0.5">
+          Manage your broker profile details and profile photo.
+        </p>
       </div>
 
-      {/* Loading */}
+      {/* ======================================================
+          LOADING
+      ====================================================== */}
 
       {loading && (
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 text-sm text-gray-500 shadow-sm">
-          Loading your profile...
-        </div>
+        <p className="text-xs text-gray-400">
+          Loading broker profile...
+        </p>
       )}
 
-      {/* Main Card */}
+      {/* ======================================================
+          MAIN CARD
+      ====================================================== */}
 
       <div className="bg-white border border-gray-100 rounded-2xl p-6 md:p-8 max-w-4xl shadow-sm">
 
-        {/* Profile Photo */}
+        {/* ====================================================
+            TOP PROFILE SECTION
+        ==================================================== */}
 
-        <div className="flex flex-col sm:flex-row items-center gap-6 pb-8 border-b border-gray-100">
+        <div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-gray-100">
+
+          {/* ==================================================
+              AVATAR
+          ================================================== */}
 
           <div
             className="relative group cursor-pointer"
@@ -952,29 +1199,51 @@ export default function BuyerProfile() {
           >
             <img
               src={currentAvatar}
-              alt={
-                effectiveProfile.name ||
-                "Buyer"
-              }
-              className="w-24 h-24 rounded-full object-cover border-4 border-emerald-100 shadow-sm transition-transform duration-200 group-hover:scale-[1.02]"
+              alt={displayName}
+              className="w-28 h-28 rounded-full object-cover border-4 border-purple-100 shadow-sm transition-transform duration-200 group-hover:scale-[1.02]"
             />
 
             <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-              <Camera className="w-5 h-5 text-white" />
+              <Camera className="w-6 h-6 text-white" />
             </div>
           </div>
+
+          {/* ==================================================
+              PROFILE DETAILS
+          ================================================== */}
 
           <div className="flex-1 text-center sm:text-left min-w-0">
 
             <h3 className="text-xl font-bold text-gray-900 truncate">
-              {effectiveProfile.name ||
-                "Buyer"}
+              {displayName}
             </h3>
 
             <p className="text-sm text-gray-500 mt-0.5">
-              @{effectiveProfile.username ||
-                "username"}
+              Broker / Agent Account
             </p>
+
+            {/* ==================================================
+                RATING
+            ================================================== */}
+
+            <div className="flex items-center justify-center sm:justify-start gap-1 mt-2 text-sm text-gray-500">
+
+              <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+
+              <span className="font-semibold text-gray-800">
+                {profileData.rating ?? "4.8"}
+              </span>
+
+              <span className="text-gray-400 text-xs">
+                (
+                {profileData.totalDeals ?? "47"}{" "}
+                deals)
+              </span>
+            </div>
+
+            {/* ==================================================
+                PHOTO CONTROLS
+            ================================================== */}
 
             <div className="mt-4 flex flex-wrap items-center justify-center sm:justify-start gap-2">
 
@@ -983,24 +1252,27 @@ export default function BuyerProfile() {
                 type="file"
                 accept={ACCEPT}
                 className="hidden"
-                onChange={
-                  handleFileSelect
-                }
+                onChange={handleFileSelect}
               />
+
+              {/* UPLOAD */}
 
               <button
                 type="button"
                 onClick={() =>
                   fileRef.current?.click()
                 }
-                className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm transition"
+                disabled={saving}
+                className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm transition disabled:opacity-50"
               >
                 <Upload className="w-3.5 h-3.5 text-gray-400" />
 
                 {preview
-                  ? "Choose Another"
+                  ? "Change Choice"
                   : "Upload photo"}
               </button>
+
+              {/* SAVE PHOTO */}
 
               {preview && (
                 <>
@@ -1010,45 +1282,37 @@ export default function BuyerProfile() {
                       handleSaveAvatar
                     }
                     disabled={saving}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition disabled:opacity-60"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition disabled:opacity-60"
                   >
                     {saving
                       ? "Saving..."
-                      : "Save photo"}
+                      : "Save Now"}
                   </button>
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setPreview(null);
-                      setSelectedFile(
-                        null
-                      );
-
-                      if (
-                        fileRef.current
-                      ) {
-                        fileRef.current.value =
-                          "";
-                      }
-                    }}
-                    className="text-xs text-gray-500 hover:text-gray-700 font-medium px-2"
+                    onClick={
+                      handleCancelPreview
+                    }
+                    disabled={saving}
+                    className="text-xs text-gray-500 hover:text-gray-700 font-medium px-2 disabled:opacity-50"
                   >
                     Cancel
                   </button>
                 </>
               )}
 
+              {/* REMOVE */}
+
               {!preview &&
-                (profilePhotoUrl ||
-                  effectiveProfile.avatar) && (
+                photoUrl && (
                   <button
                     type="button"
                     onClick={
                       handleRemoveAvatar
                     }
                     disabled={saving}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 transition disabled:opacity-60"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl text-rose-600 hover:bg-rose-50 transition disabled:opacity-50"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     Remove
@@ -1056,16 +1320,22 @@ export default function BuyerProfile() {
                 )}
             </div>
 
+            {/* FILE INFO */}
+
             <p className="text-[11px] text-gray-400 mt-2.5">
               JPG, PNG, WebP or GIF · Max{" "}
               {MAX_SIZE_MB}MB
             </p>
+
+            {/* ERROR */}
 
             {error && (
               <p className="text-xs font-medium text-red-600 mt-2">
                 {error}
               </p>
             )}
+
+            {/* SUCCESS */}
 
             {success && (
               <p className="text-xs font-medium text-green-600 mt-2 flex items-center gap-1 justify-center sm:justify-start">
@@ -1076,133 +1346,58 @@ export default function BuyerProfile() {
           </div>
         </div>
 
-        {/* EDIT MODE */}
+        {/* ====================================================
+            PERSONAL INFORMATION
+        ==================================================== */}
 
-        {editing ? (
-          <div className="pt-6">
+        <div className="pt-6">
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+          <div className="flex items-center justify-between mb-4">
 
-              {/* Username */}
+            <div>
+              <h3 className="text-sm font-bold text-gray-900">
+                Personal Information
+              </h3>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-2">
-                  Username
-                </label>
-
-                <input
-                  type="text"
-                  name="username"
-                  value={form.username}
-                  onChange={
-                    handleChange
-                  }
-                  placeholder="Enter username"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                />
-              </div>
-
-              {/* Full Name */}
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-2">
-                  Full Name
-                </label>
-
-                <input
-                  type="text"
-                  name="name"
-                  value={form.name}
-                  onChange={
-                    handleChange
-                  }
-                  placeholder="Enter your name"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                />
-              </div>
-
-              {/* Email */}
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-2">
-                  Email
-                </label>
-
-                <input
-                  type="email"
-                  name="email"
-                  value={form.email}
-                  onChange={
-                    handleChange
-                  }
-                  placeholder="Enter your email"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                />
-              </div>
-
-              {/* Phone */}
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-2">
-                  Phone
-                </label>
-
-                <input
-                  type="tel"
-                  name="phone"
-                  value={form.phone}
-                  onChange={
-                    handleChange
-                  }
-                  placeholder="Enter phone number"
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                />
-              </div>
-            </div>
-
-            {error && (
-              <p className="text-sm font-medium text-red-600 mt-4">
-                {error}
+              <p className="text-xs text-gray-400 mt-0.5">
+                Update your broker account information.
               </p>
+            </div>
+
+            {!editing && (
+              <div className="flex items-center gap-2">
+
+                {/* EDIT */}
+
+                <button
+                  type="button"
+                  onClick={
+                    handleStartEditing
+                  }
+                  className="text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 text-purple-600 hover:bg-purple-50 transition"
+                >
+                  Edit Profile
+                </button>
+
+                {/* PASSWORD */}
+
+                <button
+                  type="button"
+                  onClick={
+                    handleOpenChangePassword
+                  }
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 text-purple-600 hover:bg-purple-50 transition"
+                >
+                  <LockKeyhole className="w-3.5 h-3.5" />
+                  Change Password
+                </button>
+              </div>
             )}
-
-            <div className="flex flex-wrap gap-3 mt-6 pt-5 border-t border-gray-100">
-
-              <button
-                type="button"
-                onClick={
-                  handleSaveProfile
-                }
-                disabled={saving}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition disabled:opacity-60"
-              >
-                <Save className="w-4 h-4" />
-
-                {saving
-                  ? "Saving..."
-                  : "Save Changes"}
-              </button>
-
-              <button
-                type="button"
-                onClick={
-                  handleCancelEdit
-                }
-                disabled={saving}
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition"
-              >
-                <X className="w-4 h-4" />
-
-                Cancel
-              </button>
-            </div>
           </div>
-        ) : (
-          /* VIEW MODE */
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
-            {/* Username */}
+            {/* FIRST NAME */}
 
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
 
@@ -1210,19 +1405,34 @@ export default function BuyerProfile() {
                 <User className="w-4 h-4" />
               </div>
 
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
+
                 <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                  Username
+                  First Name
                 </label>
 
-                <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">
-                  {effectiveProfile.username ||
-                    ""}
-                </p>
+                {editing ? (
+                  <input
+                    type="text"
+                    name="firstName"
+                    value={
+                      editForm.firstName
+                    }
+                    onChange={
+                      handleFormChange
+                    }
+                    className="mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  />
+                ) : (
+                  <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">
+                    {profileData.firstName ||
+                      "—"}
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* Full Name */}
+            {/* LAST NAME */}
 
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
 
@@ -1230,19 +1440,34 @@ export default function BuyerProfile() {
                 <User className="w-4 h-4" />
               </div>
 
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
+
                 <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                  Full Name
+                  Last Name
                 </label>
 
-                <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">
-                  {effectiveProfile.name ||
-                    ""}
-                </p>
+                {editing ? (
+                  <input
+                    type="text"
+                    name="lastName"
+                    value={
+                      editForm.lastName
+                    }
+                    onChange={
+                      handleFormChange
+                    }
+                    className="mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  />
+                ) : (
+                  <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">
+                    {profileData.lastName ||
+                      "—"}
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* Email */}
+            {/* EMAIL */}
 
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
 
@@ -1250,19 +1475,34 @@ export default function BuyerProfile() {
                 <Mail className="w-4 h-4" />
               </div>
 
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
+
                 <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
                   Email
                 </label>
 
-                <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">
-                  {effectiveProfile.email ||
-                    ""}
-                </p>
+                {editing ? (
+                  <input
+                    type="email"
+                    name="email"
+                    value={
+                      editForm.email
+                    }
+                    onChange={
+                      handleFormChange
+                    }
+                    className="mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  />
+                ) : (
+                  <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">
+                    {profileData.email ||
+                      "—"}
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* Phone */}
+            {/* PHONE */}
 
             <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
 
@@ -1270,106 +1510,144 @@ export default function BuyerProfile() {
                 <Phone className="w-4 h-4" />
               </div>
 
-              <div>
+              <div className="min-w-0 flex-1">
+
                 <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
                   Phone
                 </label>
 
+                {editing ? (
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={
+                      editForm.phone
+                    }
+                    onChange={
+                      handleFormChange
+                    }
+                    className="mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                  />
+                ) : (
+                  <p className="text-sm font-semibold text-gray-800 mt-0.5">
+                    {profileData.phone ||
+                      "—"}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* JOINED */}
+
+            <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl sm:col-span-2">
+
+              <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
+                <Calendar className="w-4 h-4" />
+              </div>
+
+              <div>
+
+                <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                  Joined
+                </label>
+
                 <p className="text-sm font-semibold text-gray-800 mt-0.5">
-                  {effectiveProfile.phone ||
-                    effectiveProfile.phoneNumber ||
-                    ""}
+                  {joinedDate}
                 </p>
               </div>
             </div>
           </div>
-        )}
+
+          {/* ==================================================
+              SAVE / CANCEL
+          ================================================== */}
+
+          {editing && (
+            <div className="flex flex-wrap items-center justify-end gap-3 mt-5 pt-5 border-t border-gray-100">
+
+              <button
+                type="button"
+                onClick={
+                  handleCancelEdit
+                }
+                disabled={saving}
+                className="text-sm font-semibold px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={
+                  handleSaveProfile
+                }
+                disabled={saving}
+                className="text-sm font-semibold px-5 py-2.5 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition disabled:opacity-60"
+              >
+                {saving
+                  ? "Saving..."
+                  : "Save Changes"}
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ======================================================
-          CHANGE PASSWORD - SINGLE LINE
+          FOOTER MESSAGE
       ====================================================== */}
 
-      <div className="max-w-4xl">
-        <button
-  type="button"
-  onClick={() => {
-    setPasswordError("");
-    setPasswordSuccess("");
-    setPasswordForm({
-      currentPassword: "",
-      newPassword: "",
-      confirmPassword: "",
-    });
-    setShowChangePassword(true);
-  }}
-  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
->
-  <LockKeyhole className="w-4 h-4" />
-  Change Password
-</button>
-      </div>
+      <p className="text-xs text-gray-400 max-w-4xl mt-3 pl-1">
+        Your broker profile information and photo are saved to your HomeSpace account.
+      </p>
 
       {/* ======================================================
           CHANGE PASSWORD MODAL
       ====================================================== */}
 
       {showChangePassword && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onMouseDown={(e) => {
-            if (
-              e.target === e.currentTarget &&
-              !passwordSaving
-            ) {
-              closeChangePassword();
-            }
-          }}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+
           <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100">
 
-            {/* Modal Header */}
+            {/* HEADER */}
 
             <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
 
-              <div className="flex items-center gap-3">
+              <div>
 
-                <div className="p-2.5 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-600">
-                  <LockKeyhole className="w-5 h-5" />
-                </div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  Change Password
+                </h3>
 
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">
-                    Change Password
-                  </h3>
-
-                  <p className="text-xs text-gray-500 mt-0.5">
-                    Update your account password
-                  </p>
-                </div>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Update your broker account password securely.
+                </p>
               </div>
 
               <button
                 type="button"
-                onClick={closeChangePassword}
-                disabled={passwordSaving}
-                className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-50 transition disabled:opacity-50"
+                onClick={
+                  handleCloseChangePassword
+                }
+                disabled={
+                  changingPassword
+                }
+                className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 transition disabled:opacity-50"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Modal Body */}
+            {/* BODY */}
 
-            <form
-              onSubmit={handleChangePassword}
-              className="p-6 space-y-5"
-            >
+            <div className="p-6 space-y-4">
 
-              {/* Current Password */}
+              {/* CURRENT PASSWORD */}
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-2">
+
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Current Password
                 </label>
 
@@ -1386,36 +1664,36 @@ export default function BuyerProfile() {
                       passwordForm.currentPassword
                     }
                     onChange={
-                      handlePasswordChange
+                      handlePasswordFormChange
                     }
-                    autoComplete="current-password"
                     placeholder="Enter current password"
-                    className="w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    autoComplete="current-password"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 pr-11 text-sm text-gray-800 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
                   />
 
                   <button
                     type="button"
                     onClick={() =>
                       setShowCurrentPassword(
-                        (previous) =>
-                          !previous
+                        (value) => !value
                       )
                     }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
                   >
                     {showCurrentPassword ? (
-                      <EyeOff className="w-5 h-5" />
+                      <EyeOff className="w-4 h-4" />
                     ) : (
-                      <Eye className="w-5 h-5" />
+                      <Eye className="w-4 h-4" />
                     )}
                   </button>
                 </div>
               </div>
 
-              {/* New Password */}
+              {/* NEW PASSWORD */}
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-2">
+
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   New Password
                 </label>
 
@@ -1432,40 +1710,40 @@ export default function BuyerProfile() {
                       passwordForm.newPassword
                     }
                     onChange={
-                      handlePasswordChange
+                      handlePasswordFormChange
                     }
-                    autoComplete="new-password"
                     placeholder="Enter new password"
-                    className="w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    autoComplete="new-password"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 pr-11 text-sm text-gray-800 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
                   />
 
                   <button
                     type="button"
                     onClick={() =>
                       setShowNewPassword(
-                        (previous) =>
-                          !previous
+                        (value) => !value
                       )
                     }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
                   >
                     {showNewPassword ? (
-                      <EyeOff className="w-5 h-5" />
+                      <EyeOff className="w-4 h-4" />
                     ) : (
-                      <Eye className="w-5 h-5" />
+                      <Eye className="w-4 h-4" />
                     )}
                   </button>
                 </div>
 
-                <p className="text-[11px] text-gray-400 mt-2">
+                <p className="text-[11px] text-gray-400 mt-1.5">
                   Password must be between 6 and 100 characters.
                 </p>
               </div>
 
-              {/* Confirm Password */}
+              {/* CONFIRM PASSWORD */}
 
               <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-2">
+
+                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                   Confirm New Password
                 </label>
 
@@ -1482,84 +1760,95 @@ export default function BuyerProfile() {
                       passwordForm.confirmPassword
                     }
                     onChange={
-                      handlePasswordChange
+                      handlePasswordFormChange
                     }
-                    autoComplete="new-password"
                     placeholder="Confirm new password"
-                    className="w-full px-4 py-3 pr-12 rounded-xl border border-gray-200 text-sm text-gray-800 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                    autoComplete="new-password"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 pr-11 text-sm text-gray-800 outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
                   />
 
                   <button
                     type="button"
                     onClick={() =>
                       setShowConfirmPassword(
-                        (previous) =>
-                          !previous
+                        (value) => !value
                       )
                     }
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
                   >
                     {showConfirmPassword ? (
-                      <EyeOff className="w-5 h-5" />
+                      <EyeOff className="w-4 h-4" />
                     ) : (
-                      <Eye className="w-5 h-5" />
+                      <Eye className="w-4 h-4" />
                     )}
                   </button>
                 </div>
               </div>
 
-              {/* Error */}
+              {/* ERROR */}
 
               {passwordError && (
-                <p className="text-sm font-medium text-red-600">
-                  {passwordError}
-                </p>
+                <div className="rounded-xl bg-red-50 border border-red-100 px-3 py-2.5">
+
+                  <p className="text-xs font-medium text-red-600">
+                    {passwordError}
+                  </p>
+                </div>
               )}
 
-              {/* Success */}
+              {/* SUCCESS */}
 
               {passwordSuccess && (
-                <p className="text-sm font-medium text-green-600 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" />
-                  {passwordSuccess}
-                </p>
+                <div className="rounded-xl bg-green-50 border border-green-100 px-3 py-2.5">
+
+                  <p className="text-xs font-medium text-green-600 flex items-center gap-1.5">
+
+                    <CheckCircle2 className="w-4 h-4" />
+
+                    {passwordSuccess}
+                  </p>
+                </div>
               )}
+            </div>
 
-              {/* Buttons */}
+            {/* FOOTER */}
 
-              <div className="flex justify-end gap-3 pt-2">
+            <div className="flex items-center justify-end gap-3 px-6 py-5 border-t border-gray-100">
 
-                <button
-                  type="button"
-                  onClick={closeChangePassword}
-                  disabled={passwordSaving}
-                  className="px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 text-sm font-semibold hover:bg-gray-50 transition disabled:opacity-60"
-                >
-                  Cancel
-                </button>
+              <button
+                type="button"
+                onClick={
+                  handleCloseChangePassword
+                }
+                disabled={
+                  changingPassword
+                }
+                className="text-sm font-semibold px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
 
-                <button
-                  type="submit"
-                  disabled={passwordSaving}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition disabled:opacity-60"
-                >
-                  <LockKeyhole className="w-4 h-4" />
+              <button
+                type="button"
+                onClick={
+                  handleChangePassword
+                }
+                disabled={
+                  changingPassword
+                }
+                className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl text-white bg-purple-600 hover:bg-purple-700 transition disabled:opacity-60"
+              >
+                <LockKeyhole className="w-4 h-4" />
 
-                  {passwordSaving
-                    ? "Changing..."
-                    : "Change Password"}
-                </button>
-
-              </div>
-            </form>
+                {changingPassword
+                  ? "Changing..."
+                  : "Change Password"}
+              </button>
+            </div>
           </div>
         </div>
       )}
-
-      <p className="text-xs text-gray-400 max-w-4xl mt-3 pl-1">
-        Your profile details and photo are saved securely through
-        your HomeSpace account.
-      </p>
     </div>
   );
 }
+

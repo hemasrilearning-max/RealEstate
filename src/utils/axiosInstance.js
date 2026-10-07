@@ -1,3 +1,4 @@
+
 import axios from "axios";
 
 const axiosInstance = axios.create({
@@ -10,20 +11,23 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
     (config) => {
 
-        const token = localStorage.getItem("token");
+        // Get the CURRENT logged-in user's token.
+        // Every login can have a different JWT.
+        const token = localStorage.getItem("accessToken");
 
         if (token) {
+            config.headers = config.headers || {};
             config.headers.Authorization = `Bearer ${token}`;
         }
 
         // JSON request
         if (!(config.data instanceof FormData)) {
+            config.headers = config.headers || {};
             config.headers["Content-Type"] = "application/json";
         }
 
-        // For FormData, DON'T manually set Content-Type.
-        // Browser/Axios will automatically set:
-        // multipart/form-data; boundary=....
+        // Do NOT manually set Content-Type for FormData.
+        // Axios/browser will add the multipart boundary automatically.
 
         return config;
     },
@@ -40,8 +44,9 @@ axiosInstance.interceptors.response.use(
 
         if (error.response?.status === 401) {
 
-            localStorage.removeItem("token");
-            localStorage.removeItem("user");
+            // Token is invalid/expired.
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("authUser");
 
             window.location.href = "/";
         }
@@ -51,3 +56,4 @@ axiosInstance.interceptors.response.use(
 );
 
 export default axiosInstance;
+
