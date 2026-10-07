@@ -9,6 +9,7 @@ import com.realestate.modules.property.dto.request.CreatePropertyRequest;
 import com.realestate.modules.property.dto.request.UpdatePropertyRequest;
 import com.realestate.modules.property.dto.response.PropertyResponse;
 import com.realestate.modules.property.entity.Property;
+import com.realestate.modules.property.enums.PropertyStatus;
 import com.realestate.modules.property.mapper.PropertyMapper;
 import com.realestate.modules.property.repository.PropertyRepository;
 import com.realestate.modules.property.service.PropertyService;
@@ -28,9 +29,13 @@ import java.util.List;
 public class PropertyServiceImpl implements PropertyService {
 
   private final PropertyRepository propertyRepository;
+
   private final UserRepository userRepository;
+
   private final LocationRepository locationRepository;
+
   private final PropertyMapper propertyMapper;
+
   private final AuthenticatedUserService authenticatedUserService;
 
   // Media repository used when deleting a property
@@ -277,6 +282,46 @@ public class PropertyServiceImpl implements PropertyService {
   }
 
   // ============================================================
+  // APPROVE PROPERTY
+  // ============================================================
+
+  @Override
+  @Transactional
+  public PropertyResponse approveProperty(Long id) {
+
+    // Get currently logged-in user from JWT
+    User currentUser = authenticatedUserService.getCurrentUser();
+
+    // Only ADMIN or SUPER_ADMIN can approve properties
+    if (currentUser.getRole() == null
+        || (currentUser.getRole().getName() != RoleType.ADMIN
+            && currentUser.getRole().getName() != RoleType.SUPER_ADMIN)) {
+
+      throw new AccessDeniedException(
+          "Only ADMIN or SUPER_ADMIN users can approve properties");
+    }
+
+    // Find property
+    Property property = propertyRepository.findById(id)
+        .orElseThrow(() -> new ResourceNotFoundException(
+            "Property not found with id: " + id));
+
+    // Only PENDING properties can be approved
+    if (property.getStatus() != PropertyStatus.PENDING) {
+      throw new IllegalStateException(
+          "Only PENDING properties can be approved");
+    }
+
+    // Change status from PENDING to AVAILABLE
+    property.setStatus(PropertyStatus.AVAILABLE);
+
+    // Save approved property
+    Property approvedProperty = propertyRepository.save(property);
+
+    return propertyMapper.toResponse(approvedProperty);
+  }
+
+  // ============================================================
   // DELETE PROPERTY
   // ============================================================
 
@@ -295,11 +340,10 @@ public class PropertyServiceImpl implements PropertyService {
     // ----------------------------------------------------------
     // DELETE MEDIA FIRST
     // ----------------------------------------------------------
-    //
+
     // media.property_id references properties.id.
     // Therefore media records must be removed before
     // deleting the property.
-    //
 
     mediaRepository.deleteByPropertyId(id);
 

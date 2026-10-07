@@ -18,5 +18,7 @@ public interface PropertyService {
 
   PropertyResponse updateProperty(Long id, UpdatePropertyRequest request);
 
+  PropertyResponse approveProperty(Long id);
+
   void deleteProperty(Long id);
 }
