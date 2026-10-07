@@ -1,8 +1,5 @@
 package com.realestate.modules.Broker.dto;
 
-import com.realestate.modules.Broker.entity.BrokerLead.LeadSource;
-import com.realestate.modules.Broker.entity.BrokerLead.LeadStatus;
-
 import lombok.*;
 
 import java.time.LocalDateTime;
@@ -15,33 +12,24 @@ public class BrokerLeadDTO {
 
     private Long id;
 
-    private String name;
+    private Long buyerId;
+    private String buyerName;
 
-    private String email;
-
-    private String phone;
-
-    private String message;
-
-    private LeadStatus status;
-
-    private LeadSource source;
-
-    /**
-     * properties.id
-     */
     private Long propertyId;
-
     private String propertyTitle;
 
-    /**
-     * users.id where the user has BROKER role.
-     */
+    private Long sellerId;
+    private String sellerName;
+
     private Long brokerId;
 
-    private boolean isActive;
+    private String name;
+    private String email;
+    private String phone;
+    private String message;
+
+    /** NEW, CONTACTED, IN_PROGRESS, CONVERTED, CLOSED */
+    private String status;
 
     private LocalDateTime createdAt;
-
-    private LocalDateTime updatedAt;
 }

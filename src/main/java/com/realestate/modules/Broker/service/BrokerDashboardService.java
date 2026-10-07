@@ -3,7 +3,7 @@ package com.realestate.modules.Broker.service;
 
 import com.realestate.modules.Broker.dto.BrokerDashboardStatsDTO;
 import com.realestate.modules.Broker.entity.BrokerTransaction.TransactionStatus;
-import com.realestate.modules.Broker.repository.BrokerLeadRepository;
+import com.realestate.modules.lead.repository.LeadRepository;
 import com.realestate.modules.Broker.repository.BrokerTransactionRepository;
 import com.realestate.modules.messaging.repository.MessageRepository;
 import com.realestate.modules.property.repository.PropertyRepository;
@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class BrokerDashboardService {
 
     private final PropertyRepository propertyRepository;
-    private final BrokerLeadRepository leadRepository;
+    private final LeadRepository leadRepository;
     private final MessageRepository messageRepository;
     private final TourRepository tourRepository;
     private final BrokerTransactionRepository transactionRepository;
@@ -68,7 +68,7 @@ public class BrokerDashboardService {
 
         try {
             activeLeads =
-                    leadRepository.countByBrokerIdAndIsActiveTrue(brokerId);
+                    leadRepository.findByBrokerIdOrderByCreatedAtDesc(brokerId).size();
         } catch (Exception e) {
             System.out.println(
                     "Unable to count active leads for broker "

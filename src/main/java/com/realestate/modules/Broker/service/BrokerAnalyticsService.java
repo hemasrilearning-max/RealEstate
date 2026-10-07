@@ -1,10 +1,10 @@
 package com.realestate.modules.Broker.service;
 
 import com.realestate.modules.Broker.dto.BrokerAnalyticsDTO;
-import com.realestate.modules.Broker.entity.BrokerLead;
+import com.realestate.modules.lead.entity.Lead;
 import com.realestate.modules.Broker.entity.BrokerTransaction;
 import com.realestate.modules.Broker.repository.BrokerClientRepository;
-import com.realestate.modules.Broker.repository.BrokerLeadRepository;
+import com.realestate.modules.lead.repository.LeadRepository;
 import com.realestate.modules.Broker.repository.BrokerTransactionRepository;
 import com.realestate.modules.Broker.exception.BrokerResourceNotFoundException;
 
@@ -31,7 +31,7 @@ public class BrokerAnalyticsService {
 
     private final PropertyRepository propertyRepository;
 
-    private final BrokerLeadRepository brokerLeadRepository;
+    private final LeadRepository leadRepository;
 
     private final BrokerTransactionRepository brokerTransactionRepository;
 
@@ -177,11 +177,9 @@ public class BrokerAnalyticsService {
          * 5. LEADS
          * =========================================================
          *
-         * Your BrokerLead has brokerId.
+         * Your Lead has brokerId.
          */
-        List<BrokerLead> leads =
-                brokerLeadRepository
-                        .findByBrokerId(brokerId);
+        List<Lead> leads = leadRepository.findByBrokerIdOrderByCreatedAtDesc(brokerId);
 
 
         long totalLeads =

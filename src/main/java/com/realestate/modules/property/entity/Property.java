@@ -91,9 +91,12 @@ public class Property {
     @JoinColumn(name = "location_id")
     private Location location;
 
-  // @ManyToOne(fetch = FetchType.LAZY)
-  // @JoinColumn(name = "broker_id")
-  // private User broker;
+    /**
+     * User who originally created the property record.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by")
+    private User createdBy;
 
     @Column(nullable = false, updatable = false)
     @Builder.Default
