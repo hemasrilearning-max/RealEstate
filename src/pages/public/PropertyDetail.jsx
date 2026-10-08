@@ -30,6 +30,9 @@ import mediaService from "../../services/mediaService";
 import propertyViewService from "../../services/propertyViewService";
 import tourService from "../../services/tourService";
 import paymentService from "../../services/paymentService";
+import locationService from "../../services/locationService";
+
+import PropertyMap from "../../components/PropertyMap";
 
 export default function PropertyDetail() {
   const { id } = useParams();
@@ -56,6 +59,21 @@ export default function PropertyDetail() {
   const [propertyImages, setPropertyImages] = useState([]);
   const [imagesLoading, setImagesLoading] = useState(true);
   const [imgIdx, setImgIdx] = useState(0);
+
+  /*
+   * ============================================================
+   * PROPERTY LOCATION STATE
+   * ============================================================
+   */
+
+  const [propertyLocation, setPropertyLocation] =
+    useState(null);
+
+  const [locationLoading, setLocationLoading] =
+    useState(true);
+
+  const [showPropertyMap, setShowPropertyMap] =
+  useState(false);
 
   const [showLeadForm, setShowLeadForm] = useState(false);
 
@@ -86,15 +104,33 @@ export default function PropertyDetail() {
   const [messageLoading, setMessageLoading] = useState(false);
   const [messageSuccess, setMessageSuccess] = useState("");
   const [messageError, setMessageError] = useState("");
-/*
- * ============================================================
- * PROPERTY PAYMENT
- * ============================================================
- */
 
-const [paymentLoading, setPaymentLoading] = useState(false);
-const [paymentError, setPaymentError] = useState("");
-const [paymentSuccess, setPaymentSuccess] = useState("");
+  /*
+   * ============================================================
+   * PROPERTY PAYMENT
+   * ============================================================
+   */
+
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [paymentError, setPaymentError] = useState("");
+  const [paymentSuccess, setPaymentSuccess] = useState("");
+
+  /*
+   * ============================================================
+   * PROPERTY TOUR
+   * ============================================================
+   */
+
+  const [showTourForm, setShowTourForm] = useState(false);
+  const [tourSubmitting, setTourSubmitting] = useState(false);
+  const [tourError, setTourError] = useState("");
+
+  const [tourForm, setTourForm] = useState({
+    tourDate: "",
+    tourTime: "",
+    notes: "",
+  });
+
   /*
    * ============================================================
    * REVIEWS
@@ -248,16 +284,145 @@ const [paymentSuccess, setPaymentSuccess] = useState("");
 
   /*
    * ============================================================
-   * AUTOMATIC IMAGE SLIDESHOW
+   * LOAD PROPERTY LOCATION FROM BACKEND
    * ============================================================
-   *
-   * Images automatically move every 4 seconds.
-   *
-   * The user can still use:
-   * - Previous button
-   * - Next button
-   * - Thumbnail buttons
-   *
+   */
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPropertyLocation = async () => {
+      if (!property?.id) {
+        setPropertyLocation(null);
+        setLocationLoading(false);
+        return;
+      }
+
+      try {
+        setLocationLoading(true);
+
+        /*
+         * First check whether the property response already
+         * contains the location coordinates.
+         */
+
+        const existingLatitude =
+          property.latitude ??
+          property.location?.latitude ??
+          null;
+
+        const existingLongitude =
+          property.longitude ??
+          property.location?.longitude ??
+          null;
+
+        if (
+          existingLatitude !== null &&
+          existingLatitude !== undefined &&
+          existingLongitude !== null &&
+          existingLongitude !== undefined
+        ) {
+          const latitude = Number(existingLatitude);
+          const longitude = Number(existingLongitude);
+
+          if (
+            Number.isFinite(latitude) &&
+            Number.isFinite(longitude)
+          ) {
+            if (!cancelled) {
+              setPropertyLocation({
+                latitude,
+                longitude,
+                address:
+                  property.location?.address ||
+                  property.locationName ||
+                  "",
+                city:
+                  property.location?.city || "",
+                state:
+                  property.location?.state || "",
+                country:
+                  property.location?.country || "",
+              });
+            }
+
+            return;
+          }
+        }
+
+        /*
+         * Otherwise use the location ID saved with the property.
+         */
+
+        const locationId =
+          property.locationId ||
+          property.location?.id ||
+          property.location?.locationId ||
+          null;
+
+        if (!locationId) {
+          if (!cancelled) {
+            setPropertyLocation(null);
+          }
+
+          return;
+        }
+
+        /*
+         * Fetch the complete Location entity.
+         */
+
+        const location =
+          await locationService.getLocationById(
+            locationId
+          );
+
+        if (cancelled) {
+          return;
+        }
+
+        const latitude = Number(location?.latitude);
+        const longitude = Number(location?.longitude);
+
+        if (
+          !Number.isFinite(latitude) ||
+          !Number.isFinite(longitude)
+        ) {
+          setPropertyLocation(null);
+          return;
+        }
+
+        setPropertyLocation({
+          ...location,
+          latitude,
+          longitude,
+        });
+      } catch (error) {
+        console.error(
+          "Failed to load property location:",
+          error
+        );
+
+        if (!cancelled) {
+          setPropertyLocation(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLocationLoading(false);
+        }
+      }
+    };
+
+    loadPropertyLocation();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [property?.id]);
+
+  /*
+   * ============================================================
+   * AUTOMATIC IMAGE SLIDESHOW
    * ============================================================
    */
 
@@ -268,7 +433,10 @@ const [paymentSuccess, setPaymentSuccess] = useState("");
 
     const slideshow = setInterval(() => {
       setImgIdx((current) => {
-        return (current + 1) % propertyImages.length;
+        return (
+          (current + 1) %
+          propertyImages.length
+        );
       });
     }, 4000);
 
@@ -546,142 +714,127 @@ const [paymentSuccess, setPaymentSuccess] = useState("");
       setMessageLoading(false);
     }
   };
-/*
- * ============================================================
- * BUY PROPERTY
- * ============================================================
- */
 
-const handleBuyProperty = async () => {
-  setPaymentError("");
-  setPaymentSuccess("");
+  /*
+   * ============================================================
+   * BUY PROPERTY
+   * ============================================================
+   */
 
-  if (!isAuthenticated) {
-    navigate("/login");
-    return;
-  }
+  const handleBuyProperty = async () => {
+    setPaymentError("");
+    setPaymentSuccess("");
 
-  if (user?.role !== "buyer") {
-    setPaymentError(
-      "Only buyers can purchase a property."
-    );
-    return;
-  }
-
-  if (!property?.id) {
-    setPaymentError(
-      "Property information is not available."
-    );
-    return;
-  }
-
-  const listingType = String(
-  property.listingType || ""
-).toLowerCase();
-
-if (!["buy", "sale", "for sale"].includes(listingType)) {
-  setPaymentError(
-    "Only properties listed for sale can be purchased."
-  );
-  return;
-}
-
-  if (
-    String(property.status || "").toUpperCase() !==
-    "AVAILABLE"
-  ) {
-    setPaymentError(
-      "This property is currently not available for purchase."
-    );
-    return;
-  }
-
-  try {
-    setPaymentLoading(true);
-
-    /*
-     * Step 1:
-     * Ask backend to create the payment and
-     * Razorpay order.
-     *
-     * POST /api/payments
-     */
-    const payment =
-      await paymentService.createPayment(
-        property.id
-      );
-
-    if (!payment?.razorpayOrderId) {
-      throw new Error(
-        "Payment order was not created successfully."
-      );
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
     }
 
-    /*
-     * Step 2:
-     * Open Razorpay Checkout.
-     */
-    await paymentService.openCheckout({
-      payment,
-      user,
-      property,
+    if (user?.role !== "buyer") {
+      setPaymentError(
+        "Only buyers can purchase a property."
+      );
+      return;
+    }
 
-      /*
-       * Step 3:
-       * Razorpay returns payment details.
-       * paymentService verifies them with backend.
-       */
-      onSuccess: (verifiedPayment) => {
-        setPaymentLoading(false);
+    if (!property?.id) {
+      setPaymentError(
+        "Property information is not available."
+      );
+      return;
+    }
 
-        setPaymentSuccess(
-          "Payment successful! The property has been purchased successfully."
+    const listingType = String(
+      property.listingType || ""
+    ).toLowerCase();
+
+    if (
+      !["buy", "sale", "for sale"].includes(
+        listingType
+      )
+    ) {
+      setPaymentError(
+        "Only properties listed for sale can be purchased."
+      );
+      return;
+    }
+
+    if (
+      String(property.status || "").toUpperCase() !==
+      "AVAILABLE"
+    ) {
+      setPaymentError(
+        "This property is currently not available for purchase."
+      );
+      return;
+    }
+
+    try {
+      setPaymentLoading(true);
+
+      const payment =
+        await paymentService.createPayment(
+          property.id
         );
 
-        console.log(
-          "Payment verified successfully:",
-          verifiedPayment
+      if (!payment?.razorpayOrderId) {
+        throw new Error(
+          "Payment order was not created successfully."
         );
+      }
 
-        /*
-         * Give the backend a moment to finish
-         * the related transaction/invoice work,
-         * then open Buyer Payments.
-         */
-        setTimeout(() => {
-          navigate("/buyer/dashboard/payments");
-        }, 1500);
-      },
+      await paymentService.openCheckout({
+        payment,
+        user,
+        property,
 
-      onFailure: (error) => {
-        setPaymentLoading(false);
+        onSuccess: (verifiedPayment) => {
+          setPaymentLoading(false);
 
-        console.error(
-          "Payment failed:",
-          error
-        );
+          setPaymentSuccess(
+            "Payment successful! The property has been purchased successfully."
+          );
 
-        setPaymentError(
+          console.log(
+            "Payment verified successfully:",
+            verifiedPayment
+          );
+
+          setTimeout(() => {
+            navigate("/payments");
+          }, 1500);
+        },
+
+        onFailure: (error) => {
+          setPaymentLoading(false);
+
+          console.error(
+            "Payment failed:",
+            error
+          );
+
+          setPaymentError(
+            error?.message ||
+              "Payment could not be completed. Please try again."
+          );
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Failed to start property payment:",
+        error
+      );
+
+      setPaymentLoading(false);
+
+      setPaymentError(
+        error?.response?.data?.message ||
           error?.message ||
-            "Payment could not be completed. Please try again."
-        );
-      },
-    });
-  } catch (error) {
-    console.error(
-      "Failed to start property payment:",
-      error
-    );
+          "Unable to start payment. Please try again."
+      );
+    }
+  };
 
-    setPaymentLoading(false);
-
-    setPaymentError(
-      error?.response?.data?.message ||
-        error?.message ||
-        "Unable to start payment. Please try again."
-    );
-  }
-};
   /*
    * ============================================================
    * OPEN INTEREST FORM
@@ -822,17 +975,9 @@ if (!["buy", "sale", "for sale"].includes(listingType)) {
    * ============================================================
    * TOUR REQUEST
    * ============================================================
-   *
-   * This now creates the tour through:
-   *
-   * POST /api/tours
-   *
-   * No backend file changes are required.
-   *
-   * ============================================================
    */
 
-  const handleTourRequest = async () => {
+  const handleTourRequest = () => {
     if (!isAuthenticated) {
       navigate("/login");
       return;
@@ -845,19 +990,86 @@ if (!["buy", "sale", "for sale"].includes(listingType)) {
       return;
     }
 
+    setTourError("");
+
+    setTourForm({
+      tourDate: "",
+      tourTime: "",
+      notes: "Requested from property page",
+    });
+
+    setShowTourForm(true);
+  };
+
+  /*
+   * ============================================================
+   * TOUR SUBMISSION
+   * ============================================================
+   */
+
+  const handleTourSubmit = async (e) => {
+    e.preventDefault();
+
+    setTourError("");
+
+    if (!isAuthenticated) {
+      navigate("/login");
+      return;
+    }
+
+    if (user?.role !== "buyer") {
+      setTourError(
+        "Only buyers can request a property tour."
+      );
+      return;
+    }
+
+    if (!tourForm.tourDate) {
+      setTourError(
+        "Please select a tour date."
+      );
+      return;
+    }
+
+    if (!tourForm.tourTime) {
+      setTourError(
+        "Please select a tour time."
+      );
+      return;
+    }
+
+    const selectedDateTime = new Date(
+      `${tourForm.tourDate}T${tourForm.tourTime}`
+    );
+
+    if (
+      Number.isNaN(
+        selectedDateTime.getTime()
+      )
+    ) {
+      setTourError(
+        "Please select a valid date and time."
+      );
+      return;
+    }
+
+    if (selectedDateTime <= new Date()) {
+      setTourError(
+        "Please select a future date and time."
+      );
+      return;
+    }
+
     try {
+      setTourSubmitting(true);
+
       const tourData = {
         propertyId: property.id,
-
-        tourDate: new Date(
-          Date.now() + 86400000 * 2
-        )
-          .toISOString()
-          .slice(0, 10),
-
-        tourTime: "11:00:00",
-
-        notes: "Requested from property page",
+        tourDate: tourForm.tourDate,
+        tourTime: `${tourForm.tourTime}:00`,
+        notes:
+          tourForm.notes.trim() ||
+          "Requested from property page",
       };
 
       console.log(
@@ -875,8 +1087,16 @@ if (!["buy", "sale", "for sale"].includes(listingType)) {
         createdTour
       );
 
+      setShowTourForm(false);
+
+      setTourForm({
+        tourDate: "",
+        tourTime: "",
+        notes: "",
+      });
+
       alert(
-        "Tour request submitted! Agent will contact you soon."
+        "Tour request submitted successfully!"
       );
     } catch (error) {
       console.error(
@@ -884,10 +1104,13 @@ if (!["buy", "sale", "for sale"].includes(listingType)) {
         error
       );
 
-      alert(
-        error.message ||
+      setTourError(
+        error?.response?.data?.message ||
+          error?.message ||
           "Failed to submit tour request. Please try again."
       );
+    } finally {
+      setTourSubmitting(false);
     }
   };
 
@@ -1006,6 +1229,16 @@ if (!["buy", "sale", "for sale"].includes(listingType)) {
           ) / reviews.length
         ).toFixed(1)
       : "0.0";
+
+  /*
+   * ============================================================
+   * TODAY'S DATE
+   * ============================================================
+   */
+
+  const todayDate = new Date()
+    .toISOString()
+    .split("T")[0];
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
@@ -1367,6 +1600,91 @@ if (!["buy", "sale", "for sale"].includes(listingType)) {
           </div>
 
           {/* ====================================================
+    PROPERTY LOCATION MAP
+==================================================== */}
+
+<div>
+  <div className="flex items-center justify-between mb-3">
+    <h2 className="text-lg font-semibold">
+      Property Location
+    </h2>
+
+    {!locationLoading &&
+      propertyLocation &&
+      Number.isFinite(
+        Number(propertyLocation.latitude)
+      ) &&
+      Number.isFinite(
+        Number(propertyLocation.longitude)
+      ) && (
+        <button
+          type="button"
+          onClick={() =>
+            setShowPropertyMap((prev) => !prev)
+          }
+          className="text-sm font-semibold text-purple-600 hover:text-purple-700 transition"
+        >
+          {showPropertyMap
+            ? "Hide Map"
+            : "View Map"}
+        </button>
+      )}
+  </div>
+
+  {locationLoading ? (
+    <div className="w-full rounded-xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500">
+      Loading property location...
+    </div>
+  ) : propertyLocation &&
+    Number.isFinite(
+      Number(propertyLocation.latitude)
+    ) &&
+    Number.isFinite(
+      Number(propertyLocation.longitude)
+    ) ? (
+    <>
+      {!showPropertyMap && (
+        <div className="flex items-start gap-2 text-sm text-gray-600">
+          <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-gray-500" />
+
+          <span>
+            {[
+              propertyLocation.address,
+              propertyLocation.area,
+              propertyLocation.city,
+              propertyLocation.state,
+              propertyLocation.pincode,
+            ]
+              .filter(Boolean)
+              .join(", ") ||
+              property.location ||
+              "Property location"}
+          </span>
+        </div>
+      )}
+
+      {showPropertyMap && (
+        <div className="mt-3">
+          <PropertyMap
+            latitude={propertyLocation.latitude}
+            longitude={propertyLocation.longitude}
+            locationName={
+              propertyLocation.address ||
+              property.location ||
+              property.title
+            }
+          />
+        </div>
+      )}
+    </>
+  ) : (
+    <div className="w-full rounded-xl border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500">
+      Property location coordinates are not available.
+    </div>
+  )}
+</div>
+
+          {/* ====================================================
               AMENITIES
           ==================================================== */}
 
@@ -1663,27 +1981,29 @@ if (!["buy", "sale", "for sale"].includes(listingType)) {
             <h3 className="font-semibold text-lg mb-4">
               Contact Agent/Seller
             </h3>
-{paymentSuccess && (
-  <div className="mb-4 bg-green-50 border border-green-100 text-green-700 rounded-lg px-3 py-3 text-sm flex items-start gap-2">
-    <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
 
-    <div>
-      <p className="font-medium">
-        Payment Successful
-      </p>
+            {paymentSuccess && (
+              <div className="mb-4 bg-green-50 border border-green-100 text-green-700 rounded-lg px-3 py-3 text-sm flex items-start gap-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
 
-      <p className="text-xs mt-0.5">
-        {paymentSuccess}
-      </p>
-    </div>
-  </div>
-)}
+                <div>
+                  <p className="font-medium">
+                    Payment Successful
+                  </p>
 
-{paymentError && (
-  <div className="mb-4 bg-red-50 border border-red-100 text-red-600 rounded-lg px-3 py-3 text-sm">
-    {paymentError}
-  </div>
-)}
+                  <p className="text-xs mt-0.5">
+                    {paymentSuccess}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {paymentError && (
+              <div className="mb-4 bg-red-50 border border-red-100 text-red-600 rounded-lg px-3 py-3 text-sm">
+                {paymentError}
+              </div>
+            )}
+
             {messageSuccess && (
               <div className="mb-4 bg-green-50 border border-green-100 text-green-700 rounded-lg px-3 py-3 text-sm flex items-start gap-2">
                 <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
@@ -1869,25 +2189,179 @@ if (!["buy", "sale", "for sale"].includes(listingType)) {
 
               </form>
 
+            ) : showTourForm ? (
+
+              <form
+                onSubmit={handleTourSubmit}
+                className="space-y-3"
+              >
+
+                {tourError && (
+                  <div className="bg-red-50 border border-red-100 text-red-600 rounded-lg px-3 py-2.5 text-sm">
+                    {tourError}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between mb-1">
+                  <div>
+                    <h4 className="font-semibold text-gray-900">
+                      Schedule Property Tour
+                    </h4>
+
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Select your preferred date and time.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowTourForm(false);
+                      setTourError("");
+                    }}
+                    disabled={tourSubmitting}
+                    className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 disabled:opacity-50"
+                    aria-label="Close tour form"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* DATE */}
+
+                <div>
+                  <label
+                    htmlFor="tour-date"
+                    className="text-sm font-medium text-gray-700 block mb-1.5"
+                  >
+                    Tour Date
+                  </label>
+
+                  <input
+                    id="tour-date"
+                    type="date"
+                    required
+                    min={todayDate}
+                    value={tourForm.tourDate}
+                    onChange={(e) =>
+                      setTourForm((prev) => ({
+                        ...prev,
+                        tourDate: e.target.value,
+                      }))
+                    }
+                    disabled={tourSubmitting}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none disabled:bg-gray-100"
+                  />
+                </div>
+
+                {/* TIME */}
+
+                <div>
+                  <label
+                    htmlFor="tour-time"
+                    className="text-sm font-medium text-gray-700 block mb-1.5"
+                  >
+                    Tour Time
+                  </label>
+
+                  <input
+                    id="tour-time"
+                    type="time"
+                    required
+                    value={tourForm.tourTime}
+                    onChange={(e) =>
+                      setTourForm((prev) => ({
+                        ...prev,
+                        tourTime: e.target.value,
+                      }))
+                    }
+                    disabled={tourSubmitting}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none disabled:bg-gray-100"
+                  />
+                </div>
+
+                {/* NOTES */}
+
+                <div>
+                  <label
+                    htmlFor="tour-notes"
+                    className="text-sm font-medium text-gray-700 block mb-1.5"
+                  >
+                    Notes
+                  </label>
+
+                  <textarea
+                    id="tour-notes"
+                    rows={3}
+                    value={tourForm.notes}
+                    onChange={(e) =>
+                      setTourForm((prev) => ({
+                        ...prev,
+                        notes: e.target.value,
+                      }))
+                    }
+                    placeholder="Add any additional request..."
+                    disabled={tourSubmitting}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-purple-600 focus:border-purple-600 focus:outline-none resize-none disabled:bg-gray-100"
+                  />
+                </div>
+
+                {/* SUBMIT */}
+
+                <button
+                  type="submit"
+                  disabled={tourSubmitting}
+                  className="w-full bg-purple-600 text-white py-2.5 rounded-lg font-semibold hover:bg-purple-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <Calendar className="w-4 h-4" />
+
+                  {tourSubmitting
+                    ? "Submitting..."
+                    : "Submit Tour Request"}
+                </button>
+
+                {/* CANCEL */}
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowTourForm(false);
+                    setTourError("");
+                  }}
+                  disabled={tourSubmitting}
+                  className="w-full text-sm text-gray-500 hover:text-gray-700 py-1 disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+
+              </form>
+
             ) : (
 
               <div className="space-y-3">
-{["buy", "sale", "for sale"].includes(
-  String(property.listingType || "").toLowerCase()
-) &&
-String(property.status || "").toUpperCase() === "AVAILABLE" &&
-user?.role === "buyer" && (
-    <button
-      type="button"
-      onClick={handleBuyProperty}
-      disabled={paymentLoading}
-      className="w-full bg-purple-600 text-white py-2.5 rounded-lg font-semibold hover:bg-purple-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      {paymentLoading
-        ? "Processing Payment..."
-        : "Buy Property"}
-    </button>
-  )}
+
+                {["buy", "sale", "for sale"].includes(
+                  String(
+                    property.listingType || ""
+                  ).toLowerCase()
+                ) &&
+                String(
+                  property.status || ""
+                ).toUpperCase() ===
+                  "AVAILABLE" &&
+                user?.role === "buyer" && (
+                  <button
+                    type="button"
+                    onClick={handleBuyProperty}
+                    disabled={paymentLoading}
+                    className="w-full bg-purple-600 text-white py-2.5 rounded-lg font-semibold hover:bg-purple-700 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {paymentLoading
+                      ? "Processing Payment..."
+                      : "Buy Property"}
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={handleInterested}
@@ -1962,4 +2436,3 @@ user?.role === "buyer" && (
     </div>
   );
 }
-

@@ -36,23 +36,17 @@ export default function DashboardLayout() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const [sidebarOpen, setSidebarOpen] =
-    useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const [profilePhoto, setProfilePhoto] =
-    useState(null);
+  const [profilePhoto, setProfilePhoto] = useState(null);
 
-  const [ownerProperties, setOwnerProperties] =
-    useState([]);
+  const [ownerProperties, setOwnerProperties] = useState([]);
 
-  const [ownerLeads, setOwnerLeads] =
-    useState([]);
+  const [ownerLeads, setOwnerLeads] = useState([]);
 
-  const [propertiesLoading, setPropertiesLoading] =
-    useState(false);
+  const [propertiesLoading, setPropertiesLoading] = useState(false);
 
-  const [leadsLoading, setLeadsLoading] =
-    useState(false);
+  const [leadsLoading, setLeadsLoading] = useState(false);
 
   const {
     agent,
@@ -62,11 +56,9 @@ export default function DashboardLayout() {
     logout,
   } = useAuth();
 
-  const profile =
-    agent || owner || buyer || user;
+  const profile = agent || owner || buyer || user;
 
-  const userId =
-    profile?.userId || profile?.id;
+  const userId = profile?.userId || profile?.id;
 
   const profilePhotoUpdatedAt =
     profile?.profilePhotoUpdatedAt || 0;
@@ -87,9 +79,7 @@ export default function DashboardLayout() {
 
       try {
         const blob =
-          await userService.getProfilePhotoBlob(
-            userId
-          );
+          await userService.getProfilePhotoBlob(userId);
 
         if (cancelled) {
           return;
@@ -100,8 +90,7 @@ export default function DashboardLayout() {
           return;
         }
 
-        objectUrl =
-          URL.createObjectURL(blob);
+        objectUrl = URL.createObjectURL(blob);
 
         setProfilePhoto(objectUrl);
       } catch (error) {
@@ -125,18 +114,14 @@ export default function DashboardLayout() {
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [
-    userId,
-    profilePhotoUpdatedAt,
-  ]);
+  }, [userId, profilePhotoUpdatedAt]);
 
   /* ============================================================
      ROLE
   ============================================================ */
 
   const rawRole =
-    profile?.role?.toLowerCase() ||
-    "owner";
+    profile?.role?.toLowerCase() || "owner";
 
   /* ============================================================
      SIDEBAR
@@ -239,9 +224,7 @@ export default function DashboardLayout() {
           return;
         }
 
-        setOwnerProperties(
-          backendProperties
-        );
+        setOwnerProperties(backendProperties);
       } catch (error) {
         console.error(
           "Failed to load owner properties:",
@@ -282,9 +265,7 @@ export default function DashboardLayout() {
 
       try {
         const response =
-          await leadService.getLeadsBySeller(
-            userId
-          );
+          await leadService.getLeadsBySeller(userId);
 
         if (cancelled) {
           return;
@@ -335,25 +316,18 @@ export default function DashboardLayout() {
         /*
          * Newest leads first.
          */
-        normalizedLeads.sort(
-          (a, b) => {
-            if (
-              !a.createdAt ||
-              !b.createdAt
-            ) {
-              return 0;
-            }
-
-            return (
-              new Date(b.createdAt) -
-              new Date(a.createdAt)
-            );
+        normalizedLeads.sort((a, b) => {
+          if (!a.createdAt || !b.createdAt) {
+            return 0;
           }
-        );
 
-        setOwnerLeads(
-          normalizedLeads
-        );
+          return (
+            new Date(b.createdAt) -
+            new Date(a.createdAt)
+          );
+        });
+
+        setOwnerLeads(normalizedLeads);
       } catch (error) {
         console.error(
           "Failed to load owner leads:",
@@ -389,8 +363,7 @@ export default function DashboardLayout() {
       (property) =>
         String(
           property.status || ""
-        ).toUpperCase() ===
-        "ACTIVE"
+        ).toUpperCase() === "ACTIVE"
     ).length;
 
   const soldProperties =
@@ -398,8 +371,7 @@ export default function DashboardLayout() {
       (property) =>
         String(
           property.status || ""
-        ).toUpperCase() ===
-        "SOLD"
+        ).toUpperCase() === "SOLD"
     ).length;
 
   const rentedProperties =
@@ -407,8 +379,7 @@ export default function DashboardLayout() {
       (property) =>
         String(
           property.status || ""
-        ).toUpperCase() ===
-        "RENTED"
+        ).toUpperCase() === "RENTED"
     ).length;
 
   /*
@@ -418,9 +389,7 @@ export default function DashboardLayout() {
     ownerProperties.reduce(
       (total, property) =>
         total +
-        (Number(
-          property.views
-        ) || 0),
+        (Number(property.views) || 0),
       0
     );
 
@@ -439,9 +408,54 @@ export default function DashboardLayout() {
       (lead) =>
         String(
           lead.status || ""
-        ).toUpperCase() ===
-        "NEW"
+        ).toUpperCase() === "NEW"
     ).length;
+
+  /*
+   * Revenue based on completed SOLD
+   * properties from the existing owner
+   * property data.
+   *
+   * ACTIVE and RENTED properties are not
+   * counted because they do not represent
+   * confirmed money received.
+   */
+  const ownerRevenue =
+    ownerProperties.reduce(
+      (total, property) => {
+        const status =
+          String(
+            property.status || ""
+          ).toUpperCase();
+
+        if (status !== "SOLD") {
+          return total;
+        }
+
+        const price =
+          Number(
+            property.price ??
+              property.amount ??
+              property.listingPrice ??
+              property.expectedPrice ??
+              0
+          ) || 0;
+
+        return total + price;
+      },
+      0
+    );
+
+  /*
+   * Format revenue in Indian currency.
+   */
+  const formatCurrency = (value) => {
+    return `₹${Number(
+      value || 0
+    ).toLocaleString("en-IN", {
+      maximumFractionDigits: 2,
+    })}`;
+  };
 
   const statistics = [
     {
@@ -516,12 +530,10 @@ export default function DashboardLayout() {
     },
 
     {
-      /*
-       * Revenue is not currently supplied by
-       * the backend property/lead APIs.
-       */
       label: "Revenue",
-      count: "N/A",
+      count: propertiesLoading
+        ? "..."
+        : formatCurrency(ownerRevenue),
       icon: CreditCard,
       color: "text-emerald-600",
       bg: "bg-emerald-50",
@@ -565,9 +577,7 @@ export default function DashboardLayout() {
      STATUS LABELS
   ============================================================ */
 
-  const getStatusLabel = (
-    status
-  ) => {
+  const getStatusLabel = (status) => {
     const normalized =
       String(
         status || ""
@@ -576,8 +586,7 @@ export default function DashboardLayout() {
     const labels = {
       NEW: "New",
       CONTACTED: "Contacted",
-      IN_PROGRESS:
-        "In Progress",
+      IN_PROGRESS: "In Progress",
       CONVERTED: "Converted",
       CLOSED: "Closed",
     };
@@ -589,9 +598,7 @@ export default function DashboardLayout() {
     );
   };
 
-  const getStatusClass = (
-    status
-  ) => {
+  const getStatusClass = (status) => {
     const normalized =
       String(
         status || ""
@@ -601,31 +608,19 @@ export default function DashboardLayout() {
       return "bg-blue-50 text-blue-600 border-blue-200";
     }
 
-    if (
-      normalized ===
-      "CONTACTED"
-    ) {
+    if (normalized === "CONTACTED") {
       return "bg-amber-50 text-amber-600 border-amber-200";
     }
 
-    if (
-      normalized ===
-      "IN_PROGRESS"
-    ) {
+    if (normalized === "IN_PROGRESS") {
       return "bg-purple-50 text-purple-600 border-purple-200";
     }
 
-    if (
-      normalized ===
-      "CONVERTED"
-    ) {
+    if (normalized === "CONVERTED") {
       return "bg-green-50 text-green-600 border-green-200";
     }
 
-    if (
-      normalized ===
-      "CLOSED"
-    ) {
+    if (normalized === "CLOSED") {
       return "bg-gray-50 text-gray-600 border-gray-200";
     }
 
@@ -637,25 +632,18 @@ export default function DashboardLayout() {
   ============================================================ */
 
   const isDashboardHome =
-    location.pathname ===
-      "/owner" ||
-    location.pathname ===
-      "/owner/dashboard";
+    location.pathname === "/owner" ||
+    location.pathname === "/owner/dashboard";
 
   /* ============================================================
      HELPERS
   ============================================================ */
 
-  const getInitials = (
-    name
-  ) =>
+  const getInitials = (name) =>
     name
       ? name
           .split(" ")
-          .map(
-            (word) =>
-              word[0]
-          )
+          .map((word) => word[0])
           .join("")
           .toUpperCase()
           .slice(0, 2)
@@ -744,8 +732,7 @@ export default function DashboardLayout() {
                   }) =>
                     `w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
                       isActive
-                        ? rawRole ===
-                          "owner"
+                        ? rawRole === "owner"
                           ? "bg-rose-50 text-rose-600 shadow-sm"
                           : "bg-purple-50 text-purple-600 shadow-sm"
                         : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
@@ -779,9 +766,7 @@ export default function DashboardLayout() {
           </NavLink>
 
           <button
-            onClick={
-              handleLogout
-            }
+            onClick={handleLogout}
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-rose-600 hover:bg-rose-50/50 transition-colors"
           >
             <LogOut className="h-4 w-4 text-rose-500 shrink-0" />
@@ -927,8 +912,7 @@ export default function DashboardLayout() {
                       Recent Inbound Leads
                     </h3>
 
-                    {ownerLeads.length >
-                      0 && (
+                    {ownerLeads.length > 0 && (
                       <NavLink
                         to="/owner/leads"
                         className="text-xs font-semibold text-rose-600 hover:text-rose-700"
@@ -941,15 +925,19 @@ export default function DashboardLayout() {
 
                   {leadsLoading ? (
                     <div className="py-8 text-center">
+
                       <p className="text-sm text-gray-500">
                         Loading leads...
                       </p>
+
                     </div>
-                  ) : recentLeads.length ===
-                    0 ? (
+                  ) : recentLeads.length === 0 ? (
                     <div className="py-8 text-center">
+
                       <div className="h-10 w-10 mx-auto bg-gray-50 rounded-xl flex items-center justify-center">
+
                         <Users className="h-5 w-5 text-gray-400" />
+
                       </div>
 
                       <p className="text-sm text-gray-500 mt-3">
@@ -959,6 +947,7 @@ export default function DashboardLayout() {
                       <p className="text-xs text-gray-400 mt-1">
                         New enquiries will appear here.
                       </p>
+
                     </div>
                   ) : (
                     <div className="divide-y divide-gray-50">

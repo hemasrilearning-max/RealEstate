@@ -9,12 +9,16 @@ import {
   Upload,
   X,
   Home,
+  MapPin,
+  Search,
+  Loader2,
 } from "lucide-react";
 
 import locationService from "../../services/locationService";
 import propertyService from "../../services/propertyService";
 import mediaService from "../../services/mediaService";
 import axiosInstance from "../../utils/axiosInstance";
+import PropertyMap from "../../components/PropertyMap";
 
 const EMPTY_FORM = {
   title: "",
@@ -32,6 +36,9 @@ const EMPTY_FORM = {
   locality: "",
   pincode: "",
   address: "",
+
+  latitude: "",
+  longitude: "",
 
   furnishingStatus: "FURNISHED",
   ownershipType: "FREEHOLD",
@@ -52,6 +59,22 @@ export default function AddProperty({
 
   const [formData, setFormData] =
     useState(EMPTY_FORM);
+
+  /*
+   * =========================================================
+   * MAP / GEOCODING
+   * =========================================================
+   */
+
+  const [
+    locating,
+    setLocating,
+  ] = useState(false);
+
+  const [
+    locationMessage,
+    setLocationMessage,
+  ] = useState("");
 
   /*
    * =========================================================
@@ -80,34 +103,34 @@ export default function AddProperty({
   ] = useState(false);
 
   /*
-   * New files selected by the user.
+   * =========================================================
+   * IMAGES
+   * =========================================================
    */
+
   const [images, setImages] =
     useState([]);
 
-  /*
-   * Images already stored in backend.
-   */
   const [
     existingImages,
     setExistingImages,
   ] = useState([]);
 
-  /*
-   * New image previews.
-   */
   const [
     newImagePreviews,
     setNewImagePreviews,
   ] = useState([]);
 
-  /*
-   * Media IDs removed by user while editing.
-   */
   const [
     removedMediaIds,
     setRemovedMediaIds,
   ] = useState([]);
+
+  /*
+   * =========================================================
+   * PAGE STATE
+   * =========================================================
+   */
 
   const [
     loadingProperty,
@@ -126,10 +149,6 @@ export default function AddProperty({
    * =========================================================
    * LOAD BROKERS
    * =========================================================
-   *
-   * Uses the existing GET /api/users endpoint.
-   *
-   * No backend changes are required.
    */
 
   useEffect(() => {
@@ -163,15 +182,6 @@ export default function AddProperty({
               user?.role ||
               user?.roleName ||
               user?.roleType;
-
-            /*
-             * Handles possible response formats:
-             *
-             * role: "BROKER"
-             * role: { name: "BROKER" }
-             * roleName: "BROKER"
-             * roleType: "BROKER"
-             */
 
             const normalizedRole =
               typeof role === "object"
@@ -333,6 +343,14 @@ export default function AddProperty({
             property.address ||
             "",
 
+          latitude:
+            location.latitude ??
+            "",
+
+          longitude:
+            location.longitude ??
+            "",
+
           furnishingStatus:
             property.furnishingStatus ||
             "FURNISHED",
@@ -346,11 +364,6 @@ export default function AddProperty({
          * -----------------------------------------------------
          * EXISTING BROKER
          * -----------------------------------------------------
-         *
-         * This only reads broker information if the existing
-         * property response already contains it.
-         *
-         * It does not require a backend change.
          */
 
         const existingBroker =
@@ -365,6 +378,7 @@ export default function AddProperty({
           existingBrokerId
         ) {
           setNeedsBroker(true);
+
           setSelectedBrokerId(
             String(
               existingBrokerId
@@ -516,7 +530,145 @@ export default function AddProperty({
       ...prev,
       [name]: value,
     }));
+
+    /*
+     * If the owner manually changes the address,
+     * the previous map confirmation may no longer
+     * represent the current address.
+     */
+    if (
+      [
+        "country",
+        "state",
+        "city",
+        "locality",
+        "pincode",
+        "address",
+      ].includes(name)
+    ) {
+      setLocationMessage("");
+    }
   };
+
+  /*
+   * =========================================================
+   * FIND LOCATION ON MAP
+   * =========================================================
+   */
+
+  const handleFindOnMap =
+    async () => {
+      try {
+        setLocationMessage("");
+        setError("");
+
+        const country =
+          formData.country.trim();
+
+        const state =
+          formData.state.trim();
+
+        const city =
+          formData.city.trim();
+
+        const locality =
+          formData.locality.trim();
+
+        const pincode =
+          formData.pincode.trim();
+
+        const address =
+          formData.address.trim();
+
+        const parts = [
+          address,
+          locality,
+          city,
+          state,
+          pincode,
+          country,
+        ].filter(Boolean);
+
+        if (parts.length === 0) {
+          setLocationMessage(
+            "Please enter the property address before finding it on the map."
+          );
+
+          return;
+        }
+
+        setLocating(true);
+
+        const result =
+          await locationService.searchAddress(
+            parts.join(", ")
+          );
+
+        if (
+          !result ||
+          !Number.isFinite(
+            Number(result.latitude)
+          ) ||
+          !Number.isFinite(
+            Number(result.longitude)
+          )
+        ) {
+          throw new Error(
+            "The location could not be found. Please enter a more specific address."
+          );
+        }
+
+        setFormData((prev) => ({
+          ...prev,
+
+          latitude:
+            result.latitude,
+
+          longitude:
+            result.longitude,
+        }));
+
+        setLocationMessage(
+          "Location found. You can drag the marker to adjust the exact property position."
+        );
+      } catch (err) {
+        console.error(
+          "Find Location Error:",
+          err
+        );
+
+        setLocationMessage(
+          err?.message ||
+            "Unable to find this location."
+        );
+      } finally {
+        setLocating(false);
+      }
+    };
+
+  /*
+   * =========================================================
+   * MAP MARKER MOVE
+   * =========================================================
+   */
+
+  const handleMarkerPositionChange =
+    ({
+      latitude,
+      longitude,
+    }) => {
+      setFormData((prev) => ({
+        ...prev,
+
+        latitude,
+
+        longitude,
+      }));
+
+      setLocationMessage(
+        "Location marker updated. The selected coordinates will be saved with the property."
+      );
+    };
 
   /*
    * =========================================================
@@ -808,6 +960,40 @@ export default function AddProperty({
          * -----------------------------------------------------
          */
 
+        const latitude =
+          formData.latitude === "" ||
+          formData.latitude === null
+            ? null
+            : Number(
+                formData.latitude
+              );
+
+        const longitude =
+          formData.longitude === "" ||
+          formData.longitude === null
+            ? null
+            : Number(
+                formData.longitude
+              );
+
+        if (
+          formData.latitude !== "" &&
+          !Number.isFinite(latitude)
+        ) {
+          throw new Error(
+            "Please enter a valid latitude."
+          );
+        }
+
+        if (
+          formData.longitude !== "" &&
+          !Number.isFinite(longitude)
+        ) {
+          throw new Error(
+            "Please enter a valid longitude."
+          );
+        }
+
         const locationPayload = {
           country:
             formData.country.trim(),
@@ -826,6 +1012,10 @@ export default function AddProperty({
 
           address:
             formData.address.trim(),
+
+          latitude,
+
+          longitude,
         };
 
         const locationResponse =
@@ -845,33 +1035,60 @@ export default function AddProperty({
          * -----------------------------------------------------
          * STEP 2: PROPERTY PAYLOAD
          * -----------------------------------------------------
-         *
-         * Broker is intentionally NOT sent here because
-         * backend changes were not requested.
-         *
-         * The selected broker remains available in
-         * selectedBrokerId for the UI.
          */
 
-const propertyPayload = {
-  title: formData.title.trim(),
-  description: formData.description.trim() || null,
-  price: Number(formData.price),
-  bedrooms: Number(formData.bedrooms),
-  bathrooms: Number(formData.bathrooms),
-  area: Number(formData.area),
-  propertyType: getBackendPropertyType(),
-  listingType: formData.type === "Rent" ? "RENT" : "SALE",
-  furnishingStatus: formData.furnishingStatus || null,
-  ownershipType: formData.ownershipType || null,
-  locationId: locationResponse.id,
+        const propertyPayload = {
+          title:
+            formData.title.trim(),
 
-  // Send broker only when owner selected Yes
-  brokerId:
-    needsBroker && selectedBrokerId
-      ? Number(selectedBrokerId)
-      : null,
-};
+          description:
+            formData.description.trim() ||
+            null,
+
+          price:
+            Number(formData.price),
+
+          bedrooms:
+            Number(
+              formData.bedrooms
+            ),
+
+          bathrooms:
+            Number(
+              formData.bathrooms
+            ),
+
+          area:
+            Number(formData.area),
+
+          propertyType:
+            getBackendPropertyType(),
+
+          listingType:
+            formData.type ===
+            "Rent"
+              ? "RENT"
+              : "SALE",
+
+          furnishingStatus:
+            formData.furnishingStatus ||
+            null,
+
+          ownershipType:
+            formData.ownershipType ||
+            null,
+
+          locationId:
+            locationResponse.id,
+
+          brokerId:
+            needsBroker &&
+            selectedBrokerId
+              ? Number(
+                  selectedBrokerId
+                )
+              : null,
+        };
 
         console.log(
           isEditMode
@@ -1501,18 +1718,22 @@ const propertyPayload = {
 
           </div>
 
-          {/* LOCATION */}
+          {/* =====================================================
+              LOCATION
+          ===================================================== */}
 
           <div className="border-t border-gray-100 pt-6">
 
             <div className="mb-5">
 
-              <h2 className="text-base font-bold text-gray-800">
+              <h2 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                <MapPin className="w-5 h-5 text-rose-600" />
+
                 Property Location
               </h2>
 
               <p className="text-xs text-gray-500 mt-1">
-                Enter the location details used to register this property.
+                Enter the property address. You can automatically find it on the map and adjust the exact location by moving the marker.
               </p>
 
             </div>
@@ -1638,6 +1859,149 @@ const propertyPayload = {
               </div>
 
             </div>
+
+            {/* FIND ON MAP */}
+
+            <div className="mt-5">
+
+              <button
+                type="button"
+                onClick={
+                  handleFindOnMap
+                }
+                disabled={
+                  locating ||
+                  submitting
+                }
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-sm font-bold shadow-sm transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+
+                {locating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+
+                    Finding Location...
+                  </>
+                ) : (
+                  <>
+                    <Search className="w-4 h-4" />
+
+                    Find on Map
+                  </>
+                )}
+
+              </button>
+
+              <p className="text-[11px] text-gray-400 mt-2">
+                Enter the address first, then use Find on Map to automatically determine the coordinates.
+              </p>
+
+            </div>
+
+            {/* LOCATION MESSAGE */}
+
+            {locationMessage && (
+              <div className="mt-4 rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-xs text-rose-700">
+                {locationMessage}
+              </div>
+            )}
+
+            {/* COORDINATES */}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+
+              <div>
+
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Latitude
+                </label>
+
+                <input
+                  type="number"
+                  name="latitude"
+                  step="any"
+                  min="-90"
+                  max="90"
+                  placeholder="e.g., 17.4213"
+                  value={
+                    formData.latitude
+                  }
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:border-rose-500 transition-colors text-sm font-medium"
+                />
+
+                <p className="text-[10px] text-gray-400 mt-1">
+                  Automatically filled or enter manually.
+                </p>
+
+              </div>
+
+              <div>
+
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Longitude
+                </label>
+
+                <input
+                  type="number"
+                  name="longitude"
+                  step="any"
+                  min="-180"
+                  max="180"
+                  placeholder="e.g., 80.5783"
+                  value={
+                    formData.longitude
+                  }
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:outline-none focus:border-rose-500 transition-colors text-sm font-medium"
+                />
+
+                <p className="text-[10px] text-gray-400 mt-1">
+                  Automatically filled or enter manually.
+                </p>
+
+              </div>
+
+            </div>
+
+            {/* MAP */}
+
+            {formData.latitude !== "" &&
+              formData.longitude !== "" && (
+                <div className="mt-6">
+
+                  <div className="mb-2">
+
+                    <p className="text-sm font-semibold text-gray-700">
+                      Confirm Property Position
+                    </p>
+
+                    <p className="text-xs text-gray-500 mt-1">
+                      Drag the marker to the exact property location if necessary.
+                    </p>
+
+                  </div>
+
+                  <PropertyMap
+                    latitude={
+                      formData.latitude
+                    }
+                    longitude={
+                      formData.longitude
+                    }
+                    locationName={
+                      formData.locality ||
+                      formData.city ||
+                      "Property Location"
+                    }
+                    draggable
+                    onPositionChange={
+                      handleMarkerPositionChange
+                    }
+                  />
+
+                </div>
+              )}
 
           </div>
 

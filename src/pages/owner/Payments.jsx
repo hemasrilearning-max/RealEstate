@@ -1,277 +1,612 @@
-import React, { useEffect, useMemo, useState } from "react";
-import axiosInstance from "../../utils/axiosInstance";
+import React, { useMemo } from "react";
+import { useData } from "../../context/DataContext";
+import { useAuth } from "../../context/AuthContext";
+
+const BROKER_COMMISSION_RATE = 0.02;
 
 export default function OwnerPayments() {
-  const [transactions, setTransactions] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const { properties = [] } = useData();
+  const { user } = useAuth();
 
-  useEffect(() => {
-    let mounted = true;
+  const currentUserId = getUserId(user);
 
-    const loadPayments = async () => {
-      try {
-        setLoading(true);
-        setError("");
+  /*
+   * Get only properties belonging to the logged-in owner.
+   */
+  const ownerProperties = useMemo(() => {
+    if (!Array.isArray(properties)) {
+      return [];
+    }
 
-        const response = await axiosInstance.get("/api/payments/my");
+    return properties.filter((property) => {
+      const ownerId =
+        getPropertyOwnerId(property);
 
-        if (!mounted) return;
-
-        const payments = Array.isArray(response.data)
-          ? response.data
-          : [];
-
-        const mappedTransactions = payments.map((payment) => ({
-          id:
-            payment.razorpayPaymentId ||
-            payment.razorpayOrderId ||
-            `PAY-${payment.id}`,
-
-          tenant:
-            payment.buyerName ||
-            payment.buyerUsername ||
-            payment.buyerEmail ||
-            `Buyer #${payment.buyerId ?? "-"}`,
-
-          property:
-            payment.propertyTitle ||
-            `Property #${payment.propertyId ?? "-"}`,
-
-          item: "Property Purchase",
-
-          amount: formatCurrency(payment.amount),
-
-          date: formatDate(payment.createdAt),
-
-          status: formatStatus(payment.status),
-
-          channel:
-            payment.paymentMethod ||
-            "Razorpay Gateway",
-        }));
-
-        setTransactions(mappedTransactions);
-      } catch (err) {
-        console.error("Failed to load owner payments:", err);
-
-        if (!mounted) return;
-
-        setTransactions([]);
-        setError(
-          err?.response?.data?.message ||
-            "Unable to load payment records."
-        );
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
+      if (
+        ownerId === null ||
+        currentUserId === null
+      ) {
+        return false;
       }
-    };
 
-    loadPayments();
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  const statusColors = {
-    Successful:
-      "bg-green-50 text-green-600 border-green-200",
-
-    Pending:
-      "bg-amber-50 text-amber-600 border-amber-200",
-
-    Failed:
-      "bg-red-50 text-red-600 border-red-200",
-  };
-
-  const grossPayouts = useMemo(() => {
-    return transactions
-      .filter((txn) => txn.status === "Successful")
-      .reduce(
-        (total, txn) => total + parseCurrency(txn.amount),
-        0
+      return (
+        String(ownerId) ===
+        String(currentUserId)
       );
-  }, [transactions]);
+    });
+  }, [properties, currentUserId]);
 
-  const pendingAmount = useMemo(() => {
-    return transactions
-      .filter((txn) => txn.status === "Pending")
-      .reduce(
-        (total, txn) => total + parseCurrency(txn.amount),
-        0
-      );
-  }, [transactions]);
+  /*
+   * Total value of the owner's current listings.
+   */
+  const portfolioValue = useMemo(() => {
+    return ownerProperties.reduce(
+      (total, property) =>
+        total + getNumericPrice(property),
+      0
+    );
+  }, [ownerProperties]);
+
+  /*
+   * Active / available owner listings.
+   */
+  const activeListings = useMemo(() => {
+    return ownerProperties.filter(
+      (property) => {
+        const status =
+          normalizeStatus(
+            property.status
+          );
+
+        return [
+          "ACTIVE",
+          "AVAILABLE",
+          "PUBLISHED",
+          "LISTED",
+        ].includes(status);
+      }
+    ).length;
+  }, [ownerProperties]);
+
+  /*
+   * Rental listings.
+   */
+  const rentalListings = useMemo(() => {
+    return ownerProperties.filter(
+      (property) =>
+        normalizeListingType(
+          property
+        ) === "RENT"
+    ).length;
+  }, [ownerProperties]);
+
+  /*
+   * Sale listings.
+   */
+  const saleListings = useMemo(() => {
+    return ownerProperties.filter(
+      (property) =>
+        normalizeListingType(
+          property
+        ) === "SALE"
+    ).length;
+  }, [ownerProperties]);
+
+  /*
+   * ============================================================
+   * COMPLETED SALES
+   * ============================================================
+   *
+   * Revenue is calculated only from SOLD properties.
+   */
+  const soldProperties = useMemo(() => {
+    return ownerProperties.filter(
+      (property) =>
+        normalizeStatus(
+          property.status
+        ) === "SOLD"
+    );
+  }, [ownerProperties]);
+
+  /*
+   * ============================================================
+   * GROSS REVENUE
+   * ============================================================
+   *
+   * Total sale value before broker commission.
+   */
+  const grossRevenue = useMemo(() => {
+    return soldProperties.reduce(
+      (total, property) =>
+        total +
+        getNumericPrice(property),
+      0
+    );
+  }, [soldProperties]);
+
+  /*
+   * ============================================================
+   * BROKER COMMISSION
+   * ============================================================
+   *
+   * Broker gets 2% only when a broker is assigned
+   * to the sold property.
+   */
+  const brokerCommission = useMemo(() => {
+    return soldProperties.reduce(
+      (total, property) => {
+        const saleAmount =
+          getNumericPrice(property);
+
+        const hasBroker =
+          isBrokerAssigned(property);
+
+        if (
+          !hasBroker ||
+          saleAmount <= 0
+        ) {
+          return total;
+        }
+
+        return (
+          total +
+          saleAmount *
+            BROKER_COMMISSION_RATE
+        );
+      },
+      0
+    );
+  }, [soldProperties]);
+
+  /*
+   * ============================================================
+   * OWNER NET REVENUE
+   * ============================================================
+   *
+   * Gross sold amount - broker commission.
+   */
+  const netRevenue =
+    grossRevenue -
+    brokerCommission;
+
+  /*
+   * Number of sold properties that used a broker.
+   */
+  const brokerAssistedSales = useMemo(() => {
+    return soldProperties.filter(
+      (property) =>
+        isBrokerAssigned(property)
+    ).length;
+  }, [soldProperties]);
 
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm font-sans animate-fadeIn">
-      {/* Module Title Section */}
+
+      {/* ========================================================
+          TITLE
+      ======================================================== */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-5 border-b border-gray-100 gap-4">
+
         <div>
           <h2 className="text-xl font-bold text-gray-900">
             Payments & Ledgers
           </h2>
 
           <p className="text-sm text-gray-500 mt-0.5">
-            Audit historical rent statements and transactional billing items.
+            Review your property sales, broker commissions,
+            and net revenue.
           </p>
         </div>
 
-        {/* Quick Statement Export Action Link Trigger */}
-        <button className="px-4 py-2 text-xs font-semibold bg-gray-900 text-white rounded-xl shadow-sm hover:bg-gray-800 transition-colors self-start">
+        <button
+          type="button"
+          onClick={() =>
+            window.print()
+          }
+          className="px-4 py-2 text-xs font-semibold bg-gray-900 text-white rounded-xl shadow-sm hover:bg-gray-800 transition-colors self-start"
+        >
           📥 Export Account Statement
         </button>
       </div>
 
-      {/* Interactive Account Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+      {/* ========================================================
+          REVENUE SUMMARY
+      ======================================================== */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mt-6">
+
+        {/* Gross Revenue */}
         <div className="bg-gray-50/50 p-4 border border-gray-100 rounded-xl">
           <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">
-            Gross Payouts (Month)
+            Gross Revenue
           </span>
 
           <p className="text-2xl font-black text-gray-900 mt-1">
-            {formatCurrency(grossPayouts)}
+            {formatCurrency(
+              grossRevenue
+            )}
+          </p>
+
+          <p className="text-[11px] text-gray-400 mt-1">
+            Total value of completed sales
           </p>
         </div>
 
+        {/* Broker Commission */}
         <div className="bg-gray-50/50 p-4 border border-gray-100 rounded-xl">
           <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">
-            Pending Approvals
+            Broker Commission
           </span>
 
-          <p className="text-2xl font-black text-amber-600 mt-1">
-            {formatCurrency(pendingAmount)}
+          <p className="text-2xl font-black text-rose-600 mt-1">
+            -{formatCurrency(
+              brokerCommission
+            )}
+          </p>
+
+          <p className="text-[11px] text-gray-400 mt-1">
+            2% on broker-assisted sales
           </p>
         </div>
 
-        <div className="bg-gray-50/50 p-4 border border-gray-100 rounded-xl">
+        {/* Net Revenue */}
+        <div className="bg-gray-50/50 p-4 border border-emerald-100 rounded-xl">
           <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">
-            Active Leases Invoiced
+            Net Revenue
           </span>
 
-          <p className="text-2xl font-black text-rose-500 mt-1">
-            0 / 0
+          <p className="text-2xl font-black text-emerald-600 mt-1">
+            {formatCurrency(
+              netRevenue
+            )}
+          </p>
+
+          <p className="text-[11px] text-gray-400 mt-1">
+            Revenue after broker commission
+          </p>
+        </div>
+
+        {/* Completed Sales */}
+        <div className="bg-gray-50/50 p-4 border border-gray-100 rounded-xl">
+          <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">
+            Completed Sales
+          </span>
+
+          <p className="text-2xl font-black text-blue-600 mt-1">
+            {soldProperties.length}
+          </p>
+
+          <p className="text-[11px] text-gray-400 mt-1">
+            Sold owner properties
+          </p>
+        </div>
+
+        {/* Broker Sales */}
+        <div className="bg-gray-50/50 p-4 border border-gray-100 rounded-xl">
+          <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">
+            Broker Sales
+          </span>
+
+          <p className="text-2xl font-black text-purple-600 mt-1">
+            {brokerAssistedSales}
+          </p>
+
+          <p className="text-[11px] text-gray-400 mt-1">
+            Sales with assigned broker
           </p>
         </div>
       </div>
 
-      {/* Error */}
-      {error && (
-        <div className="mt-6 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
-          {error}
-        </div>
-      )}
+      {/* ========================================================
+          INFORMATION
+      ======================================================== */}
+      <div className="mt-6 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3">
 
-      {/* Transaction Records Table Column View Grid */}
+        <p className="text-sm font-semibold text-blue-700">
+          Revenue calculation
+        </p>
+
+        <p className="text-xs text-blue-600 mt-1 leading-5">
+          Net revenue is calculated from completed SOLD
+          properties. Properties with an assigned broker have
+          2% broker commission deducted from the sale amount.
+          Properties without a broker have no commission deduction.
+        </p>
+
+      </div>
+
+      {/* ========================================================
+          PROPERTY LEDGER
+      ======================================================== */}
       <div className="overflow-x-auto mt-6">
+
         <table className="w-full text-left border-collapse">
+
           <thead>
             <tr className="border-b border-gray-100 text-xs uppercase tracking-wider text-gray-400 font-bold">
+
               <th className="pb-3 pl-4">
-                Transaction ID / Asset
+                Property / Asset
               </th>
 
               <th className="pb-3">
-                Payer Account
+                Listing
               </th>
 
               <th className="pb-3">
-                Description
+                Property Type
               </th>
 
               <th className="pb-3">
-                Value
+                Location
+              </th>
+
+              <th className="pb-3">
+                Sale Amount
+              </th>
+
+              <th className="pb-3">
+                Broker
+              </th>
+
+              <th className="pb-3">
+                Commission
+              </th>
+
+              <th className="pb-3">
+                Net Revenue
               </th>
 
               <th className="pb-3">
                 Status
               </th>
 
-              <th className="pb-3 pr-4 text-right">
-                Date
-              </th>
             </tr>
           </thead>
 
           <tbody className="divide-y divide-gray-50 text-sm">
-            {loading ? (
+
+            {ownerProperties.length === 0 ? (
               <tr>
                 <td
-                  colSpan="6"
-                  className="py-10 text-center text-sm text-gray-400"
+                  colSpan="9"
+                  className="py-12 text-center"
                 >
-                  Loading payment records...
-                </td>
-              </tr>
-            ) : transactions.length === 0 ? (
-              <tr>
-                <td
-                  colSpan="6"
-                  className="py-10 text-center text-sm text-gray-400"
-                >
-                  No payment records found.
+                  <div className="flex flex-col items-center justify-center">
+
+                    <div className="text-3xl mb-3">
+                      🏠
+                    </div>
+
+                    <p className="text-sm font-semibold text-gray-700">
+                      No owner properties found
+                    </p>
+
+                    <p className="text-xs text-gray-400 mt-1 max-w-md leading-5">
+                      No properties currently linked to the
+                      logged-in owner were found in the existing
+                      property data.
+                    </p>
+
+                  </div>
                 </td>
               </tr>
             ) : (
-              transactions.map((txn) => (
-                <tr
-                  key={txn.id}
-                  className="hover:bg-gray-50/30 transition-colors"
-                >
-                  {/* ID Mapping reference */}
-                  <td className="py-4 pl-4">
-                    <div className="font-bold text-gray-900">
-                      {txn.id}
-                    </div>
+              ownerProperties.map(
+                (property) => {
 
-                    <div className="text-xs text-gray-400 mt-0.5 truncate max-w-[180px]">
-                      {txn.property}
-                    </div>
-                  </td>
+                  const listingType =
+                    normalizeListingType(
+                      property
+                    );
 
-                  {/* Tenant User Name */}
-                  <td className="py-4 font-medium text-gray-700">
-                    {txn.tenant}
-                  </td>
+                  const status =
+                    formatPropertyStatus(
+                      property.status
+                    );
 
-                  {/* Line Item Specific Details */}
-                  <td className="py-4 text-gray-500">
-                    <div className="text-gray-800 font-medium">
-                      {txn.item}
-                    </div>
+                  const propertyTitle =
+                    property.title ||
+                    property.name ||
+                    "Untitled Property";
 
-                    <div className="text-[10px] text-gray-400">
-                      {txn.channel}
-                    </div>
-                  </td>
+                  const propertyType =
+                    property.propertyType ||
+                    "Property";
 
-                  {/* Currency Values */}
-                  <td className="py-4 font-bold text-gray-900">
-                    {txn.amount}
-                  </td>
+                  const location =
+                    getPropertyLocation(
+                      property
+                    );
 
-                  {/* Status Badges */}
-                  <td className="py-4">
-                    <span
-                      className={`px-2.5 py-0.5 text-xs font-semibold rounded-md border ${
-                        statusColors[txn.status] ||
-                        "bg-gray-50 text-gray-600 border-gray-200"
-                      }`}
+                  const price =
+                    getNumericPrice(
+                      property
+                    );
+
+                  const propertyId =
+                    property.id ||
+                    property.propertyId;
+
+                  const hasBroker =
+                    isBrokerAssigned(
+                      property
+                    );
+
+                  const isSold =
+                    normalizeStatus(
+                      property.status
+                    ) === "SOLD";
+
+                  const commission =
+                    isSold &&
+                    hasBroker
+                      ? price *
+                        BROKER_COMMISSION_RATE
+                      : 0;
+
+                  const propertyNetRevenue =
+                    isSold
+                      ? price -
+                        commission
+                      : 0;
+
+                  const brokerName =
+                    getBrokerName(
+                      property
+                    );
+
+                  return (
+                    <tr
+                      key={
+                        propertyId ||
+                        propertyTitle
+                      }
+                      className="hover:bg-gray-50/30 transition-colors"
                     >
-                      {txn.status}
-                    </span>
-                  </td>
 
-                  {/* Timestamps */}
-                  <td className="py-4 pr-4 text-right text-xs text-gray-500 font-medium">
-                    {txn.date}
-                  </td>
-                </tr>
-              ))
+                      {/* Property */}
+                      <td className="py-4 pl-4">
+
+                        <div className="font-bold text-gray-900">
+                          {propertyTitle}
+                        </div>
+
+                        {propertyId && (
+                          <div className="text-[10px] text-gray-400 mt-0.5">
+                            Property #{propertyId}
+                          </div>
+                        )}
+
+                      </td>
+
+                      {/* Listing */}
+                      <td className="py-4">
+
+                        <span
+                          className={`px-2.5 py-1 text-xs font-semibold rounded-md border ${
+                            listingType === "RENT"
+                              ? "bg-purple-50 text-purple-600 border-purple-200"
+                              : "bg-blue-50 text-blue-600 border-blue-200"
+                          }`}
+                        >
+                          {listingType ===
+                          "RENT"
+                            ? "Rental"
+                            : "Sale"}
+                        </span>
+
+                      </td>
+
+                      {/* Property Type */}
+                      <td className="py-4 text-gray-700 font-medium">
+                        {propertyType}
+                      </td>
+
+                      {/* Location */}
+                      <td className="py-4 text-gray-500">
+
+                        <div className="max-w-[220px] truncate">
+                          {location}
+                        </div>
+
+                      </td>
+
+                      {/* Sale Amount */}
+                      <td className="py-4 font-bold text-gray-900">
+
+                        {isSold
+                          ? formatCurrency(
+                              price
+                            )
+                          : "—"}
+
+                        {!isSold &&
+                          listingType ===
+                            "RENT" && (
+                            <div className="text-[10px] text-gray-400 font-normal mt-0.5">
+                              Listed rental value
+                            </div>
+                          )}
+
+                      </td>
+
+                      {/* Broker */}
+                      <td className="py-4">
+
+                        {hasBroker ? (
+                          <div>
+                            <span className="px-2.5 py-1 text-xs font-semibold rounded-md border bg-purple-50 text-purple-600 border-purple-200">
+                              {brokerName}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">
+                            No broker
+                          </span>
+                        )}
+
+                      </td>
+
+                      {/* Commission */}
+                      <td className="py-4">
+
+                        {isSold &&
+                        hasBroker ? (
+                          <div>
+                            <span className="font-bold text-rose-600">
+                              -{formatCurrency(
+                                commission
+                              )}
+                            </span>
+
+                            <div className="text-[10px] text-gray-400 mt-0.5">
+                              2%
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400">
+                            —
+                          </span>
+                        )}
+
+                      </td>
+
+                      {/* Net Revenue */}
+                      <td className="py-4">
+
+                        {isSold ? (
+                          <span className="font-bold text-emerald-600">
+                            {formatCurrency(
+                              propertyNetRevenue
+                            )}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">
+                            —
+                          </span>
+                        )}
+
+                      </td>
+
+                      {/* Status */}
+                      <td className="py-4">
+
+                        <span
+                          className={`px-2.5 py-1 text-xs font-semibold rounded-md border ${getStatusClasses(
+                            status
+                          )}`}
+                        >
+                          {status}
+                        </span>
+
+                      </td>
+
+                    </tr>
+                  );
+                }
+              )
             )}
+
           </tbody>
         </table>
       </div>
@@ -280,54 +615,185 @@ export default function OwnerPayments() {
 }
 
 /* ============================================================
-   HELPERS
+   USER HELPERS
 ============================================================ */
 
-function formatStatus(status) {
-  const normalized = String(status || "").toUpperCase();
+function getUserId(user) {
+  if (!user) {
+    return null;
+  }
+
+  return (
+    user.userId ??
+    user.id ??
+    user.user?.userId ??
+    user.user?.id ??
+    null
+  );
+}
+
+/* ============================================================
+   PROPERTY OWNER HELPERS
+============================================================ */
+
+function getPropertyOwnerId(property) {
+  if (!property) {
+    return null;
+  }
+
+  return (
+    property.sellerId ??
+    property.ownerId ??
+    property.seller?.id ??
+    property.owner?.id ??
+    property.seller?.userId ??
+    property.owner?.userId ??
+    null
+  );
+}
+
+/* ============================================================
+   BROKER HELPERS
+============================================================ */
+
+function getPropertyBrokerId(property) {
+  if (!property) {
+    return null;
+  }
+
+  return (
+    property.brokerId ??
+    property.agentId ??
+    property.broker?.id ??
+    property.broker?.userId ??
+    property.agent?.id ??
+    property.agent?.userId ??
+    null
+  );
+}
+
+function isBrokerAssigned(property) {
+  const brokerId =
+    getPropertyBrokerId(property);
+
+  /*
+   * If the backend property contains a broker/agent
+   * relationship, consider this property broker-assisted.
+   */
+  if (
+    brokerId !== null &&
+    brokerId !== undefined &&
+    brokerId !== ""
+  ) {
+    return true;
+  }
+
+  /*
+   * Also support common boolean flags if your
+   * frontend/backend sends one.
+   */
+  if (
+    property?.brokerAssigned === true ||
+    property?.hasBroker === true ||
+    property?.isBrokerAssigned === true
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+function getBrokerName(property) {
+  if (!property) {
+    return "Broker";
+  }
+
+  return (
+    property.brokerName ||
+    property.agentName ||
+    property.broker?.name ||
+    property.broker?.fullName ||
+    property.agent?.name ||
+    property.agent?.fullName ||
+    "Assigned Broker"
+  );
+}
+
+/* ============================================================
+   LISTING HELPERS
+============================================================ */
+
+function normalizeListingType(property) {
+  const value = String(
+    property?.listingType ||
+      property?.propertyListingType ||
+      property?.type ||
+      ""
+  ).toUpperCase();
+
+  if (
+    value === "RENT" ||
+    value === "RENTAL" ||
+    value === "LEASE"
+  ) {
+    return "RENT";
+  }
+
+  return "SALE";
+}
+
+function normalizeStatus(status) {
+  return String(status || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+}
+
+function formatPropertyStatus(status) {
+  const normalized =
+    normalizeStatus(status);
 
   switch (normalized) {
-    case "SUCCESS":
-    case "SUCCESSFUL":
-      return "Successful";
+    case "ACTIVE":
+    case "AVAILABLE":
+    case "PUBLISHED":
+    case "LISTED":
+      return "Active";
 
-    case "CREATED":
+    case "SOLD":
+      return "Sold";
+
+    case "RENTED":
+      return "Rented";
+
     case "PENDING":
       return "Pending";
 
-    case "FAILED":
-      return "Failed";
+    case "INACTIVE":
+    case "DRAFT":
+      return "Inactive";
 
     default:
-      return status || "Pending";
+      return status || "Unknown";
   }
 }
 
-function formatDate(value) {
-  if (!value) return "-";
+/* ============================================================
+   PRICE HELPERS
+============================================================ */
 
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "-";
+function getNumericPrice(property) {
+  if (!property) {
+    return 0;
   }
 
-  return date.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
+  const value =
+    property.price ??
+    property.amount ??
+    property.listingPrice ??
+    property.expectedPrice ??
+    0;
 
-function formatCurrency(value) {
-  const number = Number(value) || 0;
-
-  return `₹${number.toLocaleString("en-IN", {
-    maximumFractionDigits: 2,
-  })}`;
-}
-
-function parseCurrency(value) {
   if (typeof value === "number") {
     return value;
   }
@@ -336,7 +802,123 @@ function parseCurrency(value) {
     return 0;
   }
 
+  const stringValue =
+    String(value)
+      .trim()
+      .replace(/[₹,\s]/g, "");
+
+  /*
+   * Support values such as:
+   * 35000000
+   * ₹35000000
+   * ₹3.5 Cr
+   * 3.5 Crore
+   * 50 Lakh
+   */
+  const croreMatch =
+    stringValue.match(
+      /^([\d.]+)(CR|CRORE)$/i
+    );
+
+  if (croreMatch) {
+    return (
+      Number(croreMatch[1]) *
+      10000000
+    );
+  }
+
+  const lakhMatch =
+    stringValue.match(
+      /^([\d.]+)(L|LAKH|LAKHS)$/i
+    );
+
+  if (lakhMatch) {
+    return (
+      Number(lakhMatch[1]) *
+      100000
+    );
+  }
+
   return Number(
-    String(value).replace(/[₹,\s]/g, "")
+    stringValue
   ) || 0;
+}
+
+function formatCurrency(value) {
+  const number =
+    Number(value) || 0;
+
+  return `₹${number.toLocaleString(
+    "en-IN",
+    {
+      maximumFractionDigits: 2,
+    }
+  )}`;
+}
+
+/* ============================================================
+   LOCATION HELPERS
+============================================================ */
+
+function getPropertyLocation(property) {
+  if (!property) {
+    return "-";
+  }
+
+  if (property.location) {
+    if (
+      typeof property.location ===
+      "string"
+    ) {
+      return property.location;
+    }
+
+    const locationParts = [
+      property.location.locality,
+      property.location.city,
+      property.location.state,
+    ].filter(Boolean);
+
+    if (
+      locationParts.length > 0
+    ) {
+      return locationParts.join(
+        ", "
+      );
+    }
+  }
+
+  return (
+    property.locality ||
+    property.area ||
+    property.city ||
+    property.address ||
+    "-"
+  );
+}
+
+/* ============================================================
+   STATUS STYLES
+============================================================ */
+
+function getStatusClasses(status) {
+  switch (status) {
+    case "Active":
+      return "bg-green-50 text-green-600 border-green-200";
+
+    case "Sold":
+      return "bg-blue-50 text-blue-600 border-blue-200";
+
+    case "Rented":
+      return "bg-purple-50 text-purple-600 border-purple-200";
+
+    case "Pending":
+      return "bg-amber-50 text-amber-600 border-amber-200";
+
+    case "Inactive":
+      return "bg-gray-50 text-gray-500 border-gray-200";
+
+    default:
+      return "bg-gray-50 text-gray-600 border-gray-200";
+  }
 }
