@@ -13,6 +13,8 @@ public interface ReviewService {
 
     ReviewResponse getReviewById(Long reviewId);
 
+    List<ReviewResponse> getAllReviews();
+
     List<ReviewResponse> getReviewsByProperty(Long propertyId);
 
     List<ReviewResponse> getMyReviews();

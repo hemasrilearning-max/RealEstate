@@ -5,6 +5,8 @@ import com.realestate.security.AuthenticatedUserService;
 import com.realestate.modules.location.entity.Location;
 import com.realestate.modules.location.repository.LocationRepository;
 import com.realestate.modules.media.repository.MediaRepository;
+import com.realestate.modules.notification.dto.request.CreateNotificationRequest;
+import com.realestate.modules.notification.service.NotificationService;
 import com.realestate.modules.property.dto.request.CreatePropertyRequest;
 import com.realestate.modules.property.dto.request.UpdatePropertyRequest;
 import com.realestate.modules.property.dto.response.PropertyResponse;
@@ -37,6 +39,10 @@ public class PropertyServiceImpl implements PropertyService {
   private final PropertyMapper propertyMapper;
 
   private final AuthenticatedUserService authenticatedUserService;
+
+  // Notification service used to notify admins
+  // when a new property is created
+  private final NotificationService notificationService;
 
   // Media repository used when deleting a property
   private final MediaRepository mediaRepository;
@@ -103,10 +109,157 @@ public class PropertyServiceImpl implements PropertyService {
       property.setBroker(null);
     }
 
-    // Save property
+    // ==========================================================
+    // SAVE PROPERTY
+    // ==========================================================
+
     Property savedProperty = propertyRepository.save(property);
 
+    // ==========================================================
+    // NOTIFY ADMINS
+    // ==========================================================
+
+    notifyAdminsAboutNewProperty(savedProperty, seller);
+
     return propertyMapper.toResponse(savedProperty);
+  }
+
+  // ============================================================
+  // NOTIFY ADMINS ABOUT NEW PROPERTY
+  // ============================================================
+
+  private void notifyAdminsAboutNewProperty(
+    Property property,
+    User seller) {
+
+  System.out.println("==============================================");
+  System.out.println("ADMIN PROPERTY NOTIFICATION STARTED");
+  System.out.println("Property ID: " + property.getId());
+  System.out.println("Property Title: " + property.getTitle());
+  System.out.println("Seller ID: " + seller.getId());
+  System.out.println("Seller Username: " + seller.getUsername());
+
+  List<User> allUsers = userRepository.findAll();
+
+  System.out.println("TOTAL USERS: " + allUsers.size());
+
+  int adminCount = 0;
+
+  for (User user : allUsers) {
+
+    if (user == null) {
+      continue;
+    }
+
+    System.out.println(
+        "USER -> ID: " + user.getId()
+            + ", username: " + user.getUsername()
+            + ", role: "
+            + (user.getRole() == null
+                ? "NULL"
+                : user.getRole().getName()));
+
+    if (user.getRole() == null) {
+      continue;
+    }
+
+    RoleType role = user.getRole().getName();
+
+    if (role == RoleType.ADMIN
+        || role == RoleType.SUPER_ADMIN) {
+
+      adminCount++;
+
+      System.out.println(
+          "ADMIN FOUND -> ID: "
+              + user.getId()
+              + ", username: "
+              + user.getUsername()
+              + ", role: "
+              + role);
+
+      String sellerName =
+          getUserDisplayName(seller);
+
+      String propertyTitle =
+          property.getTitle();
+
+      if (propertyTitle == null
+          || propertyTitle.isBlank()) {
+
+        propertyTitle = "New Property";
+      }
+
+      CreateNotificationRequest notificationRequest =
+          new CreateNotificationRequest();
+
+      notificationRequest.setTitle(
+          "New Property Listed");
+
+      notificationRequest.setMessage(
+          sellerName
+              + " has added a new property \""
+              + propertyTitle
+              + "\". Please review the property.");
+
+      notificationRequest.setType(
+          "PROPERTY");
+
+      System.out.println(
+          "CREATING NOTIFICATION FOR USER ID: "
+              + user.getId());
+
+      notificationService.createNotification(
+          user,
+          notificationRequest);
+
+      System.out.println(
+          "NOTIFICATION CREATED FOR USER ID: "
+              + user.getId());
+    }
+  }
+
+  System.out.println(
+      "TOTAL ADMINS FOUND: " + adminCount);
+
+  System.out.println(
+      "ADMIN PROPERTY NOTIFICATION END");
+
+  System.out.println("==============================================");
+}
+
+  // ============================================================
+  // USER DISPLAY NAME
+  // ============================================================
+
+  private String getUserDisplayName(User user) {
+
+    String firstName = user.getFirstName();
+    String lastName = user.getLastName();
+
+    if (firstName != null && !firstName.isBlank()
+        && lastName != null && !lastName.isBlank()) {
+
+      return firstName + " " + lastName;
+    }
+
+    if (firstName != null && !firstName.isBlank()) {
+      return firstName;
+    }
+
+    if (user.getUsername() != null
+        && !user.getUsername().isBlank()) {
+
+      return user.getUsername();
+    }
+
+    if (user.getEmail() != null
+        && !user.getEmail().isBlank()) {
+
+      return user.getEmail();
+    }
+
+    return "A seller";
   }
 
   // ============================================================
