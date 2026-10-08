@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Search,
   UserRound,
@@ -7,155 +7,124 @@ import {
   MoreVertical,
   CheckCircle,
   XCircle,
-  Plus,
-  X,
 } from "lucide-react";
 
 export default function Owners() {
+  const [owners, setOwners] = useState([]);
   const [search, setSearch] = useState("");
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const [owners, setOwners] = useState([
-    {
-      id: 1,
-      name: "Rahul Kumar",
-      email: "rahul@gmail.com",
-      phone: "9876543210",
-      properties: 5,
-      status: "Active",
-    },
-    {
-      id: 2,
-      name: "Anil Raj",
-      email: "anil@gmail.com",
-      phone: "9845671230",
-      properties: 3,
-      status: "Active",
-    },
-    {
-      id: 3,
-      name: "Meena Devi",
-      email: "meena@gmail.com",
-      phone: "9988776655",
-      properties: 4,
-      status: "Inactive",
-    },
-    {
-      id: 4,
-      name: "Vikram S",
-      email: "vikram@gmail.com",
-      phone: "9123456789",
-      properties: 2,
-      status: "Active",
-    },
-    {
-      id: 5,
-      name: "Sneha R",
-      email: "sneha@gmail.com",
-      phone: "9012345678",
-      properties: 6,
-      status: "Active",
-    },
-    {
-      id: 6,
-      name: "Kiran Kumar",
-      email: "kiran@gmail.com",
-      phone: "9876123456",
-      properties: 3,
-      status: "Inactive",
-    },
-  ]);
+  const fetchOwners = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-  const [newOwner, setNewOwner] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    properties: 0,
-  });
-const handleViewOwner = (owner) => {
-  alert(
-    `Owner Details\n\n` +
-    `Name: ${owner.name}\n` +
-    `Email: ${owner.email}\n` +
-    `Phone: ${owner.phone}\n` +
-    `Properties: ${owner.properties}\n` +
-    `Status: ${owner.status}`
-  );
-};
-  const toggleStatus = (id) => {
-    setOwners((current) =>
-      current.map((owner) =>
-        owner.id === id
-          ? {
-              ...owner,
-              status:
-                owner.status === "Active" ? "Inactive" : "Active",
-            }
-          : owner
-      )
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("token");
+
+      const response = await fetch("http://localhost:8080/api/users", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch users: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      // Only SELLER users
+      const sellerUsers = data.filter(
+        (user) => String(user.role).toUpperCase() === "SELLER"
+      );
+
+      setOwners(sellerUsers);
+    } catch (err) {
+      console.error("Error fetching owners:", err);
+      setError("Failed to load owners.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOwners();
+  }, []);
+
+  const getFullName = (owner) => {
+    return `${owner.firstName || ""} ${owner.lastName || ""}`.trim();
+  };
+
+  const handleViewOwner = (owner) => {
+    alert(
+      `Owner Details\n\n` +
+        `Name: ${getFullName(owner) || owner.username}\n` +
+        `Email: ${owner.email || "N/A"}\n` +
+        `Phone: ${owner.phone || "N/A"}\n` +
+        `Status: ${owner.status || "N/A"}`
     );
   };
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
+  const toggleStatus = async (owner) => {
+    try {
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("token");
 
-    setNewOwner((current) => ({
-      ...current,
-      [name]: value,
-    }));
-  };
+      const currentStatus = String(owner.status).toUpperCase();
 
-  const handleAddOwner = (e) => {
-    e.preventDefault();
+      const newStatus =
+        currentStatus === "ACTIVE" ? "INACTIVE" : "ACTIVE";
 
-    if (
-      !newOwner.name ||
-      !newOwner.email ||
-      !newOwner.phone
-    ) {
-      alert("Please fill all required fields.");
-      return;
+      const response = await fetch(
+        `http://localhost:8080/api/users/${owner.id}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: newStatus,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to update owner status");
+      }
+
+      // Get latest data from backend
+      fetchOwners();
+    } catch (err) {
+      console.error("Error changing owner status:", err);
+      alert("Failed to change owner status.");
     }
-
-    const owner = {
-      id: Date.now(),
-      name: newOwner.name,
-      email: newOwner.email,
-      phone: newOwner.phone,
-      properties: Number(newOwner.properties) || 0,
-      status: "Active",
-    };
-
-    setOwners((current) => [owner, ...current]);
-
-    setNewOwner({
-      name: "",
-      email: "",
-      phone: "",
-      properties: 0,
-    });
-
-    setShowAddForm(false);
   };
 
   const filteredOwners = owners.filter((owner) => {
-    const value = search.toLowerCase();
+    const searchValue = search.toLowerCase();
+
+    const name = getFullName(owner).toLowerCase();
+    const email = (owner.email || "").toLowerCase();
+    const phone = owner.phone || "";
 
     return (
-      owner.name.toLowerCase().includes(value) ||
-      owner.email.toLowerCase().includes(value) ||
-      owner.phone.includes(value)
+      name.includes(searchValue) ||
+      email.includes(searchValue) ||
+      phone.includes(searchValue)
     );
   });
 
   const activeOwners = owners.filter(
-    (owner) => owner.status === "Active"
+    (owner) =>
+      String(owner.status).toUpperCase() === "ACTIVE"
   ).length;
-
-  const totalProperties = owners.reduce(
-    (total, owner) => total + owner.properties,
-    0
-  );
 
   return (
     <div className="p-6">
@@ -172,163 +141,10 @@ const handleViewOwner = (owner) => {
           </p>
         </div>
 
-        <div className="flex items-center gap-4">
-
-          <div className="text-sm text-gray-500">
-            {owners.length} Owners
-          </div>
-
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2
-            bg-purple-600 text-white
-            px-4 py-2.5 rounded-lg
-            hover:bg-purple-700 transition"
-          >
-            <Plus className="w-4 h-4" />
-            Add Owner
-          </button>
-
+        <div className="text-sm text-gray-500">
+          {owners.length} Owners
         </div>
       </div>
-
-      {/* Add Owner Form */}
-      {showAddForm && (
-        <div className="bg-white border rounded-xl p-6 mb-6">
-
-          <div className="flex items-center justify-between mb-5">
-
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Add Owner
-              </h2>
-
-              <p className="text-sm text-gray-500 mt-1">
-                Enter owner details below
-              </p>
-            </div>
-
-            <button
-              onClick={() => setShowAddForm(false)}
-              className="p-2 rounded-lg hover:bg-gray-100"
-            >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
-
-          </div>
-
-          <form onSubmit={handleAddOwner}>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-              {/* Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Full Name *
-                </label>
-
-                <input
-                  type="text"
-                  name="name"
-                  value={newOwner.name}
-                  onChange={handleInputChange}
-                  placeholder="Enter owner name"
-                  className="w-full border border-gray-300
-                  rounded-lg px-3 py-2.5
-                  focus:outline-none focus:ring-2
-                  focus:ring-purple-500"
-                />
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email *
-                </label>
-
-                <input
-                  type="email"
-                  name="email"
-                  value={newOwner.email}
-                  onChange={handleInputChange}
-                  placeholder="Enter email"
-                  className="w-full border border-gray-300
-                  rounded-lg px-3 py-2.5
-                  focus:outline-none focus:ring-2
-                  focus:ring-purple-500"
-                />
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Phone *
-                </label>
-
-                <input
-                  type="text"
-                  name="phone"
-                  value={newOwner.phone}
-                  onChange={handleInputChange}
-                  placeholder="Enter phone number"
-                  maxLength="10"
-                  className="w-full border border-gray-300
-                  rounded-lg px-3 py-2.5
-                  focus:outline-none focus:ring-2
-                  focus:ring-purple-500"
-                />
-              </div>
-
-              {/* Properties */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Number of Properties
-                </label>
-
-                <input
-                  type="number"
-                  name="properties"
-                  value={newOwner.properties}
-                  onChange={handleInputChange}
-                  min="0"
-                  placeholder="Enter number of properties"
-                  className="w-full border border-gray-300
-                  rounded-lg px-3 py-2.5
-                  focus:outline-none focus:ring-2
-                  focus:ring-purple-500"
-                />
-              </div>
-
-            </div>
-
-            {/* Buttons */}
-            <div className="flex justify-end gap-3 mt-6">
-
-              <button
-                type="button"
-                onClick={() => setShowAddForm(false)}
-                className="px-4 py-2.5 rounded-lg
-                border border-gray-300
-                text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                className="px-4 py-2.5 rounded-lg
-                bg-purple-600 text-white
-                hover:bg-purple-700"
-              >
-                Add Owner
-              </button>
-
-            </div>
-
-          </form>
-
-        </div>
-      )}
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -355,11 +171,11 @@ const handleViewOwner = (owner) => {
 
         <div className="bg-white border rounded-xl p-4">
           <p className="text-sm text-gray-500">
-            Total Properties
+            Seller Users
           </p>
 
           <p className="text-2xl font-bold text-purple-600 mt-1">
-            {totalProperties}
+            {owners.length}
           </p>
         </div>
 
@@ -367,7 +183,6 @@ const handleViewOwner = (owner) => {
 
       {/* Search */}
       <div className="bg-white border rounded-xl p-4 mb-6">
-
         <div className="relative">
 
           <Search
@@ -387,134 +202,170 @@ const handleViewOwner = (owner) => {
           />
 
         </div>
-
       </div>
 
-      {/* Owner Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-        {filteredOwners.map((owner) => (
-
-          <div
-            key={owner.id}
-            className="bg-white border rounded-xl
-            p-4 hover:shadow-md transition"
-          >
-
-            {/* Top */}
-            <div className="flex items-start justify-between">
-
-              <div className="flex items-center gap-3">
-
-                <div className="w-11 h-11 rounded-full
-                  bg-purple-100 flex items-center justify-center">
-
-                  <UserRound className="w-5 h-5 text-purple-600" />
-
-                </div>
-
-                <div>
-
-                  <h2 className="font-semibold text-gray-900">
-                    {owner.name}
-                  </h2>
-
-                  <p className="text-xs text-gray-500">
-                    Property Owner
-                  </p>
-
-                </div>
-
-              </div>
-
-              <button className="p-1 rounded hover:bg-gray-100">
-                <MoreVertical className="w-5 h-5 text-gray-500" />
-              </button>
-
-            </div>
-
-            {/* Details */}
-            <div className="mt-4 space-y-2 text-sm">
-
-              <p className="text-gray-600">
-                📧 {owner.email}
-              </p>
-
-              <p className="text-gray-600">
-                📞 {owner.phone}
-              </p>
-
-              <div className="flex items-center gap-2 text-gray-600">
-                <Building2 className="w-4 h-4" />
-                {owner.properties} Properties
-              </div>
-
-            </div>
-
-            {/* Bottom */}
-            <div className="flex items-center justify-between
-              mt-4 pt-4 border-t">
-
-              {owner.status === "Active" ? (
-
-                <span className="flex items-center gap-1
-                  text-xs font-medium text-green-600">
-
-                  <CheckCircle className="w-4 h-4" />
-                  Active
-
-                </span>
-
-              ) : (
-
-                <span className="flex items-center gap-1
-                  text-xs font-medium text-red-600">
-
-                  <XCircle className="w-4 h-4" />
-                  Inactive
-
-                </span>
-
-              )}
-
-              <div className="flex gap-2">
-
-               <button
-  onClick={() => handleViewOwner(owner)}
-  className="p-2 rounded-lg
-  text-gray-600 hover:bg-gray-100"
-  title="View Owner"
->
-  <Eye className="w-4 h-4" />
-</button>
-
-                <button
-                  onClick={() => toggleStatus(owner.id)}
-                  className="text-xs px-3 py-2 rounded-lg
-                  border border-gray-300 hover:bg-gray-50"
-                >
-                  {owner.status === "Active"
-                    ? "Deactivate"
-                    : "Activate"}
-                </button>
-
-              </div>
-
-            </div>
-
-          </div>
-
-        ))}
-
-      </div>
-
-      {filteredOwners.length === 0 && (
+      {/* Loading */}
+      {loading && (
         <div className="bg-white border rounded-xl p-10 text-center">
           <p className="text-gray-500">
-            No owners found.
+            Loading owners...
           </p>
         </div>
       )}
+
+      {/* Error */}
+      {!loading && error && (
+        <div className="bg-white border rounded-xl p-10 text-center">
+          <p className="text-red-500">
+            {error}
+          </p>
+
+          <button
+            onClick={fetchOwners}
+            className="mt-4 px-4 py-2 rounded-lg
+            bg-purple-600 text-white hover:bg-purple-700"
+          >
+            Retry
+          </button>
+        </div>
+      )}
+
+      {/* Owner Cards */}
+      {!loading && !error && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          {filteredOwners.map((owner) => {
+            const fullName =
+              getFullName(owner) ||
+              owner.username ||
+              "Owner";
+
+            const isActive =
+              String(owner.status).toUpperCase() === "ACTIVE";
+
+            return (
+              <div
+                key={owner.id}
+                className="bg-white border rounded-xl
+                p-4 hover:shadow-md transition"
+              >
+
+                {/* Top */}
+                <div className="flex items-start justify-between">
+
+                  <div className="flex items-center gap-3">
+
+                    <div
+                      className="w-11 h-11 rounded-full
+                      bg-purple-100 flex items-center justify-center"
+                    >
+                      <UserRound className="w-5 h-5 text-purple-600" />
+                    </div>
+
+                    <div>
+                      <h2 className="font-semibold text-gray-900">
+                        {fullName}
+                      </h2>
+
+                      <p className="text-xs text-gray-500">
+                        Property Owner
+                      </p>
+                    </div>
+
+                  </div>
+
+                  <button className="p-1 rounded hover:bg-gray-100">
+                    <MoreVertical className="w-5 h-5 text-gray-500" />
+                  </button>
+
+                </div>
+
+                {/* Details */}
+                <div className="mt-4 space-y-2 text-sm">
+
+                  <p className="text-gray-600">
+                    📧 {owner.email || "N/A"}
+                  </p>
+
+                  <p className="text-gray-600">
+                    📞 {owner.phone || "N/A"}
+                  </p>
+
+                  <div className="flex items-center gap-2 text-gray-600">
+                    <Building2 className="w-4 h-4" />
+                    Property Owner
+                  </div>
+
+                </div>
+
+                {/* Bottom */}
+                <div
+                  className="flex items-center justify-between
+                  mt-4 pt-4 border-t"
+                >
+
+                  {isActive ? (
+                    <span
+                      className="flex items-center gap-1
+                      text-xs font-medium text-green-600"
+                    >
+                      <CheckCircle className="w-4 h-4" />
+                      Active
+                    </span>
+                  ) : (
+                    <span
+                      className="flex items-center gap-1
+                      text-xs font-medium text-red-600"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      {owner.status || "Inactive"}
+                    </span>
+                  )}
+
+                  <div className="flex gap-2">
+
+                    {/* View */}
+                    <button
+                      onClick={() => handleViewOwner(owner)}
+                      className="p-2 rounded-lg
+                      text-gray-600 hover:bg-gray-100"
+                      title="View Owner"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+
+                    {/* Activate / Deactivate */}
+                    <button
+                      onClick={() => toggleStatus(owner)}
+                      className="text-xs px-3 py-2 rounded-lg
+                      border border-gray-300 hover:bg-gray-50"
+                    >
+                      {isActive
+                        ? "Deactivate"
+                        : "Activate"}
+                    </button>
+
+                  </div>
+
+                </div>
+
+              </div>
+            );
+          })}
+
+        </div>
+      )}
+
+      {/* No Owners */}
+      {!loading &&
+        !error &&
+        filteredOwners.length === 0 && (
+          <div className="bg-white border rounded-xl p-10 text-center">
+            <p className="text-gray-500">
+              No owners found.
+            </p>
+          </div>
+        )}
 
     </div>
   );

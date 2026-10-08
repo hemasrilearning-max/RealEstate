@@ -1,430 +1,1681 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
+  Star,
+  Phone,
+  Mail,
+  Calendar,
+  Camera,
+  Upload,
+  Trash2,
+  CheckCircle2,
   User,
-  Lock,
-  Bell,
-  Shield,
-  Save,
+  LockKeyhole,
   Eye,
   EyeOff,
-  CheckCircle,
+  X,
 } from "lucide-react";
 
+import { useAuth } from "../../context/AuthContext";
+import userService from "../../services/userService";
+
+const MAX_SIZE_MB = 2;
+
+const ACCEPT =
+  "image/jpeg,image/png,image/webp,image/gif";
+
+const normalizeProfileRole = (role) => {
+  const value = String(role || "").toUpperCase();
+
+  const roleMap = {
+    SUPER_ADMIN: "admin",
+    ADMIN: "admin",
+    BUYER: "buyer",
+    SELLER: "owner",
+    BROKER: "agent",
+  };
+
+  return roleMap[value] || value.toLowerCase();
+};
+
+const ROLE_THEMES = {
+  admin: {
+    title: "Admin Workspace",
+    fallbackColor: "bg-gray-700",
+    avatarBorder: "border-gray-200",
+    textColor: "text-gray-700",
+    hoverBg: "hover:bg-gray-50",
+  },
+
+  agent: {
+    title: "Agent Dashboard",
+    fallbackColor: "bg-purple-600",
+    avatarBorder: "border-purple-100",
+    textColor: "text-purple-600",
+    hoverBg: "hover:bg-purple-50",
+  },
+
+  owner: {
+    title: "Owner Workspace",
+    fallbackColor: "bg-pink-600",
+    avatarBorder: "border-pink-100",
+    textColor: "text-pink-600",
+    hoverBg: "hover:bg-pink-50",
+  },
+
+  buyer: {
+    title: "Client Portal",
+    fallbackColor: "bg-indigo-600",
+    avatarBorder: "border-indigo-100",
+    textColor: "text-indigo-600",
+    hoverBg: "hover:bg-indigo-50",
+  },
+};
+
 export default function Settings() {
-  const [activeTab, setActiveTab] = useState("profile");
-  const [showPassword, setShowPassword] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const {
+    user,
+    updateProfile,
+  } = useAuth();
 
-  const [profile, setProfile] = useState({
-    name: "Admin User",
-    email: "admin@example.com",
-    phone: "9876543210",
+  const fileRef = useRef(null);
+  const photoObjectUrlRef = useRef(null);
+
+  const [profileData, setProfileData] =
+    useState(user);
+
+  const [originalProfile, setOriginalProfile] =
+    useState(user);
+
+  const [editForm, setEditForm] = useState({
+    firstName: user?.firstName || "",
+    lastName: user?.lastName || "",
+    email: user?.email || "",
+    phone: user?.phone || "",
   });
 
-  const [password, setPassword] = useState({
-    current: "",
-    newPassword: "",
-    confirm: "",
-  });
+  const [editing, setEditing] =
+    useState(false);
 
-  const [notifications, setNotifications] = useState({
-    email: true,
-    newUsers: true,
-    newProperties: true,
-    payments: true,
-    disputes: true,
-    fraudAlerts: true,
-  });
+  const [loading, setLoading] =
+    useState(true);
 
-  const handleProfileChange = (e) => {
-    const { name, value } = e.target;
+  const [saving, setSaving] =
+    useState(false);
 
-    setProfile((prev) => ({
-      ...prev,
+  const [error, setError] =
+    useState("");
+
+  const [success, setSuccess] =
+    useState("");
+
+  // ============================================================
+  // PHOTO
+  // ============================================================
+
+  const [preview, setPreview] =
+    useState(null);
+
+  const [selectedFile, setSelectedFile] =
+    useState(null);
+
+  const [photoUrl, setPhotoUrl] =
+    useState(null);
+
+  // ============================================================
+  // PASSWORD
+  // ============================================================
+
+  const [showChangePassword, setShowChangePassword] =
+    useState(false);
+
+  const [passwordForm, setPasswordForm] =
+    useState({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+
+  const [passwordError, setPasswordError] =
+    useState("");
+
+  const [passwordSuccess, setPasswordSuccess] =
+    useState("");
+
+  const [changingPassword, setChangingPassword] =
+    useState(false);
+
+  const [showCurrentPassword, setShowCurrentPassword] =
+    useState(false);
+
+  const [showNewPassword, setShowNewPassword] =
+    useState(false);
+
+  const [showConfirmPassword, setShowConfirmPassword] =
+    useState(false);
+
+  // ============================================================
+  // PROFILE ROLE
+  // ============================================================
+
+  const rawRole = normalizeProfileRole(
+    profileData?.backendRole ||
+      profileData?.role ||
+      "admin"
+  );
+
+  const theme =
+    ROLE_THEMES[rawRole] ||
+    ROLE_THEMES.admin;
+
+  // ============================================================
+  // LOAD PROFILE PHOTO
+  // ============================================================
+
+  const loadProfilePhoto = async (userId) => {
+    if (!userId) {
+      return;
+    }
+
+    try {
+      const blob =
+        await userService.getProfilePhotoBlob(
+          userId
+        );
+
+      if (!blob) {
+        setPhotoUrl(null);
+        return;
+      }
+
+      if (photoObjectUrlRef.current) {
+        URL.revokeObjectURL(
+          photoObjectUrlRef.current
+        );
+      }
+
+      const objectUrl =
+        URL.createObjectURL(blob);
+
+      photoObjectUrlRef.current =
+        objectUrl;
+
+      setPhotoUrl(objectUrl);
+    } catch (err) {
+      console.log(
+        "No profile photo available:",
+        err.message
+      );
+
+      setPhotoUrl(null);
+    }
+  };
+
+  // ============================================================
+  // LOAD PROFILE
+  // ============================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadProfile = async () => {
+      const userId =
+        user?.userId ||
+        user?.id;
+
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError("");
+
+        const data =
+          await userService.getUserById(
+            userId
+          );
+
+        if (!mounted) {
+          return;
+        }
+
+        const fullName =
+          [
+            data.firstName,
+            data.lastName,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+
+        const updatedProfile = {
+          ...user,
+
+          id: data.id,
+
+          userId: data.id,
+
+          firstName:
+            data.firstName || "",
+
+          lastName:
+            data.lastName || "",
+
+          name:
+            fullName ||
+            data.username ||
+            user?.name ||
+            "User",
+
+          username:
+            data.username,
+
+          email:
+            data.email || "",
+
+          phone:
+            data.phone || "",
+
+          role:
+            normalizeProfileRole(
+              data.role
+            ),
+
+          backendRole:
+            data.role,
+
+          status:
+            data.status,
+
+          accountType:
+            data.accountType,
+
+          profilePhotoUrl:
+            data.profilePhotoUrl,
+
+          createdAt:
+            data.createdAt,
+
+          updatedAt:
+            data.updatedAt,
+        };
+
+        setProfileData(
+          updatedProfile
+        );
+
+        setOriginalProfile(
+          updatedProfile
+        );
+
+        setEditForm({
+          firstName:
+            data.firstName || "",
+
+          lastName:
+            data.lastName || "",
+
+          email:
+            data.email || "",
+
+          phone:
+            data.phone || "",
+        });
+
+        updateProfile(
+          updatedProfile
+        );
+
+        if (data.profilePhotoUrl) {
+          await loadProfilePhoto(
+            data.id
+          );
+        }
+      } catch (err) {
+        console.error(
+          "Failed to load profile:",
+          err
+        );
+
+        if (mounted) {
+          setError(
+            err.response?.data?.message ||
+              err.message ||
+              "Failed to load profile."
+          );
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadProfile();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    user?.id,
+    user?.userId,
+  ]);
+
+  // ============================================================
+  // CLEANUP PHOTO URL
+  // ============================================================
+
+  useEffect(() => {
+    return () => {
+      if (photoObjectUrlRef.current) {
+        URL.revokeObjectURL(
+          photoObjectUrlRef.current
+        );
+      }
+    };
+  }, []);
+
+  // ============================================================
+  // FORM CHANGE
+  // ============================================================
+
+  const handleFormChange = (e) => {
+    const {
+      name,
+      value,
+    } = e.target;
+
+    setEditForm((current) => ({
+      ...current,
       [name]: value,
     }));
+
+    setError("");
+    setSuccess("");
   };
 
-  const handlePasswordChange = (e) => {
-    const { name, value } = e.target;
+  // ============================================================
+  // START EDIT
+  // ============================================================
 
-    setPassword((prev) => ({
-      ...prev,
+  const handleStartEditing = () => {
+    setEditForm({
+      firstName:
+        profileData?.firstName || "",
+
+      lastName:
+        profileData?.lastName || "",
+
+      email:
+        profileData?.email || "",
+
+      phone:
+        profileData?.phone || "",
+    });
+
+    setEditing(true);
+    setError("");
+    setSuccess("");
+  };
+
+  // ============================================================
+  // CANCEL EDIT
+  // ============================================================
+
+  const handleCancelEdit = () => {
+    setEditForm({
+      firstName:
+        originalProfile?.firstName || "",
+
+      lastName:
+        originalProfile?.lastName || "",
+
+      email:
+        originalProfile?.email || "",
+
+      phone:
+        originalProfile?.phone || "",
+    });
+
+    setEditing(false);
+    setError("");
+    setSuccess("");
+  };
+
+  // ============================================================
+  // SAVE PROFILE
+  // ============================================================
+
+  const handleSaveProfile = async () => {
+    const userId =
+      profileData?.userId ||
+      profileData?.id;
+
+    if (!userId) {
+      setError(
+        "User ID is missing. Please login again."
+      );
+      return;
+    }
+
+    const firstName =
+      editForm.firstName.trim();
+
+    const lastName =
+      editForm.lastName.trim();
+
+    const email =
+      editForm.email.trim();
+
+    const phone =
+      editForm.phone.trim();
+
+    if (!firstName) {
+      setError("First name is required.");
+      return;
+    }
+
+    if (!lastName) {
+      setError("Last name is required.");
+      return;
+    }
+
+    if (!email) {
+      setError("Email is required.");
+      return;
+    }
+
+    if (
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        email
+      )
+    ) {
+      setError(
+        "Please enter a valid email address."
+      );
+      return;
+    }
+
+    if (!phone) {
+      setError("Phone number is required.");
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+
+      const updatedData =
+        await userService.updateUser(
+          userId,
+          {
+            firstName,
+            lastName,
+            email,
+            phone,
+          }
+        );
+
+      const fullName =
+        [
+          updatedData.firstName ||
+            firstName,
+          updatedData.lastName ||
+            lastName,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim();
+
+      const updatedProfile = {
+        ...profileData,
+
+        id:
+          updatedData.id ||
+          profileData.id,
+
+        userId:
+          updatedData.id ||
+          profileData.userId,
+
+        firstName:
+          updatedData.firstName ||
+          firstName,
+
+        lastName:
+          updatedData.lastName ||
+          lastName,
+
+        name:
+          fullName ||
+          profileData.name,
+
+        username:
+          updatedData.username ||
+          profileData.username,
+
+        email:
+          updatedData.email ||
+          email,
+
+        phone:
+          updatedData.phone ||
+          phone,
+
+        role:
+          normalizeProfileRole(
+            updatedData.role ||
+              profileData.backendRole ||
+              profileData.role
+          ),
+
+        backendRole:
+          updatedData.role ||
+          profileData.backendRole,
+
+        status:
+          updatedData.status ||
+          profileData.status,
+
+        accountType:
+          updatedData.accountType ||
+          profileData.accountType,
+
+        profilePhotoUrl:
+          updatedData.profilePhotoUrl ??
+          profileData.profilePhotoUrl,
+
+        createdAt:
+          updatedData.createdAt ||
+          profileData.createdAt,
+
+        updatedAt:
+          updatedData.updatedAt ||
+          profileData.updatedAt,
+      };
+
+      setProfileData(
+        updatedProfile
+      );
+
+      setOriginalProfile(
+        updatedProfile
+      );
+
+      setEditForm({
+        firstName:
+          updatedProfile.firstName || "",
+
+        lastName:
+          updatedProfile.lastName || "",
+
+        email:
+          updatedProfile.email || "",
+
+        phone:
+          updatedProfile.phone || "",
+      });
+
+      updateProfile(
+        updatedProfile
+      );
+
+      setEditing(false);
+
+      setSuccess(
+        "Profile updated successfully!"
+      );
+
+      setTimeout(() => {
+        setSuccess("");
+      }, 3000);
+    } catch (err) {
+      console.error(
+        "Profile update failed:",
+        err
+      );
+
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to update profile."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ============================================================
+  // OPEN CHANGE PASSWORD
+  // ============================================================
+
+  const handleOpenChangePassword = () => {
+    setPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+
+    setShowChangePassword(true);
+  };
+
+  // ============================================================
+  // CLOSE CHANGE PASSWORD
+  // ============================================================
+
+  const handleCloseChangePassword = () => {
+    if (changingPassword) {
+      return;
+    }
+
+    setShowChangePassword(false);
+
+    setPasswordForm({
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    });
+
+    setPasswordError("");
+    setPasswordSuccess("");
+  };
+
+  // ============================================================
+  // PASSWORD CHANGE
+  // ============================================================
+
+  const handlePasswordFormChange = (e) => {
+    const {
+      name,
+      value,
+    } = e.target;
+
+    setPasswordForm((current) => ({
+      ...current,
       [name]: value,
     }));
+
+    setPasswordError("");
+    setPasswordSuccess("");
   };
 
-  const handleNotificationChange = (name) => {
-    setNotifications((prev) => ({
-      ...prev,
-      [name]: !prev[name],
-    }));
+  const handleChangePassword = async () => {
+    const currentPassword =
+      passwordForm.currentPassword.trim();
+
+    const newPassword =
+      passwordForm.newPassword.trim();
+
+    const confirmPassword =
+      passwordForm.confirmPassword.trim();
+
+    if (!currentPassword) {
+      setPasswordError(
+        "Current password is required."
+      );
+      return;
+    }
+
+    if (!newPassword) {
+      setPasswordError(
+        "New password is required."
+      );
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setPasswordError(
+        "New password must be at least 6 characters."
+      );
+      return;
+    }
+
+    if (newPassword.length > 100) {
+      setPasswordError(
+        "New password cannot exceed 100 characters."
+      );
+      return;
+    }
+
+    if (!confirmPassword) {
+      setPasswordError(
+        "Please confirm your new password."
+      );
+      return;
+    }
+
+    if (
+      newPassword !==
+      confirmPassword
+    ) {
+      setPasswordError(
+        "New password and confirm password do not match."
+      );
+      return;
+    }
+
+    if (
+      currentPassword ===
+      newPassword
+    ) {
+      setPasswordError(
+        "New password must be different from your current password."
+      );
+      return;
+    }
+
+    try {
+      setChangingPassword(true);
+      setPasswordError("");
+      setPasswordSuccess("");
+
+      await userService.changePassword(
+        currentPassword,
+        newPassword
+      );
+
+      setPasswordForm({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+      });
+
+      setPasswordSuccess(
+        "Password changed successfully!"
+      );
+    } catch (err) {
+      console.error(
+        "Password change failed:",
+        err
+      );
+
+      setPasswordError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to change password."
+      );
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
-  const handleSave = () => {
-    setSaved(true);
+  // ============================================================
+  // FILE SELECT
+  // ============================================================
 
-    setTimeout(() => {
-      setSaved(false);
-    }, 3000);
+  const handleFileSelect = (e) => {
+    setError("");
+    setSuccess("");
+
+    const file =
+      e.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (
+      !file.type.startsWith("image/")
+    ) {
+      setError(
+        "Please select a JPG, PNG, WebP or GIF image."
+      );
+
+      e.target.value = "";
+      return;
+    }
+
+    if (
+      file.size >
+      MAX_SIZE_MB * 1024 * 1024
+    ) {
+      setError(
+        `Image must be smaller than ${MAX_SIZE_MB}MB.`
+      );
+
+      e.target.value = "";
+      return;
+    }
+
+    setSelectedFile(file);
+
+    const reader =
+      new FileReader();
+
+    reader.onload = () => {
+      setPreview(
+        reader.result
+      );
+    };
+
+    reader.onerror = () => {
+      setError(
+        "Failed to read image."
+      );
+    };
+
+    reader.readAsDataURL(file);
   };
+
+  // ============================================================
+  // SAVE PHOTO
+  // ============================================================
+
+  const handleSaveAvatar = async () => {
+    if (!selectedFile) {
+      return;
+    }
+
+    try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+
+      await userService.uploadProfilePhoto(
+        selectedFile
+      );
+
+      const userId =
+        profileData?.userId ||
+        profileData?.id;
+
+      await loadProfilePhoto(
+        userId
+      );
+
+      const updatedProfile = {
+        ...profileData,
+        profilePhotoUrl: true,
+        profilePhotoUpdatedAt:
+          Date.now(),
+      };
+
+      setProfileData(
+        updatedProfile
+      );
+
+      updateProfile(
+        updatedProfile
+      );
+
+      setPreview(null);
+      setSelectedFile(null);
+
+      if (fileRef.current) {
+        fileRef.current.value = "";
+      }
+
+      setSuccess(
+        "Profile photo updated successfully!"
+      );
+
+      setTimeout(() => {
+        setSuccess("");
+      }, 3000);
+    } catch (err) {
+      console.error(
+        "Profile photo upload failed:",
+        err
+      );
+
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to upload profile photo."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ============================================================
+  // REMOVE PHOTO
+  // ============================================================
+
+  const handleRemoveAvatar = async () => {
+    try {
+      setSaving(true);
+      setError("");
+      setSuccess("");
+
+      await userService.deleteProfilePhoto();
+
+      if (photoObjectUrlRef.current) {
+        URL.revokeObjectURL(
+          photoObjectUrlRef.current
+        );
+
+        photoObjectUrlRef.current =
+          null;
+      }
+
+      setPhotoUrl(null);
+      setPreview(null);
+      setSelectedFile(null);
+
+      const updatedProfile = {
+        ...profileData,
+        profilePhotoUrl: null,
+        profilePhotoUpdatedAt:
+          Date.now(),
+      };
+
+      setProfileData(
+        updatedProfile
+      );
+
+      updateProfile(
+        updatedProfile
+      );
+
+      if (fileRef.current) {
+        fileRef.current.value = "";
+      }
+
+      setSuccess(
+        "Profile photo removed."
+      );
+
+      setTimeout(() => {
+        setSuccess("");
+      }, 3000);
+    } catch (err) {
+      console.error(
+        "Profile photo removal failed:",
+        err
+      );
+
+      setError(
+        err.response?.data?.message ||
+          err.message ||
+          "Failed to remove profile photo."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ============================================================
+  // CANCEL PHOTO
+  // ============================================================
+
+  const handleCancelPreview = () => {
+    setPreview(null);
+    setSelectedFile(null);
+
+    if (fileRef.current) {
+      fileRef.current.value = "";
+    }
+  };
+
+  // ============================================================
+  // NO USER
+  // ============================================================
+
+  if (!profileData) {
+    return (
+      <div className="p-6 text-gray-500">
+        User profile not available.
+      </div>
+    );
+  }
+
+  // ============================================================
+  // DISPLAY NAME
+  // ============================================================
+
+  const displayName =
+    [
+      profileData.firstName,
+      profileData.lastName,
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
+    profileData.name ||
+    profileData.username ||
+    "User";
+
+  // ============================================================
+  // FALLBACK AVATAR
+  // ============================================================
+
+  const avatarBackground =
+    theme.fallbackColor.replace(
+      "bg-",
+      ""
+    );
+
+  const fallbackAvatar =
+    `https://ui-avatars.com/api/?name=${encodeURIComponent(
+      displayName
+    )}&background=${avatarBackground}&color=fff&size=150`;
+
+  const currentAvatar =
+    preview ||
+    photoUrl ||
+    fallbackAvatar;
+
+  // ============================================================
+  // JOINED DATE
+  // ============================================================
+
+  const joinedDate =
+    profileData.createdAt
+      ? new Date(
+          profileData.createdAt
+        ).toLocaleDateString(
+          "en-IN",
+          {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          }
+        )
+      : "—";
+
+  const accountLabel = `${
+    rawRole.charAt(0).toUpperCase() +
+    rawRole.slice(1)
+  } Account`;
+
+  // ============================================================
+  // PAGE
+  // ============================================================
 
   return (
-    <div className="w-full min-h-screen bg-gray-50 px-6 pt-4 pb-8">
-      {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Settings
-        </h1>
+    <div className="space-y-6 max-w-5xl mx-auto p-4 font-sans">
 
-        <p className="text-sm text-gray-500 mt-1">
-          Manage your admin account and system preferences
+      {/* HEADER */}
+
+      <div>
+        <span className="text-xs font-bold text-gray-400 tracking-wider uppercase block mb-1">
+          {theme.title}
+        </span>
+
+        <h2 className="text-2xl font-bold text-gray-900 tracking-tight">
+          Profile
+        </h2>
+
+        <p className="text-sm text-gray-500 mt-0.5">
+          Manage your administrator profile, photo and password.
         </p>
       </div>
 
-      {/* Success Message */}
-      {saved && (
-        <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6">
-          <CheckCircle className="w-5 h-5" />
-          Settings saved successfully.
+      {/* LOADING */}
+
+      {loading && (
+        <p className="text-xs text-gray-400">
+          Loading profile...
+        </p>
+      )}
+
+      {/* PROFILE CARD */}
+
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 md:p-8 max-w-4xl shadow-sm">
+
+        {/* TOP */}
+
+        <div className="flex flex-col sm:flex-row items-center gap-6 pb-6 border-b border-gray-100">
+
+          {/* AVATAR */}
+
+          <div
+            className="relative group cursor-pointer"
+            onClick={() =>
+              fileRef.current?.click()
+            }
+          >
+            <img
+              src={currentAvatar}
+              alt={displayName}
+              className={`w-24 h-24 rounded-full object-cover border-4 ${theme.avatarBorder} shadow-sm`}
+            />
+
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+              <Camera className="w-5 h-5 text-white" />
+            </div>
+          </div>
+
+          {/* PROFILE INFO */}
+
+          <div className="flex-1 text-center sm:text-left min-w-0">
+
+            <h3 className="text-xl font-bold text-gray-900 truncate">
+              {displayName}
+            </h3>
+
+            <p className="text-sm text-gray-500 mt-0.5">
+              {accountLabel}
+            </p>
+
+            <div className="mt-4 flex flex-wrap items-center justify-center sm:justify-start gap-2">
+
+              <input
+                ref={fileRef}
+                type="file"
+                accept={ACCEPT}
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+
+              <button
+                type="button"
+                onClick={() =>
+                  fileRef.current?.click()
+                }
+                className="inline-flex items-center gap-2 text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 shadow-sm transition"
+              >
+                <Upload className="w-3.5 h-3.5 text-gray-400" />
+
+                {preview
+                  ? "Change Choice"
+                  : "Upload photo"}
+              </button>
+
+              {preview && (
+                <>
+                  <button
+                    type="button"
+                    onClick={
+                      handleSaveAvatar
+                    }
+                    disabled={saving}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-60"
+                  >
+                    {saving
+                      ? "Saving..."
+                      : "Save Now"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={
+                      handleCancelPreview
+                    }
+                    className="text-xs text-gray-500 hover:text-gray-700 font-medium px-2"
+                  >
+                    Cancel
+                  </button>
+                </>
+              )}
+
+              {!preview &&
+                photoUrl && (
+                  <button
+                    type="button"
+                    onClick={
+                      handleRemoveAvatar
+                    }
+                    disabled={saving}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-xl text-rose-600 hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+
+                    Remove
+                  </button>
+                )}
+            </div>
+
+            <p className="text-[11px] text-gray-400 mt-2.5">
+              JPG, PNG, WebP or GIF · Max{" "}
+              {MAX_SIZE_MB}MB
+            </p>
+
+            {error && (
+              <p className="text-xs font-medium text-red-600 mt-2">
+                {error}
+              </p>
+            )}
+
+            {success && (
+              <p className="text-xs font-medium text-green-600 mt-2 flex items-center gap-1 justify-center sm:justify-start">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                {success}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* PERSONAL INFORMATION */}
+
+        <div className="pt-6">
+
+          <div className="flex items-center justify-between mb-4">
+
+            <div>
+              <h3 className="text-sm font-bold text-gray-900">
+                Personal Information
+              </h3>
+
+              <p className="text-xs text-gray-400 mt-0.5">
+                Update your administrator account information.
+              </p>
+            </div>
+
+            {!editing && (
+              <div className="flex items-center gap-2">
+
+                <button
+                  type="button"
+                  onClick={
+                    handleStartEditing
+                  }
+                  className="text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 transition"
+                >
+                  Edit Profile
+                </button>
+
+                <button
+                  type="button"
+                  onClick={
+                    handleOpenChangePassword
+                  }
+                  className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 transition"
+                >
+                  <LockKeyhole className="w-3.5 h-3.5" />
+
+                  Change Password
+                </button>
+
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+            {/* FIRST NAME */}
+
+            <ProfileField
+              icon={
+                <User className="w-4 h-4" />
+              }
+              label="First Name"
+              editing={editing}
+              input={
+                <input
+                  type="text"
+                  name="firstName"
+                  value={
+                    editForm.firstName
+                  }
+                  onChange={
+                    handleFormChange
+                  }
+                  className="mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+                />
+              }
+              value={
+                profileData.firstName ||
+                "—"
+              }
+            />
+
+            {/* LAST NAME */}
+
+            <ProfileField
+              icon={
+                <User className="w-4 h-4" />
+              }
+              label="Last Name"
+              editing={editing}
+              input={
+                <input
+                  type="text"
+                  name="lastName"
+                  value={
+                    editForm.lastName
+                  }
+                  onChange={
+                    handleFormChange
+                  }
+                  className="mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+                />
+              }
+              value={
+                profileData.lastName ||
+                "—"
+              }
+            />
+
+            {/* EMAIL */}
+
+            <ProfileField
+              icon={
+                <Mail className="w-4 h-4" />
+              }
+              label="Email"
+              editing={editing}
+              input={
+                <input
+                  type="email"
+                  name="email"
+                  value={
+                    editForm.email
+                  }
+                  onChange={
+                    handleFormChange
+                  }
+                  className="mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+                />
+              }
+              value={
+                profileData.email ||
+                "—"
+              }
+            />
+
+            {/* PHONE */}
+
+            <ProfileField
+              icon={
+                <Phone className="w-4 h-4" />
+              }
+              label="Phone"
+              editing={editing}
+              input={
+                <input
+                  type="tel"
+                  name="phone"
+                  value={
+                    editForm.phone
+                  }
+                  onChange={
+                    handleFormChange
+                  }
+                  className="mt-1 w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm font-medium text-gray-800 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
+                />
+              }
+              value={
+                profileData.phone ||
+                "—"
+              }
+            />
+
+            {/* USERNAME */}
+
+            <ProfileField
+              icon={
+                <User className="w-4 h-4" />
+              }
+              label="Username"
+              value={
+                profileData.username ||
+                "—"
+              }
+            />
+
+            {/* ROLE */}
+
+            <ProfileField
+              icon={
+                <LockKeyhole className="w-4 h-4" />
+              }
+              label="Role"
+              value={
+                profileData.backendRole ||
+                profileData.role ||
+                "ADMIN"
+              }
+            />
+
+            {/* JOINED */}
+
+            <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl sm:col-span-2">
+
+              <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm">
+                <Calendar className="w-4 h-4" />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                  Joined
+                </label>
+
+                <p className="text-sm font-semibold text-gray-800 mt-0.5">
+                  {joinedDate}
+                </p>
+              </div>
+            </div>
+
+          </div>
+
+          {/* SAVE/CANCEL */}
+
+          {editing && (
+            <div className="flex items-center justify-end gap-3 mt-5 pt-5 border-t border-gray-100">
+
+              <button
+                type="button"
+                onClick={
+                  handleCancelEdit
+                }
+                disabled={saving}
+                className="text-sm font-semibold px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={
+                  handleSaveProfile
+                }
+                disabled={saving}
+                className="text-sm font-semibold px-5 py-2.5 rounded-xl bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-60"
+              >
+                {saving
+                  ? "Saving..."
+                  : "Save Changes"}
+              </button>
+
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* CHANGE PASSWORD MODAL */}
+
+      {showChangePassword && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-gray-100">
+
+            {/* HEADER */}
+
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">
+                  Change Password
+                </h3>
+
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Update your account password securely.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={
+                  handleCloseChangePassword
+                }
+                disabled={changingPassword}
+                className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* BODY */}
+
+            <div className="p-6 space-y-4">
+
+              <PasswordInput
+                label="Current Password"
+                name="currentPassword"
+                value={
+                  passwordForm.currentPassword
+                }
+                onChange={
+                  handlePasswordFormChange
+                }
+                showPassword={
+                  showCurrentPassword
+                }
+                setShowPassword={
+                  setShowCurrentPassword
+                }
+              />
+
+              <PasswordInput
+                label="New Password"
+                name="newPassword"
+                value={
+                  passwordForm.newPassword
+                }
+                onChange={
+                  handlePasswordFormChange
+                }
+                showPassword={
+                  showNewPassword
+                }
+                setShowPassword={
+                  setShowNewPassword
+                }
+              />
+
+              <PasswordInput
+                label="Confirm New Password"
+                name="confirmPassword"
+                value={
+                  passwordForm.confirmPassword
+                }
+                onChange={
+                  handlePasswordFormChange
+                }
+                showPassword={
+                  showConfirmPassword
+                }
+                setShowPassword={
+                  setShowConfirmPassword
+                }
+              />
+
+              {passwordError && (
+                <div className="rounded-xl bg-red-50 border border-red-100 px-3 py-2.5">
+                  <p className="text-xs font-medium text-red-600">
+                    {passwordError}
+                  </p>
+                </div>
+              )}
+
+              {passwordSuccess && (
+                <div className="rounded-xl bg-green-50 border border-green-100 px-3 py-2.5">
+                  <p className="text-xs font-medium text-green-600 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4" />
+                    {passwordSuccess}
+                  </p>
+                </div>
+              )}
+
+              <p className="text-[11px] text-gray-400">
+                Password must be between 6 and 100 characters.
+              </p>
+
+            </div>
+
+            {/* FOOTER */}
+
+            <div className="flex items-center justify-end gap-3 px-6 py-5 border-t border-gray-100">
+
+              <button
+                type="button"
+                onClick={
+                  handleCloseChangePassword
+                }
+                disabled={changingPassword}
+                className="text-sm font-semibold px-5 py-2.5 rounded-xl border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={
+                  handleChangePassword
+                }
+                disabled={
+                  changingPassword
+                }
+                className="inline-flex items-center gap-2 text-sm font-semibold px-5 py-2.5 rounded-xl bg-gray-900 text-white hover:bg-gray-800 disabled:opacity-60"
+              >
+                <LockKeyhole className="w-4 h-4" />
+
+                {changingPassword
+                  ? "Changing..."
+                  : "Change Password"}
+              </button>
+
+            </div>
+          </div>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        {/* Settings Sidebar */}
-        <div className="bg-white border rounded-xl p-3 h-fit">
-          <button
-            onClick={() => setActiveTab("profile")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left ${
-              activeTab === "profile"
-                ? "bg-purple-50 text-purple-700"
-                : "text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            <User className="w-5 h-5" />
-            Profile
-          </button>
+    </div>
+  );
+}
 
-          <button
-            onClick={() => setActiveTab("security")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left ${
-              activeTab === "security"
-                ? "bg-purple-50 text-purple-700"
-                : "text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            <Lock className="w-5 h-5" />
-            Security
-          </button>
+// ============================================================
+// PROFILE FIELD
+// ============================================================
 
-          <button
-            onClick={() => setActiveTab("notifications")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left ${
-              activeTab === "notifications"
-                ? "bg-purple-50 text-purple-700"
-                : "text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            <Bell className="w-5 h-5" />
-            Notifications
-          </button>
+function ProfileField({
+  icon,
+  label,
+  value,
+  editing = false,
+  input = null,
+}) {
+  return (
+    <div className="flex items-start gap-3.5 p-4 bg-gray-50/50 border border-gray-100 rounded-xl">
 
-          <button
-            onClick={() => setActiveTab("system")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left ${
-              activeTab === "system"
-                ? "bg-purple-50 text-purple-700"
-                : "text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            <Shield className="w-5 h-5" />
-            System
-          </button>
-        </div>
+      <div className="p-2.5 bg-white border border-gray-100 rounded-xl text-gray-400 shadow-sm shrink-0">
+        {icon}
+      </div>
 
-        {/* Settings Content */}
-        <div className="lg:col-span-3 bg-white border rounded-xl p-6">
-          {/* Profile */}
-          {activeTab === "profile" && (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Admin Profile
-              </h2>
+      <div className="min-w-0 flex-1">
 
-              <p className="text-sm text-gray-500 mt-1 mb-6">
-                Update your administrator account information.
-              </p>
+        <label className="block text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+          {label}
+        </label>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Full Name
-                  </label>
+        {editing && input ? (
+          input
+        ) : (
+          <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">
+            {value}
+          </p>
+        )}
 
-                  <input
-                    type="text"
-                    name="name"
-                    value={profile.name}
-                    onChange={handleProfileChange}
-                    className="w-full px-4 py-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Email
-                  </label>
-
-                  <input
-                    type="email"
-                    name="email"
-                    value={profile.email}
-                    onChange={handleProfileChange}
-                    className="w-full px-4 py-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Phone Number
-                  </label>
-
-                  <input
-                    type="text"
-                    name="phone"
-                    value={profile.phone}
-                    onChange={handleProfileChange}
-                    className="w-full px-4 py-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-purple-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Role
-                  </label>
-
-                  <input
-                    type="text"
-                    value="Administrator"
-                    disabled
-                    className="w-full px-4 py-2.5 border rounded-lg bg-gray-100 text-gray-500"
-                  />
-                </div>
-              </div>
-
-              <SaveButton onClick={handleSave} />
-            </div>
-          )}
-
-          {/* Security */}
-          {activeTab === "security" && (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Security
-              </h2>
-
-              <p className="text-sm text-gray-500 mt-1 mb-6">
-                Change your password and manage account security.
-              </p>
-
-              <div className="space-y-5 max-w-xl">
-                <PasswordInput
-                  label="Current Password"
-                  name="current"
-                  value={password.current}
-                  onChange={handlePasswordChange}
-                  showPassword={showPassword}
-                  setShowPassword={setShowPassword}
-                />
-
-                <PasswordInput
-                  label="New Password"
-                  name="newPassword"
-                  value={password.newPassword}
-                  onChange={handlePasswordChange}
-                  showPassword={showPassword}
-                  setShowPassword={setShowPassword}
-                />
-
-                <PasswordInput
-                  label="Confirm New Password"
-                  name="confirm"
-                  value={password.confirm}
-                  onChange={handlePasswordChange}
-                  showPassword={showPassword}
-                  setShowPassword={setShowPassword}
-                />
-              </div>
-
-              <SaveButton onClick={handleSave} />
-            </div>
-          )}
-
-          {/* Notifications */}
-          {activeTab === "notifications" && (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Notification Preferences
-              </h2>
-
-              <p className="text-sm text-gray-500 mt-1 mb-6">
-                Choose which notifications you want to receive.
-              </p>
-
-              <div className="space-y-4">
-                <NotificationToggle
-                  title="Email Notifications"
-                  description="Receive important notifications through email."
-                  checked={notifications.email}
-                  onChange={() =>
-                    handleNotificationChange("email")
-                  }
-                />
-
-                <NotificationToggle
-                  title="New User Registrations"
-                  description="Get notified when a new user registers."
-                  checked={notifications.newUsers}
-                  onChange={() =>
-                    handleNotificationChange("newUsers")
-                  }
-                />
-
-                <NotificationToggle
-                  title="New Property Listings"
-                  description="Get notified when a property requires approval."
-                  checked={notifications.newProperties}
-                  onChange={() =>
-                    handleNotificationChange("newProperties")
-                  }
-                />
-
-                <NotificationToggle
-                  title="Payment Notifications"
-                  description="Receive updates about transactions and payments."
-                  checked={notifications.payments}
-                  onChange={() =>
-                    handleNotificationChange("payments")
-                  }
-                />
-
-                <NotificationToggle
-                  title="Dispute Notifications"
-                  description="Receive alerts when a new dispute is raised."
-                  checked={notifications.disputes}
-                  onChange={() =>
-                    handleNotificationChange("disputes")
-                  }
-                />
-
-                <NotificationToggle
-                  title="Fraud Alerts"
-                  description="Receive alerts for suspicious activity."
-                  checked={notifications.fraudAlerts}
-                  onChange={() =>
-                    handleNotificationChange("fraudAlerts")
-                  }
-                />
-              </div>
-
-              <SaveButton onClick={handleSave} />
-            </div>
-          )}
-
-          {/* System */}
-          {activeTab === "system" && (
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                System Settings
-              </h2>
-
-              <p className="text-sm text-gray-500 mt-1 mb-6">
-                Manage basic platform configuration.
-              </p>
-
-              <div className="space-y-5">
-                <div className="flex items-center justify-between border-b pb-5">
-                  <div>
-                    <h3 className="font-medium text-gray-900">
-                      User Registration
-                    </h3>
-
-                    <p className="text-sm text-gray-500 mt-1">
-                      Allow new users to register on the platform.
-                    </p>
-                  </div>
-
-                  <Toggle defaultChecked />
-                </div>
-
-                <div className="flex items-center justify-between border-b pb-5">
-                  <div>
-                    <h3 className="font-medium text-gray-900">
-                      Property Approval
-                    </h3>
-
-                    <p className="text-sm text-gray-500 mt-1">
-                      Require admin approval before properties are published.
-                    </p>
-                  </div>
-
-                  <Toggle defaultChecked />
-                </div>
-
-                <div className="flex items-center justify-between border-b pb-5">
-                  <div>
-                    <h3 className="font-medium text-gray-900">
-                      Review Moderation
-                    </h3>
-
-                    <p className="text-sm text-gray-500 mt-1">
-                      Review new reviews before publishing them.
-                    </p>
-                  </div>
-
-                  <Toggle defaultChecked />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium text-gray-900">
-                      Fraud Detection
-                    </h3>
-
-                    <p className="text-sm text-gray-500 mt-1">
-                      Enable automatic suspicious activity monitoring.
-                    </p>
-                  </div>
-
-                  <Toggle defaultChecked />
-                </div>
-              </div>
-
-              <SaveButton onClick={handleSave} />
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
 }
 
-/* Save Button */
-function SaveButton({ onClick }) {
-  return (
-    <div className="mt-6">
-      <button
-        onClick={onClick}
-        className="flex items-center gap-2 bg-purple-600 text-white px-5 py-2.5 rounded-lg hover:bg-purple-700"
-      >
-        <Save className="w-4 h-4" />
-        Save Changes
-      </button>
-    </div>
-  );
-}
+// ============================================================
+// PASSWORD INPUT
+// ============================================================
 
-/* Password Input */
 function PasswordInput({
   label,
   name,
@@ -435,95 +1686,41 @@ function PasswordInput({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">
+      <label className="block text-xs font-semibold text-gray-600 mb-1.5">
         {label}
       </label>
 
       <div className="relative">
+
         <input
-          type={showPassword ? "text" : "password"}
+          type={
+            showPassword
+              ? "text"
+              : "password"
+          }
           name={name}
           value={value}
           onChange={onChange}
-          className="w-full px-4 py-2.5 pr-11 border rounded-lg outline-none focus:ring-2 focus:ring-purple-500"
+          className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2.5 pr-11 text-sm text-gray-800 outline-none focus:border-gray-400 focus:ring-2 focus:ring-gray-100"
         />
 
         <button
           type="button"
-          onClick={() => setShowPassword(!showPassword)}
-          className="absolute right-3 top-3 text-gray-400 hover:text-gray-700"
+          onClick={() =>
+            setShowPassword(
+              (value) => !value
+            )
+          }
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
         >
           {showPassword ? (
-            <EyeOff className="w-5 h-5" />
+            <EyeOff className="w-4 h-4" />
           ) : (
-            <Eye className="w-5 h-5" />
+            <Eye className="w-4 h-4" />
           )}
         </button>
+
       </div>
     </div>
-  );
-}
-
-/* Notification Toggle */
-function NotificationToggle({
-  title,
-  description,
-  checked,
-  onChange,
-}) {
-  return (
-    <div className="flex items-center justify-between border-b pb-4">
-      <div>
-        <h3 className="font-medium text-gray-900">
-          {title}
-        </h3>
-
-        <p className="text-sm text-gray-500 mt-1">
-          {description}
-        </p>
-      </div>
-
-      <Toggle
-        checked={checked}
-        onChange={onChange}
-      />
-    </div>
-  );
-}
-
-/* Toggle */
-function Toggle({
-  checked,
-  onChange,
-  defaultChecked = false,
-}) {
-  const [internalChecked, setInternalChecked] =
-    useState(defaultChecked);
-
-  const isChecked =
-    checked !== undefined ? checked : internalChecked;
-
-  const handleChange = () => {
-    if (onChange) {
-      onChange();
-    } else {
-      setInternalChecked(!internalChecked);
-    }
-  };
-
-  return (
-    <button
-      type="button"
-      onClick={handleChange}
-      className={`relative w-11 h-6 rounded-full transition ${
-        isChecked ? "bg-purple-600" : "bg-gray-300"
-      }`}
-    >
-      <span
-        className={`absolute top-1 w-4 h-4 bg-white rounded-full transition ${
-          isChecked ? "left-6" : "left-1"
-        }`}
-      />
-    </button>
   );
 }

@@ -1,303 +1,609 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-
+import { useEffect, useState } from "react";
 import {
   Users,
   Building2,
-  ShoppingCart,
-  Wallet,
-  Flag,
+  UserCheck,
   Clock,
-  Bell,
-  CheckCircle,
-  XCircle,
+  ArrowUpRight,
+  ArrowRight,
+  RefreshCw,
 } from "lucide-react";
 
-export default function AdminDashboard() {
-  const { user, loading } = useAuth();
-  const navigate = useNavigate();
+import axiosInstance from "../../utils/axiosInstance";
+
+export default function Dashboard() {
+  const [users, setUsers] = useState([]);
+  const [properties, setProperties] = useState([]);
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    if (loading) return;
+    fetchDashboardData();
+  }, []);
 
-    if (!user) {
-      navigate("/login", { replace: true });
-      return;
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const [usersResponse, propertiesResponse] =
+        await Promise.all([
+          axiosInstance.get("/api/users"),
+          axiosInstance.get("/api/properties"),
+        ]);
+
+      setUsers(usersResponse.data || []);
+      setProperties(propertiesResponse.data || []);
+    } catch (err) {
+      console.error("Dashboard data loading failed:", err);
+
+      if (err.response?.status === 401) {
+        setError("Your session has expired. Please login again.");
+      } else if (err.response?.status === 403) {
+        setError("You are not authorized to view dashboard data.");
+      } else {
+        setError("Failed to load dashboard data.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =========================
+  // USER STATISTICS
+  // =========================
+
+  const totalUsers = users.length;
+
+  const activeUsers = users.filter(
+    (user) => user.status === "ACTIVE"
+  ).length;
+
+  const inactiveUsers = users.filter(
+    (user) => user.status === "INACTIVE"
+  ).length;
+
+  const buyers = users.filter(
+    (user) => user.role === "BUYER"
+  ).length;
+
+  const sellers = users.filter(
+    (user) => user.role === "SELLER"
+  ).length;
+
+  const agents = users.filter(
+    (user) => user.role === "BROKER"
+  ).length;
+
+  // =========================
+  // PROPERTY STATISTICS
+  // =========================
+
+  const totalProperties = properties.length;
+
+  const pendingProperties = properties.filter(
+    (property) => property.status === "PENDING"
+  ).length;
+
+  const approvedProperties = properties.filter(
+    (property) => property.status === "APPROVED"
+  ).length;
+
+  const availableProperties = properties.filter(
+    (property) => property.status === "AVAILABLE"
+  ).length;
+
+  // =========================
+  // RECENT USERS
+  // =========================
+
+  const recentUsers = [...users]
+    .sort((a, b) => {
+      return (
+        new Date(b.createdAt || 0) -
+        new Date(a.createdAt || 0)
+      );
+    })
+    .slice(0, 5);
+
+  // =========================
+  // RECENT PROPERTIES
+  // =========================
+
+  const recentProperties = [...properties]
+    .sort((a, b) => {
+      return (
+        new Date(b.createdAt || 0) -
+        new Date(a.createdAt || 0)
+      );
+    })
+    .slice(0, 5);
+
+  const getUserName = (user) => {
+    const name = `${user.firstName || ""} ${
+      user.lastName || ""
+    }`.trim();
+
+    return name || user.username || "Unknown User";
+  };
+
+  const formatDate = (date) => {
+    if (!date) return "Recently";
+
+    const parsedDate = new Date(date);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+      return "Recently";
     }
 
-    if (user.role !== "admin") {
-      navigate("/", { replace: true });
-    }
-  }, [user, loading, navigate]);
-
-  if (loading || !user || user.role !== "admin") {
-    return null;
-  }
-
-  const stats = [
-    {
-      title: "Total Users",
-      value: "1,248",
-      icon: Users,
-      description: "Registered users",
-    },
-    {
-      title: "Total Properties",
-      value: "856",
-      icon: Building2,
-      description: "All property listings",
-    },
-    {
-      title: "Pending Approvals",
-      value: "24",
-      icon: Clock,
-      description: "Properties waiting",
-    },
-    {
-      title: "Transactions",
-      value: "342",
-      icon: ShoppingCart,
-      description: "Total transactions",
-    },
-    {
-      title: "Payments",
-      value: "₹18.5L",
-      icon: Wallet,
-      description: "Total payments",
-    },
-    {
-      title: "Reports",
-      value: "17",
-      icon: Flag,
-      description: "Open reports",
-    },
-  ];
-
-  const recentActivities = [
-    {
-      name: "Rahul Sharma",
-      action: "registered as Buyer",
-      time: "10 minutes ago",
-    },
-    {
-      name: "Priya Patel",
-      action: "submitted a new property",
-      time: "30 minutes ago",
-    },
-    {
-      name: "Amit Verma",
-      action: "completed a payment",
-      time: "1 hour ago",
-    },
-    {
-      name: "Neha Rao",
-      action: "reported a property",
-      time: "2 hours ago",
-    },
-  ];
-
-  const pendingProperties = [
-    {
-      property: "Luxury Villa",
-      owner: "Rahul Sharma",
-      location: "Bangalore",
-      status: "Pending",
-    },
-    {
-      property: "3 BHK Apartment",
-      owner: "Priya Patel",
-      location: "Whitefield",
-      status: "Pending",
-    },
-    {
-      property: "Independent House",
-      owner: "Amit Verma",
-      location: "HSR Layout",
-      status: "Pending",
-    },
-  ];
+    return parsedDate.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
 
   return (
-    <div className="w-full">
+    <div className="p-6">
 
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">
-          Admin Dashboard
-        </h1>
+      {/* =========================
+          HEADER
+      ========================= */}
 
-        <p className="text-sm text-gray-500 mt-1">
-          Welcome back, {user.name || "Administrator"}
-        </p>
-      </div>
+      <div className="flex items-center justify-between mb-6">
 
-      {/* Overview */}
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold text-gray-900">
-          Overview
-        </h2>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Dashboard
+          </h1>
 
-        <p className="text-sm text-gray-500 mt-1">
-          Monitor and manage your real-estate platform.
-        </p>
-      </div>
-
-      {/* Statistics */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-
-        {stats.map((stat) => {
-          const Icon = stat.icon;
-
-          return (
-            <div
-              key={stat.title}
-              className="bg-white border border-gray-200 rounded-xl p-5 hover:shadow-md transition"
-            >
-              <div className="w-10 h-10 bg-purple-50 rounded-lg flex items-center justify-center">
-                <Icon className="w-5 h-5 text-purple-600" />
-              </div>
-
-              <p className="text-sm text-gray-500 mt-4">
-                {stat.title}
-              </p>
-
-              <h2 className="text-2xl font-bold text-gray-900 mt-1">
-                {stat.value}
-              </h2>
-
-              <p className="text-xs text-gray-400 mt-1">
-                {stat.description}
-              </p>
-            </div>
-          );
-        })}
-
-      </div>
-
-      {/* Activity + Pending Properties */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-8">
-
-        {/* Recent Activity */}
-        <div className="bg-white border border-gray-200 rounded-xl">
-
-          <div className="p-5 border-b border-gray-200 flex items-center justify-between">
-
-            <div>
-              <h2 className="font-semibold text-gray-900">
-                Recent Activity
-              </h2>
-
-              <p className="text-xs text-gray-500 mt-1">
-                Latest activity on the platform
-              </p>
-            </div>
-
-            <Bell className="w-5 h-5 text-gray-400" />
-          </div>
-
-          <div className="divide-y divide-gray-100">
-
-            {recentActivities.map((activity, index) => (
-              <div
-                key={index}
-                className="p-5 flex items-center gap-4"
-              >
-
-                <div className="w-10 h-10 bg-purple-100 text-purple-700 rounded-full flex items-center justify-center font-semibold">
-                  {activity.name.charAt(0)}
-                </div>
-
-                <div className="flex-1">
-
-                  <p className="text-sm text-gray-800">
-                    <span className="font-semibold">
-                      {activity.name}
-                    </span>{" "}
-                    {activity.action}
-                  </p>
-
-                  <p className="text-xs text-gray-400 mt-1">
-                    {activity.time}
-                  </p>
-
-                </div>
-
-              </div>
-            ))}
-
-          </div>
+          <p className="text-sm text-gray-500 mt-1">
+            Overview of your real estate platform
+          </p>
         </div>
+
+        <button
+          onClick={fetchDashboardData}
+          disabled={loading}
+          className="flex items-center gap-2 border border-gray-300 px-4 py-2 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+        >
+          <RefreshCw
+            className={`w-4 h-4 ${
+              loading ? "animate-spin" : ""
+            }`}
+          />
+
+          Refresh
+        </button>
+
+      </div>
+
+      {/* =========================
+          ERROR
+      ========================= */}
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+          {error}
+        </div>
+      )}
+
+      {/* =========================
+          MAIN STAT CARDS
+      ========================= */}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-6">
+
+        {/* Total Users */}
+        <StatCard
+          title="Total Users"
+          value={loading ? "..." : totalUsers}
+          icon={<Users className="w-6 h-6" />}
+          description={`${activeUsers} active users`}
+        />
+
+        {/* Properties */}
+        <StatCard
+          title="Total Properties"
+          value={loading ? "..." : totalProperties}
+          icon={<Building2 className="w-6 h-6" />}
+          description={`${availableProperties} available`}
+        />
+
+        {/* Active Users */}
+        <StatCard
+          title="Active Users"
+          value={loading ? "..." : activeUsers}
+          icon={<UserCheck className="w-6 h-6" />}
+          description={`${inactiveUsers} inactive`}
+        />
 
         {/* Pending Properties */}
-        <div className="bg-white border border-gray-200 rounded-xl">
+        <StatCard
+          title="Pending Properties"
+          value={loading ? "..." : pendingProperties}
+          icon={<Clock className="w-6 h-6" />}
+          description={`${approvedProperties} approved`}
+        />
 
-          <div className="p-5 border-b border-gray-200 flex items-center justify-between">
+      </div>
+
+      {/* =========================
+          USER OVERVIEW
+      ========================= */}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+
+        <div className="bg-white border rounded-xl p-6">
+
+          <div className="flex items-center justify-between mb-5">
 
             <div>
-              <h2 className="font-semibold text-gray-900">
-                Pending Property Approvals
+              <h2 className="text-lg font-semibold text-gray-900">
+                User Overview
               </h2>
 
-              <p className="text-xs text-gray-500 mt-1">
-                Properties waiting for admin approval
+              <p className="text-sm text-gray-500 mt-1">
+                Registered users by role
               </p>
             </div>
 
-            <Clock className="w-5 h-5 text-orange-500" />
+            <Users className="w-6 h-6 text-purple-600" />
+
           </div>
 
-          <div className="divide-y divide-gray-100">
+          <div className="space-y-4">
 
-            {pendingProperties.map((property, index) => (
-              <div
-                key={index}
-                className="p-5"
-              >
+            <OverviewRow
+              label="Buyers"
+              value={buyers}
+              total={totalUsers}
+            />
 
-                <div className="flex items-center justify-between gap-4">
+            <OverviewRow
+              label="Owners"
+              value={sellers}
+              total={totalUsers}
+            />
 
-                  <div>
-                    <h3 className="text-sm font-semibold text-gray-900">
-                      {property.property}
-                    </h3>
+            <OverviewRow
+              label="Agents"
+              value={agents}
+              total={totalUsers}
+            />
 
-                    <p className="text-xs text-gray-500 mt-1">
-                      {property.owner} • {property.location}
-                    </p>
+            <OverviewRow
+              label="Other Users"
+              value={
+                Math.max(
+                  totalUsers -
+                    buyers -
+                    sellers -
+                    agents,
+                  0
+                )
+              }
+              total={totalUsers}
+            />
+
+          </div>
+
+        </div>
+
+        {/* Property Overview */}
+
+        <div className="bg-white border rounded-xl p-6">
+
+          <div className="flex items-center justify-between mb-5">
+
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Property Overview
+              </h2>
+
+              <p className="text-sm text-gray-500 mt-1">
+                Current property listing status
+              </p>
+            </div>
+
+            <Building2 className="w-6 h-6 text-purple-600" />
+
+          </div>
+
+          <div className="space-y-4">
+
+            <OverviewRow
+              label="Available"
+              value={availableProperties}
+              total={totalProperties}
+            />
+
+            <OverviewRow
+              label="Approved"
+              value={approvedProperties}
+              total={totalProperties}
+            />
+
+            <OverviewRow
+              label="Pending"
+              value={pendingProperties}
+              total={totalProperties}
+            />
+
+            <OverviewRow
+              label="Other"
+              value={
+                Math.max(
+                  totalProperties -
+                    availableProperties -
+                    approvedProperties -
+                    pendingProperties,
+                  0
+                )
+              }
+              total={totalProperties}
+            />
+
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* =========================
+          RECENT USERS
+      ========================= */}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <div className="bg-white border rounded-xl p-6">
+
+          <div className="flex items-center justify-between mb-5">
+
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Recent Users
+              </h2>
+
+              <p className="text-sm text-gray-500 mt-1">
+                Recently registered users
+              </p>
+            </div>
+
+            <ArrowUpRight className="w-5 h-5 text-gray-400" />
+
+          </div>
+
+          {loading ? (
+            <p className="text-sm text-gray-500">
+              Loading users...
+            </p>
+          ) : recentUsers.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              No users found.
+            </p>
+          ) : (
+            <div className="space-y-4">
+
+              {recentUsers.map((user) => (
+                <div
+                  key={user.id}
+                  className="flex items-center justify-between border-b last:border-b-0 pb-3 last:pb-0"
+                >
+
+                  <div className="flex items-center gap-3">
+
+                    <div className="w-9 h-9 rounded-full bg-purple-100 flex items-center justify-center text-purple-700 font-semibold">
+                      {getUserName(user)
+                        .charAt(0)
+                        .toUpperCase()}
+                    </div>
+
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {getUserName(user)}
+                      </p>
+
+                      <p className="text-xs text-gray-500">
+                        {user.email || "No email"}
+                      </p>
+                    </div>
+
                   </div>
 
-                  <span className="px-2.5 py-1 bg-orange-50 text-orange-600 text-xs rounded-full whitespace-nowrap">
-                    {property.status}
-                  </span>
+                  <div className="text-right">
+
+                    <p className="text-xs font-medium text-gray-700">
+                      {user.role || "USER"}
+                    </p>
+
+                    <p className="text-xs text-gray-400">
+                      {formatDate(user.createdAt)}
+                    </p>
+
+                  </div>
 
                 </div>
+              ))}
 
-                <div className="flex gap-2 mt-4">
+            </div>
+          )}
 
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 px-3 py-1.5 bg-green-50 text-green-600 rounded-lg text-xs hover:bg-green-100"
-                  >
-                    <CheckCircle className="w-4 h-4" />
-                    Approve
-                  </button>
+        </div>
 
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs hover:bg-red-100"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    Reject
-                  </button>
+        {/* =========================
+            RECENT PROPERTIES
+        ========================= */}
 
-                </div>
+        <div className="bg-white border rounded-xl p-6">
 
-              </div>
-            ))}
+          <div className="flex items-center justify-between mb-5">
+
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">
+                Recent Properties
+              </h2>
+
+              <p className="text-sm text-gray-500 mt-1">
+                Recently added property listings
+              </p>
+            </div>
+
+            <ArrowUpRight className="w-5 h-5 text-gray-400" />
 
           </div>
+
+          {loading ? (
+            <p className="text-sm text-gray-500">
+              Loading properties...
+            </p>
+          ) : recentProperties.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              No properties found.
+            </p>
+          ) : (
+            <div className="space-y-4">
+
+              {recentProperties.map((property) => (
+                <div
+                  key={property.id}
+                  className="flex items-center justify-between border-b last:border-b-0 pb-3 last:pb-0"
+                >
+
+                  <div className="min-w-0">
+
+                    <p className="text-sm font-medium text-gray-900 truncate">
+                      {property.title || "Untitled Property"}
+                    </p>
+
+                    <p className="text-xs text-gray-500">
+                      {property.location?.city ||
+                        "Location not available"}
+                    </p>
+
+                  </div>
+
+                  <div className="text-right ml-4">
+
+                    <p className="text-sm font-medium text-gray-900">
+                      {property.price
+                        ? `₹${Number(
+                            property.price
+                          ).toLocaleString("en-IN")}`
+                        : "Price N/A"}
+                    </p>
+
+                    <p className="text-xs text-gray-400">
+                      {property.status || "UNKNOWN"}
+                    </p>
+
+                  </div>
+
+                </div>
+              ))}
+
+            </div>
+          )}
+
         </div>
+
+      </div>
+
+      {/* =========================
+          NOTE
+      ========================= */}
+
+      <div className="mt-6 bg-blue-50 border border-blue-100 rounded-xl p-4">
+        <p className="text-sm text-blue-700">
+          Transaction and payment statistics are not shown yet.
+          They will be connected after the Transaction and Payment
+          backend modules are completed.
+        </p>
+      </div>
+
+    </div>
+  );
+}
+
+
+/* =====================================================
+   STAT CARD
+===================================================== */
+
+function StatCard({
+  title,
+  value,
+  icon,
+  description,
+}) {
+  return (
+    <div className="bg-white border rounded-xl p-5">
+
+      <div className="flex items-center justify-between">
+
+        <div>
+          <p className="text-sm text-gray-500">
+            {title}
+          </p>
+
+          <p className="text-2xl font-bold text-gray-900 mt-2">
+            {value}
+          </p>
+        </div>
+
+        <div className="w-11 h-11 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+          {icon}
+        </div>
+
+      </div>
+
+      <p className="text-xs text-gray-500 mt-4">
+        {description}
+      </p>
+
+    </div>
+  );
+}
+
+
+/* =====================================================
+   OVERVIEW ROW
+===================================================== */
+
+function OverviewRow({
+  label,
+  value,
+  total,
+}) {
+  const percentage =
+    total > 0
+      ? Math.round((value / total) * 100)
+      : 0;
+
+  return (
+    <div>
+
+      <div className="flex items-center justify-between mb-1">
+
+        <span className="text-sm text-gray-600">
+          {label}
+        </span>
+
+        <span className="text-sm font-medium text-gray-900">
+          {value}
+        </span>
+
+      </div>
+
+      <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+
+        <div
+          className="h-full bg-purple-500 rounded-full transition-all"
+          style={{
+            width: `${percentage}%`,
+          }}
+        />
 
       </div>
 
