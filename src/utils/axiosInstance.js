@@ -1,3 +1,4 @@
+
 import axios from "axios";
 
 const axiosInstance = axios.create({
@@ -10,27 +11,32 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   (config) => {
     // Support the token keys currently used by the application.
-    const token =
-      localStorage.getItem("token") ||
-      localStorage.getItem("accessToken") ||
-      localStorage.getItem("re_access_token");
+    // const token =
+    //   localStorage.getItem("token") ||
+    //   localStorage.getItem("accessToken") ||
+    //   localStorage.getItem("re_access_token");
 
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+        // Get the CURRENT logged-in user's token.
+        // Every login can have a different JWT.
+        const token = localStorage.getItem("accessToken");
 
-    // JSON request
-    if (!(config.data instanceof FormData)) {
-      config.headers["Content-Type"] = "application/json";
-    }
+        if (token) {
+            config.headers = config.headers || {};
+            config.headers.Authorization = `Bearer ${token}`;
+        }
 
-    // For FormData, DON'T manually set Content-Type.
-    // Browser/Axios will automatically set:
-    // multipart/form-data; boundary=....
+        // JSON request
+        if (!(config.data instanceof FormData)) {
+            config.headers = config.headers || {};
+            config.headers["Content-Type"] = "application/json";
+        }
 
-    return config;
-  },
-  (error) => Promise.reject(error)
+        // Do NOT manually set Content-Type for FormData.
+        // Axios/browser will add the multipart boundary automatically.
+
+        return config;
+    },
+    (error) => Promise.reject(error)
 );
 
 // ========================================
@@ -46,7 +52,16 @@ axiosInstance.interceptors.response.use(
       localStorage.removeItem("re_access_token");
       localStorage.removeItem("user");
 
-      window.location.href = "/";
+        if (error.response?.status === 401) {
+
+            // Token is invalid/expired.
+            localStorage.removeItem("accessToken");
+            localStorage.removeItem("authUser");
+
+            window.location.href = "/";
+        }
+
+        return Promise.reject(error);
     }
 
     return Promise.reject(error);
@@ -54,3 +69,4 @@ axiosInstance.interceptors.response.use(
 );
 
 export default axiosInstance;
+

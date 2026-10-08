@@ -592,7 +592,18 @@ export default function OwnerMessages() {
               ) : (
                 activeMessages.map((msg) => {
                   const isOwner =
-                    msg.senderId === ownerId;
+                    Number(msg.senderId) === Number(ownerId);
+
+                  const isBuyer =
+                    selectedChatInfo &&
+                    Number(msg.senderId) ===
+                      Number(selectedChatInfo.buyerId);
+
+                  const senderLabel = isOwner
+                    ? "You (Owner)"
+                    : isBuyer
+                    ? `${msg.senderName || "Buyer"} (Buyer)`
+                    : `${msg.senderName || "Agent"} (Broker)`;
 
                   return (
                     <div
@@ -603,6 +614,9 @@ export default function OwnerMessages() {
                           : "mr-auto items-start"
                       }`}
                     >
+                      <span className="text-[10px] text-gray-400 mb-0.5 px-1 font-medium">
+                        {senderLabel}
+                      </span>
                       <div
                         className={`p-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
                           isOwner

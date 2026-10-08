@@ -285,22 +285,21 @@ export default function BuyerMessages() {
       );
 
       /*
-       * Backend does not have an approval/status field.
-       *
-       * Therefore:
-       * - No messages = request is still pending.
-       * - Owner message exists = owner accepted request.
+       * Accepted if owner OR broker has replied (any non-buyer message),
+       * or conversation.status is ACCEPTED.
        */
-      const ownerMessages = history.filter(
+      const nonBuyerMessages = history.filter(
         (message) =>
-          message.senderId === chat.sellerId
+          Number(message.senderId) !== Number(buyerId)
       );
 
-      const isPending =
-        history.length === 0;
+      const statusAccepted =
+        String(chat.status || "").toUpperCase() === "ACCEPTED";
 
       const isAccepted =
-        ownerMessages.length > 0;
+        nonBuyerMessages.length > 0 || statusAccepted;
+
+      const isPending = !isAccepted;
 
       return {
         ...chat,
@@ -372,7 +371,7 @@ export default function BuyerMessages() {
      */
     if (!selectedChat.isAccepted) {
       setError(
-        "Please wait for the property owner to accept your message request."
+        "Please wait for the property owner or agent to accept your message request."
       );
       return;
     }
@@ -648,7 +647,7 @@ export default function BuyerMessages() {
                     </p>
 
                     <p className="text-[11px] text-amber-600 mt-0.5">
-                      The property owner needs to accept your
+                      The property owner or agent needs to accept your
                       request before you can continue chatting.
                     </p>
 
@@ -674,7 +673,7 @@ export default function BuyerMessages() {
                         </p>
 
                         <p className="text-[11px] text-gray-300 mt-1">
-                          Waiting for the property owner to accept.
+                          Waiting for the owner or agent to accept.
                         </p>
 
                       </div>
@@ -684,7 +683,17 @@ export default function BuyerMessages() {
                     activeMessages.map((msg) => {
 
                       const isBuyer =
-                        msg.senderId === buyerId;
+                        Number(msg.senderId) === Number(buyerId);
+
+                      const isOwner =
+                        Number(msg.senderId) ===
+                        Number(selectedChat?.sellerId);
+
+                      const senderLabel = isBuyer
+                        ? "You"
+                        : isOwner
+                        ? `${msg.senderName || "Owner"} (Owner)`
+                        : `${msg.senderName || "Agent"} (Broker)`;
 
                       return (
                         <div
@@ -695,6 +704,9 @@ export default function BuyerMessages() {
                               : "mr-auto items-start"
                           }`}
                         >
+                          <span className="text-[9px] text-gray-400 mb-0.5 px-1 font-medium">
+                            {senderLabel}
+                          </span>
 
                           <div
                             className={`px-4 py-3 rounded-2xl text-xs sm:text-sm leading-relaxed ${
