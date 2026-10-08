@@ -21,8 +21,8 @@ public class ReviewController {
     private final ReviewService reviewService;
 
     /**
-     * Create a review for a property.
-     * The reviewer is taken from the JWT authenticated user.
+     * Create a review for a property. The reviewer is taken from the JWT
+     * authenticated user.
      */
     @PostMapping
     public ResponseEntity<ReviewResponse> createReview(
@@ -111,6 +111,14 @@ public class ReviewController {
 
         return ResponseEntity.ok(
                 "Review status updated successfully");
+    }
+
+    /**
+     * Get all reviews.
+     */
+    @GetMapping
+    public ResponseEntity<List<ReviewResponse>> getAllReviews() {
+        return ResponseEntity.ok(reviewService.getAllReviews());
     }
 
     /**
