@@ -4,11 +4,9 @@ import {
   Star,
   CheckCircle,
   XCircle,
-  EyeOff,
-  Trash2,
 } from "lucide-react";
 
-const API_URL = "http://localhost:8080/api/reviews";
+import axiosInstance from "../../utils/axiosInstance";
 
 export default function Reviews() {
   const [search, setSearch] = useState("");
@@ -38,15 +36,37 @@ export default function Reviews() {
   }, [message, error]);
 
   // =========================================================
-  // GET TOKEN
+  // EXTRACT ARRAY
   // =========================================================
 
-  const getToken = () => {
-    return (
-      localStorage.getItem("token") ||
-      localStorage.getItem("accessToken") ||
-      ""
-    );
+  const extractArray = (response) => {
+    const data = response?.data;
+
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    if (Array.isArray(data?.reviews)) {
+      return data.reviews;
+    }
+
+    if (Array.isArray(data?.content)) {
+      return data.content;
+    }
+
+    if (Array.isArray(data?.data)) {
+      return data.data;
+    }
+
+    if (Array.isArray(data?.items)) {
+      return data.items;
+    }
+
+    if (Array.isArray(data?.results)) {
+      return data.results;
+    }
+
+    return [];
   };
 
   // =========================================================
@@ -58,40 +78,34 @@ export default function Reviews() {
       setLoading(true);
       setError("");
 
-      const token = getToken();
+      const response =
+        await axiosInstance.get("/api/reviews");
 
-      const headers = {
-        "Content-Type": "application/json",
-      };
-
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-
-      const response = await fetch(API_URL, {
-        method: "GET",
-        headers,
-      });
-
-      if (!response.ok) {
-        throw new Error(
-          `Failed to fetch reviews: ${response.status}`
-        );
-      }
-
-      const data = await response.json();
-
-      const reviewList = Array.isArray(data)
-        ? data
-        : data.reviews ||
-          data.content ||
-          data.data ||
-          [];
+      const reviewList =
+        extractArray(response);
 
       setReviews(reviewList);
     } catch (err) {
-      console.error("Error fetching reviews:", err);
-      setError("Unable to load reviews.");
+      console.error(
+        "Error fetching reviews:",
+        err
+      );
+
+      if (err.response?.status === 401) {
+        setError(
+          "Your session has expired. Please login again."
+        );
+      } else if (err.response?.status === 403) {
+        setError(
+          "You are not authorized to view reviews."
+        );
+      } else {
+        setError(
+          "Unable to load reviews."
+        );
+      }
+
+      setReviews([]);
     } finally {
       setLoading(false);
     }
@@ -114,53 +128,28 @@ export default function Reviews() {
       setError("");
       setMessage("");
 
-      const token = getToken();
-
-      const headers = {
-        "Content-Type": "application/json",
-      };
-
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-
-      // Backend statuses:
-      // APPROVED
-      // PENDING
-      // REJECTED
+      /*
+       * Backend statuses:
+       *
+       * APPROVED
+       * PENDING
+       * REJECTED
+       */
 
       const backendStatus =
         status === "HIDDEN"
           ? "REJECTED"
           : status;
 
-      const response = await fetch(
-        `${API_URL}/${id}/status?status=${encodeURIComponent(
-          backendStatus
-        )}`,
+      await axiosInstance.patch(
+        `/api/reviews/${id}/status`,
+        null,
         {
-          method: "PATCH",
-          headers,
+          params: {
+            status: backendStatus,
+          },
         }
       );
-
-      if (!response.ok) {
-        let errorMessage =
-          `Failed to update review: ${response.status}`;
-
-        try {
-          const errorData = await response.json();
-
-          errorMessage =
-            errorData.message ||
-            errorData.error ||
-            errorMessage;
-        } catch {
-          // Keep default message
-        }
-
-        throw new Error(errorMessage);
-      }
 
       // Update UI immediately
       setReviews((currentReviews) =>
@@ -174,7 +163,7 @@ export default function Reviews() {
         )
       );
 
-      // Success messages
+      // Success message
       if (status === "APPROVED") {
         setMessage(
           "Review approved successfully."
@@ -193,13 +182,24 @@ export default function Reviews() {
         );
       }
 
-      // Refresh from backend
+      /*
+       * Refresh from backend so the UI always
+       * reflects the actual database state.
+       */
       await fetchReviews();
     } catch (err) {
-      console.error("Error updating review:", err);
+      console.error(
+        "Error updating review:",
+        err
+      );
+
+      const backendMessage =
+        err.response?.data?.message ||
+        err.response?.data?.error;
 
       setError(
-        err.message ||
+        backendMessage ||
+          err.message ||
           "Failed to update review status."
       );
     }
@@ -222,45 +222,14 @@ export default function Reviews() {
       setError("");
       setMessage("");
 
-      const token = getToken();
-
-      const headers = {
-        "Content-Type": "application/json",
-      };
-
-      if (token) {
-        headers.Authorization = `Bearer ${token}`;
-      }
-
-      const response = await fetch(
-        `${API_URL}/${id}`,
-        {
-          method: "DELETE",
-          headers,
-        }
+      await axiosInstance.delete(
+        `/api/reviews/${id}`
       );
-
-      if (!response.ok) {
-        let errorMessage =
-          `Failed to delete review: ${response.status}`;
-
-        try {
-          const errorData = await response.json();
-
-          errorMessage =
-            errorData.message ||
-            errorData.error ||
-            errorMessage;
-        } catch {
-          // Keep default message
-        }
-
-        throw new Error(errorMessage);
-      }
 
       setReviews((currentReviews) =>
         currentReviews.filter(
-          (review) => review.id !== id
+          (review) =>
+            review.id !== id
         )
       );
 
@@ -268,12 +237,23 @@ export default function Reviews() {
         "Review deleted successfully."
       );
 
+      /*
+       * Refresh from backend.
+       */
       await fetchReviews();
     } catch (err) {
-      console.error("Error deleting review:", err);
+      console.error(
+        "Error deleting review:",
+        err
+      );
+
+      const backendMessage =
+        err.response?.data?.message ||
+        err.response?.data?.error;
 
       setError(
-        err.message ||
+        backendMessage ||
+          err.message ||
           "Failed to delete review."
       );
     }
@@ -284,20 +264,26 @@ export default function Reviews() {
   // =========================================================
 
   const getDisplayStatus = (status) => {
-    if (status === "REJECTED") {
+    if (
+      String(status || "").toUpperCase() ===
+      "REJECTED"
+    ) {
       return "REJECTED";
     }
 
-    return status;
+    return String(
+      status || ""
+    ).toUpperCase();
   };
 
   // =========================================================
   // SEARCH + FILTER
   // =========================================================
 
-  const filteredReviews = reviews.filter(
-    (review) => {
-      const value = search.toLowerCase();
+  const filteredReviews =
+    reviews.filter((review) => {
+      const value =
+        search.toLowerCase();
 
       const userName =
         review.userName ||
@@ -314,52 +300,61 @@ export default function Reviews() {
         "";
 
       const displayStatus =
-        getDisplayStatus(review.status);
+        getDisplayStatus(
+          review.status
+        );
 
       const matchesSearch =
-        userName
+        String(userName)
           .toLowerCase()
           .includes(value) ||
-        propertyTitle
+        String(propertyTitle)
           .toLowerCase()
           .includes(value) ||
-        comment
+        String(comment)
           .toLowerCase()
           .includes(value);
 
       const matchesStatus =
         filterStatus === "All" ||
-        displayStatus === filterStatus;
+        displayStatus ===
+          filterStatus;
 
       return (
         matchesSearch &&
         matchesStatus
       );
-    }
-  );
+    });
 
   // =========================================================
   // STATISTICS
   // =========================================================
 
-  const totalReviews = reviews.length;
+  const totalReviews =
+    reviews.length;
 
   const approvedReviews =
     reviews.filter(
       (review) =>
-        review.status === "APPROVED"
+        getDisplayStatus(
+          review.status
+        ) === "APPROVED"
     ).length;
 
   const pendingReviews =
     reviews.filter(
       (review) =>
-        review.status === "PENDING"
+        getDisplayStatus(
+          review.status
+        ) === "PENDING"
     ).length;
 
   const rejectedReviews =
     reviews.filter(
       (review) =>
-        review.status === "REJECTED"
+        getDisplayStatus(
+          review.status
+        ) === "REJECTED"
     ).length;
 
   const averageRating =
@@ -368,7 +363,9 @@ export default function Reviews() {
           reviews.reduce(
             (total, review) =>
               total +
-              Number(review.rating || 0),
+              Number(
+                review.rating || 0
+              ),
             0
           ) / reviews.length
         ).toFixed(1)
@@ -526,7 +523,9 @@ export default function Reviews() {
           <select
             value={filterStatus}
             onChange={(e) =>
-              setFilterStatus(e.target.value)
+              setFilterStatus(
+                e.target.value
+              )
             }
             className="border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
@@ -599,7 +598,9 @@ export default function Reviews() {
 
                       <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center font-semibold text-purple-600">
 
-                        {userName
+                        {String(
+                          userName
+                        )
                           .charAt(0)
                           .toUpperCase()}
 

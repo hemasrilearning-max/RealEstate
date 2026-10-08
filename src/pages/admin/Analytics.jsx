@@ -32,6 +32,42 @@ export default function Analytics() {
 
   /*
    * ============================================================
+   * HELPER - EXTRACT ARRAY
+   * ============================================================
+   */
+
+  const extractArray = (response) => {
+    const data = response?.data;
+
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    if (Array.isArray(data?.content)) {
+      return data.content;
+    }
+
+    if (Array.isArray(data?.data)) {
+      return data.data;
+    }
+
+    if (Array.isArray(data?.transactions)) {
+      return data.transactions;
+    }
+
+    if (Array.isArray(data?.items)) {
+      return data.items;
+    }
+
+    if (Array.isArray(data?.results)) {
+      return data.results;
+    }
+
+    return [];
+  };
+
+  /*
+   * ============================================================
    * LOAD ANALYTICS DATA
    * ============================================================
    */
@@ -43,6 +79,7 @@ export default function Analytics() {
   const fetchAnalyticsData = async () => {
     try {
       setLoading(true);
+      setTransactionLoading(true);
       setError("");
       setTransactionMessage("");
 
@@ -51,108 +88,111 @@ export default function Analytics() {
        * 1. GET PROPERTIES
        * --------------------------------------------------------
        *
-       * Your backend already has:
+       * Existing backend endpoint:
        *
        * GET /api/properties
-       *
-       * and SecurityConfig permits GET properties.
        */
 
       const propertiesResponse =
         await axiosInstance.get("/api/properties");
 
-      const propertyList = Array.isArray(
-        propertiesResponse.data
-      )
-        ? propertiesResponse.data
-        : [];
+      const propertyList =
+        extractArray(propertiesResponse);
 
       setProperties(propertyList);
 
       /*
        * --------------------------------------------------------
-       * 2. GET TRANSACTIONS
+       * 2. GET ALL ADMIN TRANSACTIONS
        * --------------------------------------------------------
        *
-       * Existing backend endpoint:
+       * Existing working backend endpoint:
        *
-       * GET /api/transactions/property/{propertyId}
+       * GET /api/transactions/admin
        *
-       * We do NOT allow a failure here to break the Analytics
-       * page.
+       * This is the same endpoint used by the Admin
+       * Transactions page and Reports page.
+       *
+       * We do NOT call:
+       *
+       * /api/transactions/property/{propertyId}
+       *
+       * anymore.
        */
 
-      setTransactionLoading(true);
+      try {
+        const transactionResponse =
+          await axiosInstance.get(
+            "/api/transactions/admin"
+          );
 
-      const transactionResults = await Promise.all(
-        propertyList.map(async (property) => {
-          try {
-            const response =
-              await axiosInstance.get(
-                `/api/transactions/property/${property.id}`
-              );
+        const transactionList =
+          extractArray(transactionResponse);
 
-            if (Array.isArray(response.data)) {
-              return response.data;
-            }
+        /*
+         * Remove duplicate transactions.
+         */
 
-            return [];
-          } catch (transactionError) {
-            console.error(
-              `Transaction API failed for property ${property.id}:`,
-              transactionError
-            );
+        const uniqueTransactions =
+          Array.from(
+            new Map(
+              transactionList
+                .filter(
+                  (transaction) =>
+                    transaction &&
+                    transaction.id != null
+                )
+                .map((transaction) => [
+                  transaction.id,
+                  transaction,
+                ])
+            ).values()
+          );
 
-            /*
-             * Do not break Analytics if one property transaction
-             * request is forbidden/not available.
-             */
-            return [];
-          }
-        })
-      );
+        setTransactions(uniqueTransactions);
 
-      /*
-       * Combine all transaction arrays.
-       */
-      const combinedTransactions =
-        transactionResults.flat();
+        /*
+         * If backend returned no transactions,
+         * don't create fake numbers.
+         */
 
-      /*
-       * Remove duplicate transactions using transaction ID.
-       */
-      const uniqueTransactions = Array.from(
-        new Map(
-          combinedTransactions
-            .filter(
-              (transaction) =>
-                transaction &&
-                transaction.id != null
-            )
-            .map((transaction) => [
-              transaction.id,
-              transaction,
-            ])
-        ).values()
-      );
-
-      setTransactions(uniqueTransactions);
-
-      /*
-       * If no transaction data was accessible, don't show
-       * fake numbers.
-       */
-      if (
-        propertyList.length > 0 &&
-        uniqueTransactions.length === 0
-      ) {
-        setTransactionMessage(
-          "Transaction data is not available from the current backend access."
+        if (
+          propertyList.length > 0 &&
+          uniqueTransactions.length === 0
+        ) {
+          setTransactionMessage(
+            "No transaction records are available from the backend."
+          );
+        }
+      } catch (transactionError) {
+        console.error(
+          "Admin transaction API failed:",
+          transactionError
         );
+
+        setTransactions([]);
+
+        if (
+          transactionError.response?.status === 401
+        ) {
+          setTransactionMessage(
+            "Your session has expired. Please login again."
+          );
+        } else if (
+          transactionError.response?.status === 403
+        ) {
+          setTransactionMessage(
+            "You are not authorized to view transaction analytics."
+          );
+        } else {
+          setTransactionMessage(
+            "Transaction data could not be loaded."
+          );
+        }
       }
     } catch (err) {
       console.error(
-        "Analytics property loading error:",
+        "Analytics data loading error:",
         err
       );
 
@@ -260,6 +300,14 @@ export default function Analytics() {
         const transactionDate =
           new Date(transaction.createdAt);
 
+        if (
+          Number.isNaN(
+            transactionDate.getTime()
+          )
+        ) {
+          return false;
+        }
+
         return (
           transactionDate >= startDate &&
           transactionDate <= endDate
@@ -313,7 +361,9 @@ export default function Analytics() {
       (total, transaction) => {
         return (
           total +
-          Number(transaction?.amount || 0)
+          Number(
+            transaction?.amount || 0
+          )
         );
       },
       0
@@ -401,6 +451,14 @@ export default function Analytics() {
               new Date(
                 transaction.createdAt
               );
+
+            if (
+              Number.isNaN(
+                transactionDate.getTime()
+              )
+            ) {
+              return false;
+            }
 
             return (
               transactionDate.getFullYear() ===
@@ -736,7 +794,6 @@ export default function Analytics() {
 
       </div>
 
-
       {/* TRANSACTION ACCESS MESSAGE */}
 
       {transactionMessage && (
@@ -754,7 +811,6 @@ export default function Analytics() {
 
         </div>
       )}
-
 
       {/* MAIN STATISTICS */}
 
@@ -794,7 +850,6 @@ export default function Analytics() {
 
         </div>
 
-
         {/* APPROVED */}
 
         <div className="bg-white border rounded-xl p-5">
@@ -828,7 +883,6 @@ export default function Analytics() {
           </div>
 
         </div>
-
 
         {/* TRANSACTIONS */}
 
@@ -871,7 +925,6 @@ export default function Analytics() {
           </div>
 
         </div>
-
 
         {/* REVENUE */}
 
@@ -917,7 +970,6 @@ export default function Analytics() {
 
       </div>
 
-
       {/* PROPERTY STATUS */}
 
       <div className="bg-white border rounded-xl p-6 mb-6">
@@ -950,7 +1002,6 @@ export default function Analytics() {
 
           </div>
 
-
           <div className="bg-green-50 rounded-lg p-4">
 
             <CheckCircle className="w-5 h-5 text-green-600" />
@@ -964,7 +1015,6 @@ export default function Analytics() {
             </p>
 
           </div>
-
 
           <div className="bg-red-50 rounded-lg p-4">
 
@@ -980,7 +1030,6 @@ export default function Analytics() {
 
           </div>
 
-
           <div className="bg-blue-50 rounded-lg p-4">
 
             <Home className="w-5 h-5 text-blue-600" />
@@ -994,7 +1043,6 @@ export default function Analytics() {
             </p>
 
           </div>
-
 
           <div className="bg-gray-50 rounded-lg p-4">
 
@@ -1010,7 +1058,6 @@ export default function Analytics() {
 
           </div>
 
-
           <div className="bg-indigo-50 rounded-lg p-4">
 
             <Building2 className="w-5 h-5 text-indigo-600" />
@@ -1024,7 +1071,6 @@ export default function Analytics() {
             </p>
 
           </div>
-
 
           <div className="bg-gray-50 rounded-lg p-4">
 
@@ -1043,7 +1089,6 @@ export default function Analytics() {
         </div>
 
       </div>
-
 
       {/* TRANSACTION SUMMARY */}
 
@@ -1081,7 +1126,6 @@ export default function Analytics() {
 
         </div>
 
-
         <div className="bg-white border rounded-xl p-6">
 
           <div className="flex items-center gap-3">
@@ -1113,7 +1157,6 @@ export default function Analytics() {
           </p>
 
         </div>
-
 
         <div className="bg-white border rounded-xl p-6">
 
@@ -1148,7 +1191,6 @@ export default function Analytics() {
         </div>
 
       </div>
-
 
       {/* MONTHLY TRANSACTIONS */}
 
@@ -1243,7 +1285,6 @@ export default function Analytics() {
 
       </div>
 
-
       {/* TOP PROPERTIES + PLATFORM SUMMARY */}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -1331,7 +1372,6 @@ export default function Analytics() {
 
         </div>
 
-
         {/* PLATFORM SUMMARY */}
 
         <div className="bg-white border rounded-xl p-6">
@@ -1372,7 +1412,6 @@ export default function Analytics() {
 
             </div>
 
-
             <div className="flex items-center justify-between border-b pb-4">
 
               <div>
@@ -1395,7 +1434,6 @@ export default function Analytics() {
 
             </div>
 
-
             <div className="flex items-center justify-between border-b pb-4">
 
               <div>
@@ -1417,7 +1455,6 @@ export default function Analytics() {
               </span>
 
             </div>
-
 
             <div className="flex items-center justify-between">
 
@@ -1443,7 +1480,6 @@ export default function Analytics() {
 
           </div>
 
-
           <div className="mt-6 p-4 bg-purple-50 rounded-lg">
 
             <div className="flex items-center gap-3">
@@ -1457,10 +1493,8 @@ export default function Analytics() {
                 </p>
 
                 <p className="text-sm text-gray-600 mt-1">
-                  Property data is loaded from
-                  the existing backend. Transaction
-                  data is used when the existing
-                  transaction endpoint permits access.
+                  Property and transaction data is
+                  loaded from the existing backend.
                 </p>
 
               </div>
