@@ -1,138 +1,403 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Search,
   Star,
   CheckCircle,
+  XCircle,
   EyeOff,
   Trash2,
 } from "lucide-react";
+
+const API_URL = "http://localhost:8080/api/reviews";
 
 export default function Reviews() {
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
 
-  const [reviews, setReviews] = useState([
-    {
-      id: 1,
-      clientName: "Rahul Sharma",
-      propertyTitle: "Luxury 3BHK Apartment",
-      rating: 5,
-      comment:
-        "Excellent property and very helpful agent. The entire process was smooth.",
-      createdAt: "2026-09-15",
-      status: "Approved",
-    },
-    {
-      id: 2,
-      clientName: "Priya Kumar",
-      propertyTitle: "Modern 2BHK Flat",
-      rating: 4,
-      comment:
-        "Good property with a great location. Overall experience was good.",
-      createdAt: "2026-09-14",
-      status: "Pending",
-    },
-    {
-      id: 3,
-      clientName: "Arjun Mehta",
-      propertyTitle: "Premium Villa",
-      rating: 5,
-      comment:
-        "Beautiful villa and excellent service from the agent.",
-      createdAt: "2026-09-12",
-      status: "Approved",
-    },
-    {
-      id: 4,
-      clientName: "Sneha Rao",
-      propertyTitle: "Affordable 1BHK Apartment",
-      rating: 3,
-      comment:
-        "The property was okay, but there were some issues during the visit.",
-      createdAt: "2026-09-10",
-      status: "Pending",
-    },
-    {
-      id: 5,
-      clientName: "Kiran Kumar",
-      propertyTitle: "Family 3BHK Home",
-      rating: 2,
-      comment:
-        "The property did not match the description provided online.",
-      createdAt: "2026-09-08",
-      status: "Hidden",
-    },
-  ]);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Update review status
-  const updateStatus = (id, status) => {
-    setReviews((current) =>
-      current.map((review) =>
-        review.id === id
-          ? { ...review, status }
-          : review
-      )
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const messageRef = useRef(null);
+
+  // =========================================================
+  // SCROLL TO MESSAGE
+  // =========================================================
+
+  useEffect(() => {
+    if (message || error) {
+      setTimeout(() => {
+        messageRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 100);
+    }
+  }, [message, error]);
+
+  // =========================================================
+  // GET TOKEN
+  // =========================================================
+
+  const getToken = () => {
+    return (
+      localStorage.getItem("token") ||
+      localStorage.getItem("accessToken") ||
+      ""
     );
   };
 
-  // Delete review
-  const deleteReview = (id) => {
+  // =========================================================
+  // FETCH REVIEWS
+  // =========================================================
+
+  const fetchReviews = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const token = getToken();
+
+      const headers = {
+        "Content-Type": "application/json",
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(API_URL, {
+        method: "GET",
+        headers,
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch reviews: ${response.status}`
+        );
+      }
+
+      const data = await response.json();
+
+      const reviewList = Array.isArray(data)
+        ? data
+        : data.reviews ||
+          data.content ||
+          data.data ||
+          [];
+
+      setReviews(reviewList);
+    } catch (err) {
+      console.error("Error fetching reviews:", err);
+      setError("Unable to load reviews.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // =========================================================
+  // LOAD REVIEWS
+  // =========================================================
+
+  useEffect(() => {
+    fetchReviews();
+  }, []);
+
+  // =========================================================
+  // UPDATE REVIEW STATUS
+  // =========================================================
+
+  const updateStatus = async (id, status) => {
+    try {
+      setError("");
+      setMessage("");
+
+      const token = getToken();
+
+      const headers = {
+        "Content-Type": "application/json",
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      // Backend statuses:
+      // APPROVED
+      // PENDING
+      // REJECTED
+
+      const backendStatus =
+        status === "HIDDEN"
+          ? "REJECTED"
+          : status;
+
+      const response = await fetch(
+        `${API_URL}/${id}/status?status=${encodeURIComponent(
+          backendStatus
+        )}`,
+        {
+          method: "PATCH",
+          headers,
+        }
+      );
+
+      if (!response.ok) {
+        let errorMessage =
+          `Failed to update review: ${response.status}`;
+
+        try {
+          const errorData = await response.json();
+
+          errorMessage =
+            errorData.message ||
+            errorData.error ||
+            errorMessage;
+        } catch {
+          // Keep default message
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      // Update UI immediately
+      setReviews((currentReviews) =>
+        currentReviews.map((review) =>
+          review.id === id
+            ? {
+                ...review,
+                status: backendStatus,
+              }
+            : review
+        )
+      );
+
+      // Success messages
+      if (status === "APPROVED") {
+        setMessage(
+          "Review approved successfully."
+        );
+      } else if (status === "REJECTED") {
+        setMessage(
+          "Review rejected successfully."
+        );
+      } else if (status === "HIDDEN") {
+        setMessage(
+          "Review hidden successfully."
+        );
+      } else {
+        setMessage(
+          "Review status updated successfully."
+        );
+      }
+
+      // Refresh from backend
+      await fetchReviews();
+    } catch (err) {
+      console.error("Error updating review:", err);
+
+      setError(
+        err.message ||
+          "Failed to update review status."
+      );
+    }
+  };
+
+  // =========================================================
+  // DELETE REVIEW
+  // =========================================================
+
+  const deleteReview = async (id) => {
     const confirmDelete = window.confirm(
       "Are you sure you want to delete this review?"
     );
 
-    if (!confirmDelete) return;
+    if (!confirmDelete) {
+      return;
+    }
 
-    setReviews((current) =>
-      current.filter((review) => review.id !== id)
-    );
+    try {
+      setError("");
+      setMessage("");
+
+      const token = getToken();
+
+      const headers = {
+        "Content-Type": "application/json",
+      };
+
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(
+        `${API_URL}/${id}`,
+        {
+          method: "DELETE",
+          headers,
+        }
+      );
+
+      if (!response.ok) {
+        let errorMessage =
+          `Failed to delete review: ${response.status}`;
+
+        try {
+          const errorData = await response.json();
+
+          errorMessage =
+            errorData.message ||
+            errorData.error ||
+            errorMessage;
+        } catch {
+          // Keep default message
+        }
+
+        throw new Error(errorMessage);
+      }
+
+      setReviews((currentReviews) =>
+        currentReviews.filter(
+          (review) => review.id !== id
+        )
+      );
+
+      setMessage(
+        "Review deleted successfully."
+      );
+
+      await fetchReviews();
+    } catch (err) {
+      console.error("Error deleting review:", err);
+
+      setError(
+        err.message ||
+          "Failed to delete review."
+      );
+    }
   };
 
-  // Search + filter
-  const filteredReviews = reviews.filter((review) => {
-    const value = search.toLowerCase();
+  // =========================================================
+  // DISPLAY STATUS
+  // =========================================================
 
-    const matchesSearch =
-      review.clientName.toLowerCase().includes(value) ||
-      review.propertyTitle.toLowerCase().includes(value) ||
-      review.comment.toLowerCase().includes(value);
+  const getDisplayStatus = (status) => {
+    if (status === "REJECTED") {
+      return "REJECTED";
+    }
 
-    const matchesStatus =
-      filterStatus === "All" ||
-      review.status === filterStatus;
+    return status;
+  };
 
-    return matchesSearch && matchesStatus;
-  });
+  // =========================================================
+  // SEARCH + FILTER
+  // =========================================================
 
-  // Statistics
+  const filteredReviews = reviews.filter(
+    (review) => {
+      const value = search.toLowerCase();
+
+      const userName =
+        review.userName ||
+        review.user_name ||
+        "";
+
+      const propertyTitle =
+        review.propertyTitle ||
+        review.property_title ||
+        "";
+
+      const comment =
+        review.comment ||
+        "";
+
+      const displayStatus =
+        getDisplayStatus(review.status);
+
+      const matchesSearch =
+        userName
+          .toLowerCase()
+          .includes(value) ||
+        propertyTitle
+          .toLowerCase()
+          .includes(value) ||
+        comment
+          .toLowerCase()
+          .includes(value);
+
+      const matchesStatus =
+        filterStatus === "All" ||
+        displayStatus === filterStatus;
+
+      return (
+        matchesSearch &&
+        matchesStatus
+      );
+    }
+  );
+
+  // =========================================================
+  // STATISTICS
+  // =========================================================
+
   const totalReviews = reviews.length;
 
-  const approvedReviews = reviews.filter(
-    (review) => review.status === "Approved"
-  ).length;
+  const approvedReviews =
+    reviews.filter(
+      (review) =>
+        review.status === "APPROVED"
+    ).length;
 
-  const pendingReviews = reviews.filter(
-    (review) => review.status === "Pending"
-  ).length;
+  const pendingReviews =
+    reviews.filter(
+      (review) =>
+        review.status === "PENDING"
+    ).length;
 
-  const hiddenReviews = reviews.filter(
-    (review) => review.status === "Hidden"
-  ).length;
+  const rejectedReviews =
+    reviews.filter(
+      (review) =>
+        review.status === "REJECTED"
+    ).length;
 
   const averageRating =
     reviews.length > 0
       ? (
           reviews.reduce(
-            (total, review) => total + review.rating,
+            (total, review) =>
+              total +
+              Number(review.rating || 0),
             0
           ) / reviews.length
         ).toFixed(1)
       : "0.0";
 
+  // =========================================================
+  // LOADING
+  // =========================================================
+
+  if (loading) {
+    return (
+      <div className="p-6">
+        <div className="bg-white border rounded-xl p-10 text-center">
+          <p className="text-gray-500">
+            Loading reviews...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================
+  // PAGE
+  // =========================================================
+
   return (
     <div className="p-6">
 
-      {/* Header */}
+      {/* HEADER */}
       <div className="flex items-center justify-between mb-6">
 
         <div>
@@ -145,8 +410,7 @@ export default function Reviews() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2 bg-amber-50
-          text-amber-800 px-4 py-2 rounded-lg">
+        <div className="flex items-center gap-2 bg-amber-50 text-amber-800 px-4 py-2 rounded-lg">
 
           <Star className="w-4 h-4 fill-amber-500 text-amber-500" />
 
@@ -162,10 +426,32 @@ export default function Reviews() {
 
       </div>
 
-      {/* Statistics */}
+      {/* SUCCESS / ERROR MESSAGE */}
+      <div ref={messageRef}>
+
+        {message && (
+          <div className="bg-green-50 border border-green-200 text-green-700 rounded-xl p-4 mb-6">
+            <p className="font-semibold">
+              {message}
+            </p>
+          </div>
+        )}
+
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-600 rounded-xl p-4 mb-6">
+            <p className="font-semibold">
+              {error}
+            </p>
+          </div>
+        )}
+
+      </div>
+
+      {/* STATISTICS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
 
         <div className="bg-white border rounded-xl p-4">
+
           <p className="text-sm text-gray-500">
             Total Reviews
           </p>
@@ -173,9 +459,11 @@ export default function Reviews() {
           <p className="text-2xl font-bold mt-1">
             {totalReviews}
           </p>
+
         </div>
 
         <div className="bg-white border rounded-xl p-4">
+
           <p className="text-sm text-gray-500">
             Approved
           </p>
@@ -183,9 +471,11 @@ export default function Reviews() {
           <p className="text-2xl font-bold text-green-600 mt-1">
             {approvedReviews}
           </p>
+
         </div>
 
         <div className="bg-white border rounded-xl p-4">
+
           <p className="text-sm text-gray-500">
             Pending
           </p>
@@ -193,234 +483,292 @@ export default function Reviews() {
           <p className="text-2xl font-bold text-yellow-600 mt-1">
             {pendingReviews}
           </p>
+
         </div>
 
         <div className="bg-white border rounded-xl p-4">
+
           <p className="text-sm text-gray-500">
-            Hidden
+            Rejected
           </p>
 
           <p className="text-2xl font-bold text-red-600 mt-1">
-            {hiddenReviews}
+            {rejectedReviews}
           </p>
+
         </div>
 
       </div>
 
-      {/* Search + Filter */}
+      {/* SEARCH + FILTER */}
       <div className="bg-white border rounded-xl p-4 mb-6">
 
         <div className="flex flex-col md:flex-row gap-4">
 
-          {/* Search */}
           <div className="relative flex-1">
 
             <Search
-              className="absolute left-3 top-1/2
-              -translate-y-1/2 w-5 h-5 text-gray-400"
+              className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400"
             />
 
             <input
               type="text"
               placeholder="Search reviewer, property or review..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full border border-gray-300
-              rounded-lg pl-10 pr-4 py-3
-              focus:outline-none focus:ring-2
-              focus:ring-purple-500"
+              onChange={(e) =>
+                setSearch(e.target.value)
+              }
+              className="w-full border border-gray-300 rounded-lg pl-10 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
             />
 
           </div>
 
-          {/* Status Filter */}
           <select
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="border border-gray-300 rounded-lg
-            px-4 py-3 focus:outline-none
-            focus:ring-2 focus:ring-purple-500"
+            onChange={(e) =>
+              setFilterStatus(e.target.value)
+            }
+            className="border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
-            <option value="All">All Reviews</option>
-            <option value="Pending">Pending</option>
-            <option value="Approved">Approved</option>
-            <option value="Hidden">Hidden</option>
+
+            <option value="All">
+              All Reviews
+            </option>
+
+            <option value="PENDING">
+              Pending
+            </option>
+
+            <option value="APPROVED">
+              Approved
+            </option>
+
+            <option value="REJECTED">
+              Rejected
+            </option>
+
           </select>
 
         </div>
 
       </div>
 
-      {/* Reviews */}
+      {/* REVIEWS */}
       <div className="space-y-4">
 
         {filteredReviews.length === 0 ? (
 
           <div className="bg-white border rounded-xl p-10 text-center">
+
             <p className="text-gray-500">
               No reviews found.
             </p>
+
           </div>
 
         ) : (
 
-          filteredReviews.map((review) => (
+          filteredReviews.map(
+            (review) => {
 
-            <div
-              key={review.id}
-              className="bg-white border border-gray-200
-              rounded-xl p-5"
-            >
+              const displayStatus =
+                getDisplayStatus(
+                  review.status
+                );
 
-              {/* Top */}
-              <div className="flex items-start justify-between">
+              const userName =
+                review.userName ||
+                review.user_name ||
+                "Unknown User";
 
-                <div className="flex items-center gap-3">
+              const propertyTitle =
+                review.propertyTitle ||
+                review.property_title ||
+                "Unknown Property";
 
-                  <div className="w-10 h-10 bg-purple-100
-                    rounded-full flex items-center
-                    justify-center font-semibold
-                    text-purple-600">
+              return (
+                <div
+                  key={review.id}
+                  className="bg-white border border-gray-200 rounded-xl p-5"
+                >
 
-                    {review.clientName.charAt(0)}
+                  {/* TOP */}
+                  <div className="flex items-start justify-between">
+
+                    <div className="flex items-center gap-3">
+
+                      <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center font-semibold text-purple-600">
+
+                        {userName
+                          .charAt(0)
+                          .toUpperCase()}
+
+                      </div>
+
+                      <div>
+
+                        <p className="font-semibold text-gray-900">
+                          {userName}
+                        </p>
+
+                        <p className="text-xs text-gray-500">
+                          {propertyTitle}
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                    {/* RATING */}
+                    <div className="flex items-center gap-0.5">
+
+                      {Array.from({
+                        length: 5,
+                      }).map(
+                        (_, i) => (
+
+                          <Star
+                            key={i}
+                            className={`w-4 h-4 ${
+                              i <
+                              Number(
+                                review.rating ||
+                                  0
+                              )
+                                ? "fill-amber-400 text-amber-400"
+                                : "text-gray-200"
+                            }`}
+                          />
+
+                        )
+                      )}
+
+                    </div>
 
                   </div>
 
-                  <div>
+                  {/* COMMENT */}
+                  <p className="text-sm text-gray-600 mt-4">
+                    {review.comment}
+                  </p>
 
-                    <p className="font-semibold text-gray-900">
-                      {review.clientName}
-                    </p>
+                  {/* BOTTOM */}
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mt-4 pt-4 border-t">
 
-                    <p className="text-xs text-gray-500">
-                      {review.propertyTitle}
-                    </p>
+                    <div className="flex items-center gap-3">
+
+                      {/* APPROVED */}
+                      {displayStatus ===
+                        "APPROVED" && (
+
+                        <span className="flex items-center gap-1 text-xs font-medium text-green-600">
+
+                          <CheckCircle className="w-4 h-4" />
+
+                          Approved
+
+                        </span>
+
+                      )}
+
+                      {/* PENDING */}
+                      {displayStatus ===
+                        "PENDING" && (
+
+                        <span className="text-xs font-medium text-yellow-600">
+
+                          ● Pending
+
+                        </span>
+
+                      )}
+
+                      {/* REJECTED */}
+                      {displayStatus ===
+                        "REJECTED" && (
+
+                        <span className="flex items-center gap-1 text-xs font-medium text-red-600">
+
+                          <XCircle className="w-4 h-4" />
+
+                          Rejected
+
+                        </span>
+
+                      )}
+
+                      {/* DATE */}
+                      {review.createdAt && (
+
+                        <span className="text-xs text-gray-400">
+
+                          {new Date(
+                            review.createdAt
+                          ).toLocaleDateString()}
+
+                        </span>
+
+                      )}
+
+                    </div>
+
+                    {/* ACTIONS */}
+                    <div className="flex items-center gap-2">
+
+                      {/* APPROVE */}
+                      {displayStatus !==
+                        "APPROVED" && (
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateStatus(
+                              review.id,
+                              "APPROVED"
+                            )
+                          }
+                          className="flex items-center gap-1 text-xs px-3 py-2 rounded-lg bg-green-50 text-green-700 hover:bg-green-100"
+                        >
+
+                          <CheckCircle className="w-4 h-4" />
+
+                          Approve
+
+                        </button>
+
+                      )}
+
+                      {/* REJECT */}
+                      {displayStatus !==
+                        "REJECTED" && (
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateStatus(
+                              review.id,
+                              "REJECTED"
+                            )
+                          }
+                          className="flex items-center gap-1 text-xs px-3 py-2 rounded-lg bg-red-50 text-red-700 hover:bg-red-100"
+                        >
+
+                          <XCircle className="w-4 h-4" />
+
+                          Reject
+
+                        </button>
+
+                      )}
+
+                    </div>
 
                   </div>
 
                 </div>
-
-                {/* Rating */}
-                <div className="flex items-center gap-0.5">
-
-                  {Array.from({ length: 5 }).map((_, i) => (
-
-                    <Star
-                      key={i}
-                      className={`w-4 h-4 ${
-                        i < review.rating
-                          ? "fill-amber-400 text-amber-400"
-                          : "text-gray-200"
-                      }`}
-                    />
-
-                  ))}
-
-                </div>
-
-              </div>
-
-              {/* Comment */}
-              <p className="text-sm text-gray-600 mt-4">
-                {review.comment}
-              </p>
-
-              {/* Bottom */}
-              <div className="flex flex-col md:flex-row
-                md:items-center md:justify-between
-                gap-3 mt-4 pt-4 border-t">
-
-                <div className="flex items-center gap-3">
-
-                  {/* Status */}
-                  {review.status === "Approved" && (
-                    <span className="flex items-center gap-1
-                      text-xs font-medium text-green-600">
-
-                      <CheckCircle className="w-4 h-4" />
-                      Approved
-
-                    </span>
-                  )}
-
-                  {review.status === "Pending" && (
-                    <span className="text-xs font-medium
-                      text-yellow-600">
-
-                      ● Pending
-
-                    </span>
-                  )}
-
-                  {review.status === "Hidden" && (
-                    <span className="flex items-center gap-1
-                      text-xs font-medium text-red-600">
-
-                      <EyeOff className="w-4 h-4" />
-                      Hidden
-
-                    </span>
-                  )}
-
-                  <span className="text-xs text-gray-400">
-                    {new Date(
-                      review.createdAt
-                    ).toLocaleDateString()}
-                  </span>
-
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-
-                  {review.status !== "Approved" && (
-                    <button
-                      onClick={() =>
-                        updateStatus(review.id, "Approved")
-                      }
-                      className="flex items-center gap-1
-                      text-xs px-3 py-2 rounded-lg
-                      bg-green-50 text-green-700
-                      hover:bg-green-100"
-                    >
-                      <CheckCircle className="w-4 h-4" />
-                      Approve
-                    </button>
-                  )}
-
-                  {review.status !== "Hidden" && (
-                    <button
-                      onClick={() =>
-                        updateStatus(review.id, "Hidden")
-                      }
-                      className="flex items-center gap-1
-                      text-xs px-3 py-2 rounded-lg
-                      bg-gray-100 text-gray-700
-                      hover:bg-gray-200"
-                    >
-                      <EyeOff className="w-4 h-4" />
-                      Hide
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => deleteReview(review.id)}
-                    className="flex items-center gap-1
-                    text-xs px-3 py-2 rounded-lg
-                    bg-red-50 text-red-600
-                    hover:bg-red-100"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                    Delete
-                  </button>
-
-                </div>
-
-              </div>
-
-            </div>
-
-          ))
+              );
+            }
+          )
 
         )}
 
