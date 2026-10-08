@@ -33,4 +33,9 @@ public class Location {
 
   @Column(length = 500)
   private String address;
+  
+  // Map coordinates
+  private Double latitude;
+
+  private Double longitude;
 }

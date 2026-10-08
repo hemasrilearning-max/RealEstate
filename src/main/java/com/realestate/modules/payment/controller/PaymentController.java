@@ -41,6 +41,19 @@ public class PaymentController {
         return ResponseEntity.ok(response);
     }
 
+    /*
+     * Admin payment list.
+     *
+     * Only ADMIN and SUPER_ADMIN users are allowed.
+     */
+    @GetMapping("/admin")
+    public ResponseEntity<List<PaymentResponse>> getAllPaymentsForAdmin() {
+
+        return ResponseEntity.ok(
+                paymentService.getAllPaymentsForAdmin()
+        );
+    }
+
     @GetMapping("/{paymentId}")
     public ResponseEntity<PaymentResponse> getPaymentById(
             @PathVariable Long paymentId) {

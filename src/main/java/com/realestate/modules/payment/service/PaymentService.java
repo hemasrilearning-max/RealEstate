@@ -15,4 +15,6 @@ public interface PaymentService {
     PaymentResponse getPaymentById(Long paymentId);
 
     List<PaymentResponse> getMyPayments();
+
+    List<PaymentResponse> getAllPaymentsForAdmin();
 }

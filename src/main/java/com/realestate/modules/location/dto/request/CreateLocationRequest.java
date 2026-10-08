@@ -31,4 +31,8 @@ public class CreateLocationRequest {
 
   @Size(max = 500, message = "Address must not exceed 500 characters")
   private String address;
+
+  private Double latitude;
+
+  private Double longitude;
 }

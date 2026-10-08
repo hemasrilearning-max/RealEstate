@@ -20,6 +20,7 @@ import com.realestate.modules.user.entity.User;
 import com.realestate.modules.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -240,6 +241,70 @@ public class PaymentServiceImpl implements PaymentService {
                 .toList();
     }
 
+    /*
+     * ============================================================
+     * ADMIN - GET ALL PAYMENTS
+     * ============================================================
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<PaymentResponse> getAllPaymentsForAdmin() {
+
+        Authentication authentication =
+                SecurityContextHolder
+                        .getContext()
+                        .getAuthentication();
+
+        if (authentication == null ||
+                !authentication.isAuthenticated()) {
+
+            throw new RuntimeException(
+                    "User is not authenticated");
+        }
+
+        boolean isAdmin =
+                authentication.getAuthorities()
+                        .stream()
+                        .anyMatch(authority -> {
+
+                            String name = authority.getAuthority();
+
+                            return "ROLE_ADMIN".equals(name)
+                                    || "ROLE_SUPER_ADMIN".equals(name)
+                                    || "ADMIN".equals(name)
+                                    || "SUPER_ADMIN".equals(name);
+                        });
+
+        if (!isAdmin) {
+            throw new RuntimeException(
+                    "You are not authorized to view all payments");
+        }
+
+        return paymentRepository
+                .findAll()
+                .stream()
+                .sorted((p1, p2) -> {
+
+                    if (p1.getCreatedAt() == null &&
+                            p2.getCreatedAt() == null) {
+                        return 0;
+                    }
+
+                    if (p1.getCreatedAt() == null) {
+                        return 1;
+                    }
+
+                    if (p2.getCreatedAt() == null) {
+                        return -1;
+                    }
+
+                    return p2.getCreatedAt()
+                            .compareTo(p1.getCreatedAt());
+                })
+                .map(this::toResponse)
+                .toList();
+    }
+
     private User getCurrentUser() {
 
         String username = SecurityContextHolder
@@ -261,8 +326,16 @@ public class PaymentServiceImpl implements PaymentService {
                 .paymentMethod(payment.getPaymentMethod())
                 .razorpayOrderId(payment.getRazorpayOrderId())
                 .razorpayPaymentId(payment.getRazorpayPaymentId())
-                .buyerId(payment.getBuyer().getId())
-                .propertyId(payment.getProperty().getId())
+                .buyerId(
+                        payment.getBuyer() != null
+                                ? payment.getBuyer().getId()
+                                : null
+                )
+                .propertyId(
+                        payment.getProperty() != null
+                                ? payment.getProperty().getId()
+                                : null
+                )
                 .createdAt(payment.getCreatedAt())
                 .updatedAt(payment.getUpdatedAt())
                 .build();

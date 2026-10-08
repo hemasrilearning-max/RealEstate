@@ -8,28 +8,32 @@ import org.springframework.stereotype.Component;
 @Component
 public class LocationMapper {
 
-  public Location toEntity(CreateLocationRequest request) {
+    public Location toEntity(CreateLocationRequest request) {
 
-    return Location.builder()
-        .country(request.getCountry())
-        .state(request.getState())
-        .city(request.getCity())
-        .area(request.getArea())
-        .pincode(request.getPincode())
-        .address(request.getAddress())
-        .build();
-  }
+        return Location.builder()
+                .country(request.getCountry())
+                .state(request.getState())
+                .city(request.getCity())
+                .area(request.getArea())
+                .pincode(request.getPincode())
+                .address(request.getAddress())
+                .latitude(request.getLatitude())
+                .longitude(request.getLongitude())
+                .build();
+    }
 
-  public LocationResponse toResponse(Location location) {
+    public LocationResponse toResponse(Location location) {
 
-    return LocationResponse.builder()
-        .id(location.getId())
-        .country(location.getCountry())
-        .state(location.getState())
-        .city(location.getCity())
-        .area(location.getArea())
-        .pincode(location.getPincode())
-        .address(location.getAddress())
-        .build();
-  }
+        return LocationResponse.builder()
+                .id(location.getId())
+                .country(location.getCountry())
+                .state(location.getState())
+                .city(location.getCity())
+                .area(location.getArea())
+                .pincode(location.getPincode())
+                .address(location.getAddress())
+                .latitude(location.getLatitude())
+                .longitude(location.getLongitude())
+                .build();
+    }
 }

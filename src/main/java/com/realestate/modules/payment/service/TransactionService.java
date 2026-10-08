@@ -16,4 +16,6 @@ public interface TransactionService {
     List<TransactionResponse> getPropertyTransactions(Long propertyId);
 
     List<TransactionResponse> getBrokerTransactions(Long brokerId);
+
+    List<TransactionResponse> getAllTransactionsForAdmin();
 }

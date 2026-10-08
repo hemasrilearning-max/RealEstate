@@ -86,6 +86,14 @@ public class LocationServiceImpl implements LocationService {
     if (request.getAddress() != null) {
       location.setAddress(request.getAddress());
     }
+    
+    if (request.getLatitude() != null) {
+        location.setLatitude(request.getLatitude());
+    }
+
+    if (request.getLongitude() != null) {
+        location.setLongitude(request.getLongitude());
+    }
 
     Location updatedLocation = locationRepository.save(location);
 

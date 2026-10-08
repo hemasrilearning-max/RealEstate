@@ -22,4 +22,8 @@ public class LocationResponse {
   private String pincode;
 
   private String address;
+
+  private Double latitude;
+
+  private Double longitude;
 }

@@ -49,4 +49,16 @@ public class TransactionController {
                 transactionService.getBrokerTransactions(brokerId)
         );
     }
+
+    /**
+     * Admin/Super Admin:
+     * Get all property transactions.
+     */
+    @GetMapping("/admin")
+    public ResponseEntity<List<TransactionResponse>> getAllTransactionsForAdmin() {
+
+        return ResponseEntity.ok(
+                transactionService.getAllTransactionsForAdmin()
+        );
+    }
 }
