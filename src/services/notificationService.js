@@ -1,35 +1,4 @@
-
-const API_BASE_URL = "/api";
-
-function getAuthHeaders() {
-  const token = localStorage.getItem("accessToken");
-
-  return token
-    ? {
-        Authorization: `Bearer ${token}`,
-      }
-    : {};
-}
-
-async function parseResponse(response) {
-  let data = {};
-
-  try {
-    data = await response.json();
-  } catch {
-    data = {};
-  }
-
-  if (!response.ok) {
-    throw new Error(
-      data.message ||
-        data.error ||
-        `Request failed with status ${response.status}`
-    );
-  }
-
-  return data;
-}
+import axiosInstance from "../utils/axiosInstance";
 
 const notificationService = {
   // ============================================================
@@ -37,17 +6,11 @@ const notificationService = {
   // GET /api/notifications
   // ============================================================
   async getMyNotifications() {
-    const response = await fetch(
-      `${API_BASE_URL}/notifications`,
-      {
-        method: "GET",
-        headers: {
-          ...getAuthHeaders(),
-        },
-      }
+    const response = await axiosInstance.get(
+      "/api/notifications"
     );
 
-    return parseResponse(response);
+    return response.data;
   },
 
   // ============================================================
@@ -55,17 +18,11 @@ const notificationService = {
   // GET /api/notifications/unread
   // ============================================================
   async getUnreadNotifications() {
-    const response = await fetch(
-      `${API_BASE_URL}/notifications/unread`,
-      {
-        method: "GET",
-        headers: {
-          ...getAuthHeaders(),
-        },
-      }
+    const response = await axiosInstance.get(
+      "/api/notifications/unread"
     );
 
-    return parseResponse(response);
+    return response.data;
   },
 
   // ============================================================
@@ -73,17 +30,11 @@ const notificationService = {
   // GET /api/notifications/unread/count
   // ============================================================
   async getUnreadCount() {
-    const response = await fetch(
-      `${API_BASE_URL}/notifications/unread/count`,
-      {
-        method: "GET",
-        headers: {
-          ...getAuthHeaders(),
-        },
-      }
+    const response = await axiosInstance.get(
+      "/api/notifications/unread/count"
     );
 
-    return parseResponse(response);
+    return response.data;
   },
 
   // ============================================================
@@ -92,39 +43,12 @@ const notificationService = {
   // ============================================================
   async markAsRead(notificationId) {
     if (!notificationId) {
-      throw new Error(
-        "Notification ID is required."
-      );
+      throw new Error("Notification ID is required.");
     }
 
-    const response = await fetch(
-      `${API_BASE_URL}/notifications/${notificationId}/read`,
-      {
-        method: "PATCH",
-        headers: {
-          ...getAuthHeaders(),
-        },
-      }
+    await axiosInstance.patch(
+      `/api/notifications/${notificationId}/read`
     );
-
-    if (!response.ok) {
-      let message =
-        "Failed to mark notification as read.";
-
-      try {
-        const data =
-          await response.json();
-
-        message =
-          data.message ||
-          data.error ||
-          message;
-      } catch {
-        // Backend returns 204 with no body.
-      }
-
-      throw new Error(message);
-    }
 
     return true;
   },
@@ -135,43 +59,15 @@ const notificationService = {
   // ============================================================
   async deleteNotification(notificationId) {
     if (!notificationId) {
-      throw new Error(
-        "Notification ID is required."
-      );
+      throw new Error("Notification ID is required.");
     }
 
-    const response = await fetch(
-      `${API_BASE_URL}/notifications/${notificationId}`,
-      {
-        method: "DELETE",
-        headers: {
-          ...getAuthHeaders(),
-        },
-      }
+    await axiosInstance.delete(
+      `/api/notifications/${notificationId}`
     );
-
-    if (!response.ok) {
-      let message =
-        "Failed to delete notification.";
-
-      try {
-        const data =
-          await response.json();
-
-        message =
-          data.message ||
-          data.error ||
-          message;
-      } catch {
-        // Backend may return 204 with no body.
-      }
-
-      throw new Error(message);
-    }
 
     return true;
   },
 };
 
 export default notificationService;
-

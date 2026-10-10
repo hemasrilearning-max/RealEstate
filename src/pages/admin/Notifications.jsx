@@ -1,375 +1,1015 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
-  Send,
-  Users,
-  UserRound,
+  Check,
   CheckCircle,
   Clock,
+  RefreshCw,
   Search,
+  Trash2,
+  XCircle,
+  Info,
+  AlertTriangle,
 } from "lucide-react";
+import axiosInstance from "../../utils/axiosInstance";
 
 export default function Notifications() {
-  const [showForm, setShowForm] = useState(false);
-
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      title: "Property Approval Required",
-      message: "A new property listing is waiting for admin approval.",
-      recipient: "Owners",
-      date: "Sep 18, 2026",
-      status: "Sent",
-    },
-    {
-      id: 2,
-      title: "Payment Confirmation",
-      message: "Payment transaction has been successfully completed.",
-      recipient: "Buyers",
-      date: "Sep 17, 2026",
-      status: "Sent",
-    },
-    {
-      id: 3,
-      title: "New Dispute Raised",
-      message: "A new dispute requires admin attention.",
-      recipient: "Admin",
-      date: "Sep 16, 2026",
-      status: "Sent",
-    },
-    {
-      id: 4,
-      title: "System Maintenance",
-      message: "Scheduled system maintenance notification.",
-      recipient: "All Users",
-      date: "Sep 15, 2026",
-      status: "Scheduled",
-    },
-  ]);
-
-  const [newNotification, setNewNotification] = useState({
-    title: "",
-    message: "",
-    recipient: "All Users",
-  });
-
+  const [notifications, setNotifications] = useState([]);
   const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("all");
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState("");
 
-    setNewNotification((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
+  // --------------------------------------------------
+  // Fetch notifications
+  // --------------------------------------------------
+  const fetchNotifications = async (showRefresh = false) => {
+    try {
+      if (showRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      setError("");
+
+      const response = await axiosInstance.get(
+        "/api/notifications"
+      );
+
+      const result = response.data;
+
+      // Supports:
+      // [ ... ]
+      // OR { data: [ ... ] }
+      // OR { content: [ ... ] }
+      const data = Array.isArray(result)
+        ? result
+        : Array.isArray(result?.data)
+        ? result.data
+        : Array.isArray(result?.content)
+        ? result.content
+        : [];
+
+      setNotifications(data);
+    } catch (err) {
+      console.error("Failed to load notifications:", err);
+
+      setNotifications([]);
+
+      setError(
+        err?.response?.data?.message ||
+          err?.response?.data?.error ||
+          err?.message ||
+          "Failed to load notifications."
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
   };
 
-  const handleSendNotification = (e) => {
-    e.preventDefault();
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
 
-    if (!newNotification.title || !newNotification.message) {
-      alert("Please enter notification title and message.");
+  // --------------------------------------------------
+  // Mark notification as read
+  // --------------------------------------------------
+  const markAsRead = async (notificationId) => {
+    try {
+      await axiosInstance.patch(
+        `/api/notifications/${notificationId}/read`
+      );
+
+      setNotifications((previous) =>
+        previous.map((notification) =>
+          notification.id === notificationId
+            ? {
+                ...notification,
+                read: true,
+                isRead: true,
+              }
+            : notification
+        )
+      );
+    } catch (err) {
+      console.error("Failed to mark notification as read:", err);
+
+      setError(
+        err?.response?.data?.message ||
+          "Failed to mark notification as read."
+      );
+    }
+  };
+
+  // --------------------------------------------------
+  // Mark all notifications as read
+  // --------------------------------------------------
+  const markAllAsRead = async () => {
+    const unreadNotifications = notifications.filter(
+      (notification) =>
+        !notification.read && !notification.isRead
+    );
+
+    if (unreadNotifications.length === 0) {
       return;
     }
 
-    const notification = {
-      id: Date.now(),
-      title: newNotification.title,
-      message: newNotification.message,
-      recipient: newNotification.recipient,
-      date: new Date().toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      }),
-      status: "Sent",
-    };
+    try {
+      setError("");
 
-    setNotifications((prev) => [notification, ...prev]);
+      await Promise.all(
+        unreadNotifications.map((notification) =>
+          axiosInstance.patch(
+            `/api/notifications/${notification.id}/read`
+          )
+        )
+      );
 
-    setNewNotification({
-      title: "",
-      message: "",
-      recipient: "All Users",
-    });
+      setNotifications((previous) =>
+        previous.map((notification) => ({
+          ...notification,
+          read: true,
+          isRead: true,
+        }))
+      );
+    } catch (err) {
+      console.error(
+        "Failed to mark all notifications as read:",
+        err
+      );
 
-    setShowForm(false);
+      setError(
+        err?.response?.data?.message ||
+          "Failed to mark all notifications as read."
+      );
+
+      fetchNotifications();
+    }
   };
 
-  const filteredNotifications = notifications.filter(
-    (notification) =>
-      notification.title
-        .toLowerCase()
-        .includes(search.toLowerCase()) ||
-      notification.message
-        .toLowerCase()
-        .includes(search.toLowerCase()) ||
-      notification.recipient
-        .toLowerCase()
-        .includes(search.toLowerCase())
-  );
+  // --------------------------------------------------
+  // Delete notification
+  // --------------------------------------------------
+  const deleteNotification = async (notificationId) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this notification?"
+    );
 
-  const sentCount = notifications.filter(
-    (item) => item.status === "Sent"
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setError("");
+
+      await axiosInstance.delete(
+        `/api/notifications/${notificationId}`
+      );
+
+      setNotifications((previous) =>
+        previous.filter(
+          (notification) =>
+            notification.id !== notificationId
+        )
+      );
+    } catch (err) {
+      console.error(
+        "Failed to delete notification:",
+        err
+      );
+
+      setError(
+        err?.response?.data?.message ||
+          "Failed to delete notification."
+      );
+    }
+  };
+
+  // --------------------------------------------------
+  // Helpers
+  // --------------------------------------------------
+  const isNotificationRead = (notification) => {
+    return (
+      notification.read === true ||
+      notification.isRead === true
+    );
+  };
+
+  const getNotificationTitle = (notification) => {
+    return (
+      notification.title ||
+      notification.subject ||
+      notification.notificationTitle ||
+      "Notification"
+    );
+  };
+
+  const getNotificationMessage = (notification) => {
+    return (
+      notification.message ||
+      notification.description ||
+      notification.content ||
+      notification.notificationMessage ||
+      "You have a new notification."
+    );
+  };
+
+  const getNotificationType = (notification) => {
+    return (
+      notification.type ||
+      notification.notificationType ||
+      "INFO"
+    );
+  };
+
+  const getNotificationDate = (notification) => {
+    return (
+      notification.createdAt ||
+      notification.createdDate ||
+      notification.timestamp ||
+      notification.date
+    );
+  };
+
+  const formatDate = (dateValue) => {
+    if (!dateValue) {
+      return "Unknown date";
+    }
+
+    const date = new Date(dateValue);
+
+    if (Number.isNaN(date.getTime())) {
+      return String(dateValue);
+    }
+
+    return date.toLocaleString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
+  const getTypeIcon = (type) => {
+    const normalizedType = String(type).toUpperCase();
+
+    if (
+      normalizedType.includes("SUCCESS") ||
+      normalizedType.includes("APPROVED") ||
+      normalizedType.includes("COMPLETED")
+    ) {
+      return <CheckCircle size={20} />;
+    }
+
+    if (
+      normalizedType.includes("ERROR") ||
+      normalizedType.includes("FAILED") ||
+      normalizedType.includes("REJECTED")
+    ) {
+      return <XCircle size={20} />;
+    }
+
+    if (
+      normalizedType.includes("WARNING") ||
+      normalizedType.includes("ALERT")
+    ) {
+      return <AlertTriangle size={20} />;
+    }
+
+    if (normalizedType.includes("INFO")) {
+      return <Info size={20} />;
+    }
+
+    return <Bell size={20} />;
+  };
+
+  const getTypeClass = (type) => {
+    const normalizedType = String(type).toUpperCase();
+
+    if (
+      normalizedType.includes("SUCCESS") ||
+      normalizedType.includes("APPROVED") ||
+      normalizedType.includes("COMPLETED")
+    ) {
+      return "notification-success";
+    }
+
+    if (
+      normalizedType.includes("ERROR") ||
+      normalizedType.includes("FAILED") ||
+      normalizedType.includes("REJECTED")
+    ) {
+      return "notification-error";
+    }
+
+    if (
+      normalizedType.includes("WARNING") ||
+      normalizedType.includes("ALERT")
+    ) {
+      return "notification-warning";
+    }
+
+    return "notification-info";
+  };
+
+  // --------------------------------------------------
+  // Statistics
+  // --------------------------------------------------
+  const totalNotifications = notifications.length;
+
+  const unreadNotifications = notifications.filter(
+    (notification) => !isNotificationRead(notification)
   ).length;
 
-  const scheduledCount = notifications.filter(
-    (item) => item.status === "Scheduled"
-  ).length;
+  const readNotifications =
+    totalNotifications - unreadNotifications;
 
+  // --------------------------------------------------
+  // Search + filter
+  // --------------------------------------------------
+  const filteredNotifications = useMemo(() => {
+    const searchText = search.trim().toLowerCase();
+
+    return notifications.filter((notification) => {
+      const title = getNotificationTitle(
+        notification
+      ).toLowerCase();
+
+      const message = getNotificationMessage(
+        notification
+      ).toLowerCase();
+
+      const type = getNotificationType(
+        notification
+      ).toLowerCase();
+
+      const matchesSearch =
+        !searchText ||
+        title.includes(searchText) ||
+        message.includes(searchText) ||
+        type.includes(searchText);
+
+      const read = isNotificationRead(notification);
+
+      let matchesFilter = true;
+
+      if (filter === "unread") {
+        matchesFilter = !read;
+      }
+
+      if (filter === "read") {
+        matchesFilter = read;
+      }
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [notifications, search, filter]);
+
+  // --------------------------------------------------
+  // UI
+  // --------------------------------------------------
   return (
-    <div className="w-full min-h-screen bg-gray-50 px-6 pt-4 pb-8">
+    <div className="notifications-page">
+      <style>{`
+        .notifications-page {
+          padding: 28px;
+          color: #0f172a;
+        }
+
+        .notifications-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          gap: 20px;
+          margin-bottom: 24px;
+        }
+
+        .notifications-title {
+          margin: 0;
+          font-size: 30px;
+          font-weight: 700;
+        }
+
+        .notifications-subtitle {
+          margin: 6px 0 0;
+          color: #64748b;
+          font-size: 15px;
+        }
+
+        .notifications-actions {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+        }
+
+        .notification-button {
+          border: 1px solid #cbd5e1;
+          background: white;
+          color: #0f172a;
+          border-radius: 9px;
+          padding: 11px 16px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          cursor: pointer;
+          font-size: 14px;
+        }
+
+        .notification-button:hover {
+          background: #f8fafc;
+        }
+
+        .notification-button.primary {
+          background: #c084fc;
+          border-color: #c084fc;
+          color: white;
+        }
+
+        .notification-button.primary:hover {
+          background: #a855f7;
+        }
+
+        .notification-button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .notification-error-box {
+          background: #fff1f2;
+          border: 1px solid #fecdd3;
+          color: #dc2626;
+          border-radius: 8px;
+          padding: 13px 16px;
+          margin-bottom: 22px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .notification-stats {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 20px;
+          margin-bottom: 26px;
+        }
+
+        .notification-stat {
+          background: white;
+          border: 1px solid #cbd5e1;
+          border-radius: 12px;
+          padding: 22px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+        }
+
+        .stat-label {
+          color: #64748b;
+          font-size: 14px;
+          margin-bottom: 8px;
+        }
+
+        .stat-value {
+          font-size: 26px;
+          font-weight: 700;
+        }
+
+        .stat-icon {
+          width: 48px;
+          height: 48px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .stat-icon.purple {
+          background: #f3e8ff;
+          color: #9333ea;
+        }
+
+        .stat-icon.yellow {
+          background: #fef9c3;
+          color: #ca8a04;
+        }
+
+        .stat-icon.green {
+          background: #dcfce7;
+          color: #16a34a;
+        }
+
+        .notification-toolbar {
+          background: white;
+          border: 1px solid #cbd5e1;
+          border-radius: 12px;
+          padding: 18px;
+          display: flex;
+          gap: 16px;
+          margin-bottom: 26px;
+        }
+
+        .notification-search {
+          flex: 1;
+          position: relative;
+        }
+
+        .notification-search svg {
+          position: absolute;
+          left: 14px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #94a3b8;
+        }
+
+        .notification-search input {
+          width: 100%;
+          box-sizing: border-box;
+          height: 50px;
+          border: 1px solid #cbd5e1;
+          border-radius: 9px;
+          padding: 0 16px 0 44px;
+          font-size: 15px;
+          outline: none;
+        }
+
+        .notification-search input:focus {
+          border-color: #a855f7;
+        }
+
+        .notification-filter {
+          width: 185px;
+          height: 50px;
+          border: 1px solid #cbd5e1;
+          border-radius: 9px;
+          padding: 0 12px;
+          background: white;
+          font-size: 15px;
+          outline: none;
+        }
+
+        .notification-list {
+          background: white;
+          border: 1px solid #cbd5e1;
+          border-radius: 12px;
+          overflow: hidden;
+        }
+
+        .notification-list-header {
+          padding: 22px 26px;
+          border-bottom: 1px solid #e2e8f0;
+        }
+
+        .notification-list-title {
+          margin: 0;
+          font-size: 20px;
+          font-weight: 600;
+        }
+
+        .notification-list-count {
+          margin-top: 6px;
+          color: #64748b;
+          font-size: 14px;
+        }
+
+        .notification-item {
+          display: flex;
+          gap: 16px;
+          padding: 20px 26px;
+          border-bottom: 1px solid #e2e8f0;
+          transition: background 0.2s;
+        }
+
+        .notification-item:last-child {
+          border-bottom: none;
+        }
+
+        .notification-item.unread {
+          background: #faf5ff;
+        }
+
+        .notification-item:hover {
+          background: #f8fafc;
+        }
+
+        .notification-type-icon {
+          width: 44px;
+          height: 44px;
+          min-width: 44px;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .notification-info {
+          background: #e0f2fe;
+          color: #0284c7;
+        }
+
+        .notification-success {
+          background: #dcfce7;
+          color: #16a34a;
+        }
+
+        .notification-error {
+          background: #fee2e2;
+          color: #dc2626;
+        }
+
+        .notification-warning {
+          background: #fef3c7;
+          color: #d97706;
+        }
+
+        .notification-content {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .notification-content-top {
+          display: flex;
+          justify-content: space-between;
+          gap: 16px;
+        }
+
+        .notification-item-title {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 600;
+        }
+
+        .notification-item-message {
+          margin: 7px 0;
+          color: #64748b;
+          line-height: 1.5;
+          font-size: 14px;
+        }
+
+        .notification-date {
+          display: flex;
+          align-items: center;
+          gap: 5px;
+          color: #94a3b8;
+          font-size: 12px;
+        }
+
+        .notification-item-actions {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+
+        .icon-button {
+          width: 36px;
+          height: 36px;
+          border: 1px solid #e2e8f0;
+          background: white;
+          border-radius: 7px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          color: #64748b;
+        }
+
+        .icon-button:hover {
+          background: #f1f5f9;
+        }
+
+        .icon-button.delete:hover {
+          color: #dc2626;
+          background: #fef2f2;
+        }
+
+        .unread-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #9333ea;
+          display: inline-block;
+          margin-left: 7px;
+        }
+
+        .empty-state {
+          min-height: 260px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+          padding: 30px;
+        }
+
+        .empty-icon {
+          color: #cbd5e1;
+          margin-bottom: 14px;
+        }
+
+        .empty-state h3 {
+          margin: 0 0 7px;
+          font-size: 18px;
+        }
+
+        .empty-state p {
+          margin: 0;
+          color: #94a3b8;
+        }
+
+        .loading-state {
+          padding: 70px;
+          text-align: center;
+          color: #64748b;
+        }
+
+        @media (max-width: 900px) {
+          .notification-stats {
+            grid-template-columns: 1fr;
+          }
+
+          .notifications-header {
+            flex-direction: column;
+          }
+
+          .notification-toolbar {
+            flex-direction: column;
+          }
+
+          .notification-filter {
+            width: 100%;
+          }
+        }
+
+        @media (max-width: 600px) {
+          .notifications-page {
+            padding: 16px;
+          }
+
+          .notifications-actions {
+            width: 100%;
+          }
+
+          .notification-button {
+            flex: 1;
+            justify-content: center;
+          }
+
+          .notification-content-top {
+            flex-direction: column;
+          }
+
+          .notification-item {
+            padding: 16px;
+          }
+        }
+      `}</style>
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="notifications-header">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="notifications-title">
             Notifications
           </h1>
 
-          <p className="text-sm text-gray-500 mt-1">
-            Send and manage notifications for users
+          <p className="notifications-subtitle">
+            Stay updated with important platform activities
           </p>
         </div>
 
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="flex items-center gap-2 bg-purple-600 text-white px-4 py-2.5 rounded-lg hover:bg-purple-700"
-        >
-          <Send className="w-4 h-4" />
-          Send Notification
-        </button>
-      </div>
+        <div className="notifications-actions">
+          <button
+            className="notification-button"
+            onClick={() => fetchNotifications(true)}
+            disabled={refreshing}
+          >
+            <RefreshCw
+              size={17}
+              className={refreshing ? "spin" : ""}
+            />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
 
-      {/* Statistics */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-6">
-        <div className="bg-white border rounded-xl p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">
-                Total Notifications
-              </p>
-
-              <h2 className="text-2xl font-bold mt-1">
-                {notifications.length}
-              </h2>
-            </div>
-
-            <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
-              <Bell className="w-5 h-5 text-purple-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border rounded-xl p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">
-                Sent
-              </p>
-
-              <h2 className="text-2xl font-bold mt-1">
-                {sentCount}
-              </h2>
-            </div>
-
-            <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-              <CheckCircle className="w-5 h-5 text-green-600" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white border rounded-xl p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-500">
-                Scheduled
-              </p>
-
-              <h2 className="text-2xl font-bold mt-1">
-                {scheduledCount}
-              </h2>
-            </div>
-
-            <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center">
-              <Clock className="w-5 h-5 text-yellow-600" />
-            </div>
-          </div>
+          <button
+            className="notification-button primary"
+            onClick={markAllAsRead}
+            disabled={unreadNotifications === 0}
+          >
+            <Check size={17} />
+            Mark All Read
+          </button>
         </div>
       </div>
 
-      {/* Send Notification Form */}
-      {showForm && (
-        <div className="bg-white border rounded-xl p-6 mb-6">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">
-                Create Notification
-              </h2>
+      {/* Error */}
+      {error && (
+        <div className="notification-error-box">
+          <XCircle size={19} />
+          <span>{error}</span>
 
-              <p className="text-sm text-gray-500">
-                Send a notification to selected users
-              </p>
-            </div>
-
-            <button
-              onClick={() => setShowForm(false)}
-              className="text-gray-400 hover:text-gray-700"
-            >
-              ✕
-            </button>
-          </div>
-
-          <form onSubmit={handleSendNotification}>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {/* Title */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Notification Title
-                </label>
-
-                <input
-                  type="text"
-                  name="title"
-                  value={newNotification.title}
-                  onChange={handleInputChange}
-                  placeholder="Enter notification title"
-                  className="w-full px-4 py-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-
-              {/* Recipient */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Send To
-                </label>
-
-                <select
-                  name="recipient"
-                  value={newNotification.recipient}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2.5 border rounded-lg bg-white outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  <option>All Users</option>
-                  <option>Buyers</option>
-                  <option>Renters</option>
-                  <option>Owners</option>
-                  <option>Agents</option>
-                  <option>Admin</option>
-                </select>
-              </div>
-
-              {/* Message */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Message
-                </label>
-
-                <textarea
-                  name="message"
-                  value={newNotification.message}
-                  onChange={handleInputChange}
-                  placeholder="Enter notification message"
-                  rows="4"
-                  className="w-full px-4 py-2.5 border rounded-lg outline-none resize-none focus:ring-2 focus:ring-purple-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 mt-5">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-4 py-2.5 border rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white rounded-lg hover:bg-purple-700"
-              >
-                <Send className="w-4 h-4" />
-                Send Notification
-              </button>
-            </div>
-          </form>
+          <button
+            onClick={() => setError("")}
+            style={{
+              marginLeft: "auto",
+              border: "none",
+              background: "transparent",
+              cursor: "pointer",
+              color: "inherit",
+            }}
+          >
+            ×
+          </button>
         </div>
       )}
 
-      {/* Search */}
-      <div className="bg-white border rounded-xl p-4 mb-6">
-        <div className="relative">
-          <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+      {/* Stats */}
+      <div className="notification-stats">
+        <div className="notification-stat">
+          <div>
+            <div className="stat-label">
+              Total Notifications
+            </div>
+
+            <div className="stat-value">
+              {totalNotifications}
+            </div>
+          </div>
+
+          <div className="stat-icon purple">
+            <Bell size={23} />
+          </div>
+        </div>
+
+        <div className="notification-stat">
+          <div>
+            <div className="stat-label">Unread</div>
+
+            <div className="stat-value">
+              {unreadNotifications}
+            </div>
+          </div>
+
+          <div className="stat-icon yellow">
+            <Clock size={23} />
+          </div>
+        </div>
+
+        <div className="notification-stat">
+          <div>
+            <div className="stat-label">Read</div>
+
+            <div className="stat-value">
+              {readNotifications}
+            </div>
+          </div>
+
+          <div className="stat-icon green">
+            <CheckCircle size={23} />
+          </div>
+        </div>
+      </div>
+
+      {/* Search and filter */}
+      <div className="notification-toolbar">
+        <div className="notification-search">
+          <Search size={20} />
 
           <input
             type="text"
             placeholder="Search notifications..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border rounded-lg outline-none focus:ring-2 focus:ring-purple-500"
           />
         </div>
+
+        <select
+          className="notification-filter"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        >
+          <option value="all">All Notifications</option>
+          <option value="unread">Unread</option>
+          <option value="read">Read</option>
+        </select>
       </div>
 
-      {/* Notification List */}
-      <div className="space-y-4">
-        {filteredNotifications.map((notification) => (
-          <div
-            key={notification.id}
-            className="bg-white border rounded-xl p-5"
-          >
-            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-              <div className="flex gap-4">
-                <div className="w-11 h-11 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
-                  <Bell className="w-5 h-5 text-purple-600" />
+      {/* Notification list */}
+      <div className="notification-list">
+        <div className="notification-list-header">
+          <h2 className="notification-list-title">
+            Notifications
+          </h2>
+
+          <div className="notification-list-count">
+            {filteredNotifications.length} notifications shown
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="loading-state">
+            Loading notifications...
+          </div>
+        ) : filteredNotifications.length === 0 ? (
+          <div className="empty-state">
+            <Bell
+              size={55}
+              className="empty-icon"
+            />
+
+            <h3>No notifications found</h3>
+
+            <p>
+              You don't have any notifications yet.
+            </p>
+          </div>
+        ) : (
+          filteredNotifications.map((notification) => {
+            const read =
+              isNotificationRead(notification);
+
+            const type =
+              getNotificationType(notification);
+
+            return (
+              <div
+                key={notification.id}
+                className={`notification-item ${
+                  !read ? "unread" : ""
+                }`}
+              >
+                <div
+                  className={`notification-type-icon ${getTypeClass(
+                    type
+                  )}`}
+                >
+                  {getTypeIcon(type)}
                 </div>
 
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-semibold text-gray-900">
-                      {notification.title}
-                    </h3>
+                <div className="notification-content">
+                  <div className="notification-content-top">
+                    <div>
+                      <h3 className="notification-item-title">
+                        {getNotificationTitle(
+                          notification
+                        )}
 
-                    <span
-                      className={`px-2 py-1 text-xs rounded-full ${
-                        notification.status === "Sent"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}
-                    >
-                      {notification.status}
-                    </span>
+                        {!read && (
+                          <span className="unread-dot" />
+                        )}
+                      </h3>
+
+                      <p className="notification-item-message">
+                        {getNotificationMessage(
+                          notification
+                        )}
+                      </p>
+                    </div>
+
+                    <div className="notification-item-actions">
+                      {!read && (
+                        <button
+                          className="icon-button"
+                          title="Mark as read"
+                          onClick={() =>
+                            markAsRead(
+                              notification.id
+                            )
+                          }
+                        >
+                          <Check size={17} />
+                        </button>
+                      )}
+
+                      <button
+                        className="icon-button delete"
+                        title="Delete notification"
+                        onClick={() =>
+                          deleteNotification(
+                            notification.id
+                          )
+                        }
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                    </div>
                   </div>
 
-                  <p className="text-sm text-gray-600 mt-1">
-                    {notification.message}
-                  </p>
+                  <div className="notification-date">
+                    <Clock size={13} />
 
-                  <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <Users className="w-4 h-4" />
-                      {notification.recipient}
-                    </span>
-
-                    <span>
-                      {notification.date}
-                    </span>
+                    {formatDate(
+                      getNotificationDate(
+                        notification
+                      )
+                    )}
                   </div>
                 </div>
               </div>
-
-              <button className="flex items-center gap-2 px-3 py-2 border rounded-lg text-sm hover:bg-gray-50">
-                <UserRound className="w-4 h-4" />
-                View
-              </button>
-            </div>
-          </div>
-        ))}
-
-        {filteredNotifications.length === 0 && (
-          <div className="bg-white border rounded-xl p-10 text-center text-gray-500">
-            No notifications found.
-          </div>
+            );
+          })
         )}
       </div>
     </div>

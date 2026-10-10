@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Search,
   UserRound,
@@ -7,151 +7,267 @@ import {
   MoreVertical,
   CheckCircle,
   XCircle,
-  Plus,
   X,
 } from "lucide-react";
 
 export default function Agents() {
+  const [agents, setAgents] = useState([]);
   const [search, setSearch] = useState("");
-  const [showAddForm, setShowAddForm] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [popupMessage, setPopupMessage] = useState("");
 
-  const [agents, setAgents] = useState([
-    {
-      id: 1,
-      name: "Priya Sharma",
-      email: "priya@gmail.com",
-      phone: "9876543210",
-      properties: 18,
-      status: "Active",
-    },
-    {
-      id: 2,
-      name: "Arjun Mehta",
-      email: "arjun@gmail.com",
-      phone: "9845671230",
-      properties: 12,
-      status: "Active",
-    },
-    {
-      id: 3,
-      name: "Rahul Verma",
-      email: "rahul@gmail.com",
-      phone: "9988776655",
-      properties: 8,
-      status: "Inactive",
-    },
-    {
-      id: 4,
-      name: "Sneha Rao",
-      email: "sneha@gmail.com",
-      phone: "9123456789",
-      properties: 15,
-      status: "Active",
-    },
-    {
-      id: 5,
-      name: "Kiran Kumar",
-      email: "kiran@gmail.com",
-      phone: "9012345678",
-      properties: 6,
-      status: "Inactive",
-    },
-    {
-      id: 6,
-      name: "Ananya Singh",
-      email: "ananya@gmail.com",
-      phone: "9876123456",
-      properties: 21,
-      status: "Active",
-    },
-  ]);
+  // ============================================================
+  // FETCH AGENTS
+  // ============================================================
 
-  const [newAgent, setNewAgent] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    properties: 0,
-  });
+  const fetchAgents = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-  const toggleStatus = (id) => {
-    setAgents((current) =>
-      current.map((agent) =>
-        agent.id === id
-          ? {
-              ...agent,
-              status:
-                agent.status === "Active" ? "Inactive" : "Active",
-            }
-          : agent
-      )
-    );
-  };
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("token");
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
+      const response = await fetch(
+        "/api/users",
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
 
-    setNewAgent((current) => ({
-      ...current,
-      [name]: value,
-    }));
-  };
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch users: ${response.status}`
+        );
+      }
 
-  const handleAddAgent = (e) => {
-    e.preventDefault();
+      const data = await response.json();
 
-    if (
-      !newAgent.name ||
-      !newAgent.email ||
-      !newAgent.phone
-    ) {
-      alert("Please fill all required fields.");
-      return;
+      /*
+       * In this project:
+       *
+       * BROKER = AGENT
+       *
+       * So we get all users and keep only BROKER users.
+       */
+      const brokerUsers = data.filter(
+        (user) =>
+          String(user.role).toUpperCase() === "BROKER"
+      );
+
+      setAgents(brokerUsers);
+    } catch (err) {
+      console.error("Error fetching agents:", err);
+      setError("Failed to load agents.");
+    } finally {
+      setLoading(false);
     }
-
-    const newId =
-      agents.length > 0
-        ? Math.max(...agents.map((agent) => agent.id)) + 1
-        : 1;
-
-    const agentToAdd = {
-      id: newId,
-      name: newAgent.name,
-      email: newAgent.email,
-      phone: newAgent.phone,
-      properties: Number(newAgent.properties) || 0,
-      status: "Active",
-    };
-
-    setAgents((current) => [agentToAdd, ...current]);
-
-    setNewAgent({
-      name: "",
-      email: "",
-      phone: "",
-      properties: 0,
-    });
-
-    setShowAddForm(false);
   };
+
+  // ============================================================
+  // LOAD AGENTS WHEN PAGE OPENS
+  // ============================================================
+
+  useEffect(() => {
+    fetchAgents();
+  }, []);
+
+  // ============================================================
+  // GET FULL NAME
+  // ============================================================
+
+  const getFullName = (agent) => {
+    return `${agent.firstName || ""} ${
+      agent.lastName || ""
+    }`.trim();
+  };
+
+  // ============================================================
+  // VIEW AGENT
+  // ============================================================
+
+  const handleViewAgent = (agent) => {
+    setSelectedAgent(agent);
+  };
+
+  // ============================================================
+  // ACTIVATE / DEACTIVATE AGENT
+  // ============================================================
+
+  const toggleStatus = async (agent) => {
+    try {
+      const token =
+        localStorage.getItem("accessToken") ||
+        localStorage.getItem("token");
+
+      const currentStatus =
+        String(agent.status).toUpperCase();
+
+      const newStatus =
+        currentStatus === "ACTIVE"
+          ? "INACTIVE"
+          : "ACTIVE";
+
+      const response = await fetch(
+        `/api/users/${agent.id}/status`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            status: newStatus,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "Failed to update agent status"
+        );
+      }
+
+      // Fetch latest data from backend
+      await fetchAgents();
+    } catch (err) {
+      console.error(
+        "Error changing agent status:",
+        err
+      );
+
+      setPopupMessage("Failed to change agent status.");
+    }
+  };
+
+  // ============================================================
+  // SEARCH
+  // ============================================================
 
   const filteredAgents = agents.filter((agent) => {
-    const value = search.toLowerCase();
+    const searchValue = search.toLowerCase();
+
+    const name =
+      getFullName(agent).toLowerCase();
+
+    const username =
+      (agent.username || "").toLowerCase();
+
+    const email =
+      (agent.email || "").toLowerCase();
+
+    const phone =
+      agent.phone || "";
 
     return (
-      agent.name.toLowerCase().includes(value) ||
-      agent.email.toLowerCase().includes(value) ||
-      agent.phone.includes(value)
+      name.includes(searchValue) ||
+      username.includes(searchValue) ||
+      email.includes(searchValue) ||
+      phone.includes(searchValue)
     );
   });
 
+  // ============================================================
+  // ACTIVE AGENTS
+  // ============================================================
+
   const activeAgents = agents.filter(
-    (agent) => agent.status === "Active"
+    (agent) =>
+      String(agent.status).toUpperCase() ===
+      "ACTIVE"
   ).length;
+
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   return (
     <div className="p-6">
 
-      {/* Header */}
+      {(selectedAgent || popupMessage) && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center
+          bg-black/50 p-4"
+          onClick={() => {
+            setSelectedAgent(null);
+            setPopupMessage("");
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="agent-popup-title"
+            className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-5 flex items-center justify-between">
+              <h2
+                id="agent-popup-title"
+                className="text-lg font-semibold text-gray-900"
+              >
+                {selectedAgent ? "Agent Details" : "Unable to update agent"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedAgent(null);
+                  setPopupMessage("");
+                }}
+                className="rounded-lg p-2 text-gray-500 hover:bg-gray-100"
+                aria-label="Close popup"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {selectedAgent ? (
+              <dl className="space-y-3 text-sm">
+                {[
+                  ["Name", getFullName(selectedAgent) || selectedAgent.username || "N/A"],
+                  ["Username", selectedAgent.username || "N/A"],
+                  ["Email", selectedAgent.email || "N/A"],
+                  ["Phone", selectedAgent.phone || "N/A"],
+                  ["Role", selectedAgent.role || "N/A"],
+                  ["Status", selectedAgent.status || "N/A"],
+                ].map(([label, value]) => (
+                  <div key={label} className="flex gap-3">
+                    <dt className="w-24 shrink-0 font-medium text-gray-500">
+                      {label}
+                    </dt>
+                    <dd className="break-all text-gray-900">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p className="text-sm text-red-600">{popupMessage}</p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedAgent(null);
+                setPopupMessage("");
+              }}
+              className="mt-6 w-full rounded-lg bg-purple-600 px-4 py-2
+              font-medium text-white hover:bg-purple-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ======================================================
+          HEADER
+      ====================================================== */}
+
       <div className="flex items-center justify-between mb-6">
 
         <div>
@@ -164,172 +280,22 @@ export default function Agents() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-
-          <div className="text-sm text-gray-500">
-            {agents.length} Agents
-          </div>
-
-          {/* Add Agent Button */}
-          <button
-            onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2 px-4 py-2.5
-            bg-purple-600 text-white rounded-lg
-            text-sm font-medium hover:bg-purple-700 transition"
-          >
-            <Plus className="w-4 h-4" />
-            Add Agent
-          </button>
-
+        <div className="text-sm text-gray-500">
+          {agents.length} Agents
         </div>
 
       </div>
 
-      {/* Add Agent Form */}
-      {showAddForm && (
-        <div className="bg-white border rounded-xl p-6 mb-6">
+      {/* ======================================================
+          STATS
+      ====================================================== */}
 
-          {/* Form Header */}
-          <div className="flex items-center justify-between mb-6">
-
-            <div>
-              <h2 className="text-xl font-bold text-gray-900">
-                Add Agent
-              </h2>
-
-              <p className="text-sm text-gray-500 mt-1">
-                Enter the details of the new real estate agent
-              </p>
-            </div>
-
-            <button
-              onClick={() => setShowAddForm(false)}
-              className="p-2 rounded-lg hover:bg-gray-100"
-            >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
-
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleAddAgent}>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-              {/* Name */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Full Name *
-                </label>
-
-                <input
-                  type="text"
-                  name="name"
-                  value={newAgent.name}
-                  onChange={handleInputChange}
-                  placeholder="Enter agent name"
-                  className="w-full border border-gray-300
-                  rounded-lg px-4 py-2.5
-                  focus:outline-none focus:ring-2
-                  focus:ring-purple-500"
-                />
-              </div>
-
-              {/* Email */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Email *
-                </label>
-
-                <input
-                  type="email"
-                  name="email"
-                  value={newAgent.email}
-                  onChange={handleInputChange}
-                  placeholder="Enter email address"
-                  className="w-full border border-gray-300
-                  rounded-lg px-4 py-2.5
-                  focus:outline-none focus:ring-2
-                  focus:ring-purple-500"
-                />
-              </div>
-
-              {/* Phone */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone *
-                </label>
-
-                <input
-                  type="tel"
-                  name="phone"
-                  value={newAgent.phone}
-                  onChange={handleInputChange}
-                  placeholder="Enter phone number"
-                  className="w-full border border-gray-300
-                  rounded-lg px-4 py-2.5
-                  focus:outline-none focus:ring-2
-                  focus:ring-purple-500"
-                />
-              </div>
-
-              {/* Properties */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Number of Properties
-                </label>
-
-                <input
-                  type="number"
-                  min="0"
-                  name="properties"
-                  value={newAgent.properties}
-                  onChange={handleInputChange}
-                  placeholder="0"
-                  className="w-full border border-gray-300
-                  rounded-lg px-4 py-2.5
-                  focus:outline-none focus:ring-2
-                  focus:ring-purple-500"
-                />
-              </div>
-
-            </div>
-
-            {/* Buttons */}
-            <div className="flex justify-end gap-3 mt-6 pt-5 border-t">
-
-              <button
-                type="button"
-                onClick={() => setShowAddForm(false)}
-                className="px-5 py-2.5 border border-gray-300
-                text-gray-700 rounded-lg text-sm
-                font-medium hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                className="flex items-center gap-2
-                px-5 py-2.5 bg-purple-600
-                text-white rounded-lg text-sm
-                font-medium hover:bg-purple-700"
-              >
-                <Plus className="w-4 h-4" />
-                Add Agent
-              </button>
-
-            </div>
-
-          </form>
-
-        </div>
-      )}
-
-      {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
 
+        {/* Total Agents */}
+
         <div className="bg-white border rounded-xl p-4">
+
           <p className="text-sm text-gray-500">
             Total Agents
           </p>
@@ -337,9 +303,13 @@ export default function Agents() {
           <p className="text-2xl font-bold mt-1">
             {agents.length}
           </p>
+
         </div>
 
+        {/* Active Agents */}
+
         <div className="bg-white border rounded-xl p-4">
+
           <p className="text-sm text-gray-500">
             Active Agents
           </p>
@@ -347,24 +317,29 @@ export default function Agents() {
           <p className="text-2xl font-bold text-green-600 mt-1">
             {activeAgents}
           </p>
+
         </div>
 
+        {/* Broker Users */}
+
         <div className="bg-white border rounded-xl p-4">
+
           <p className="text-sm text-gray-500">
-            Total Listings
+            Broker Users
           </p>
 
           <p className="text-2xl font-bold text-purple-600 mt-1">
-            {agents.reduce(
-              (total, agent) => total + agent.properties,
-              0
-            )}
+            {agents.length}
           </p>
+
         </div>
 
       </div>
 
-      {/* Search */}
+      {/* ======================================================
+          SEARCH
+      ====================================================== */}
+
       <div className="bg-white border rounded-xl p-4 mb-6">
 
         <div className="relative">
@@ -378,7 +353,9 @@ export default function Agents() {
             type="text"
             placeholder="Search agent by name, email or phone..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) =>
+              setSearch(e.target.value)
+            }
             className="w-full border border-gray-300
             rounded-lg pl-10 pr-4 py-3
             focus:outline-none focus:ring-2
@@ -389,122 +366,247 @@ export default function Agents() {
 
       </div>
 
-      {/* Agent Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* ======================================================
+          LOADING
+      ====================================================== */}
 
-        {filteredAgents.map((agent) => (
-
-          <div
-            key={agent.id}
-            className="bg-white border rounded-xl
-            p-4 hover:shadow-md transition"
-          >
-
-            {/* Top */}
-            <div className="flex items-start justify-between">
-
-              <div className="flex items-center gap-3">
-
-                <div className="w-11 h-11 rounded-full
-                  bg-purple-100 flex items-center
-                  justify-center">
-
-                  <UserRound className="w-5 h-5 text-purple-600" />
-
-                </div>
-
-                <div>
-                  <h2 className="font-semibold text-gray-900">
-                    {agent.name}
-                  </h2>
-
-                  <p className="text-xs text-gray-500">
-                    Real Estate Agent
-                  </p>
-                </div>
-
-              </div>
-
-              <button className="p-1 rounded hover:bg-gray-100">
-                <MoreVertical className="w-5 h-5 text-gray-500" />
-              </button>
-
-            </div>
-
-            {/* Details */}
-            <div className="mt-4 space-y-2 text-sm">
-
-              <p className="text-gray-600">
-                📧 {agent.email}
-              </p>
-
-              <p className="text-gray-600">
-                📞 {agent.phone}
-              </p>
-
-              <div className="flex items-center gap-2 text-gray-600">
-                <Building2 className="w-4 h-4" />
-                {agent.properties} Properties
-              </div>
-
-            </div>
-
-            {/* Status */}
-            <div className="flex items-center justify-between
-              mt-4 pt-4 border-t">
-
-              {agent.status === "Active" ? (
-                <span className="flex items-center gap-1
-                  text-xs font-medium text-green-600">
-                  <CheckCircle className="w-4 h-4" />
-                  Active
-                </span>
-              ) : (
-                <span className="flex items-center gap-1
-                  text-xs font-medium text-red-600">
-                  <XCircle className="w-4 h-4" />
-                  Inactive
-                </span>
-              )}
-
-              <div className="flex gap-2">
-
-                <button
-                  className="p-2 rounded-lg
-                  text-gray-600 hover:bg-gray-100"
-                  title="View Agent"
-                >
-                  <Eye className="w-4 h-4" />
-                </button>
-
-                <button
-                  onClick={() => toggleStatus(agent.id)}
-                  className="text-xs px-3 py-2 rounded-lg
-                  border border-gray-300
-                  hover:bg-gray-50"
-                >
-                  {agent.status === "Active"
-                    ? "Deactivate"
-                    : "Activate"}
-                </button>
-
-              </div>
-
-            </div>
-
-          </div>
-
-        ))}
-
-      </div>
-
-      {filteredAgents.length === 0 && (
+      {loading && (
         <div className="bg-white border rounded-xl p-10 text-center">
+
           <p className="text-gray-500">
-            No agents found.
+            Loading agents...
           </p>
+
         </div>
       )}
+
+      {/* ======================================================
+          ERROR
+      ====================================================== */}
+
+      {!loading && error && (
+        <div className="bg-white border rounded-xl p-10 text-center">
+
+          <p className="text-red-500">
+            {error}
+          </p>
+
+          <button
+            onClick={fetchAgents}
+            className="mt-4 px-4 py-2 rounded-lg
+            bg-purple-600 text-white
+            hover:bg-purple-700"
+          >
+            Retry
+          </button>
+
+        </div>
+      )}
+
+      {/* ======================================================
+          AGENT CARDS
+      ====================================================== */}
+
+      {!loading &&
+        !error &&
+        filteredAgents.length > 0 && (
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+            {filteredAgents.map((agent) => {
+
+              const fullName =
+                getFullName(agent) ||
+                agent.username ||
+                "Agent";
+
+              const isActive =
+                String(agent.status).toUpperCase() ===
+                "ACTIVE";
+
+              return (
+                <div
+                  key={agent.id}
+                  className="bg-white border rounded-xl
+                  p-4 hover:shadow-md transition"
+                >
+
+                  {/* =================================================
+                      TOP SECTION
+                  ================================================= */}
+
+                  <div className="flex items-start justify-between">
+
+                    <div className="flex items-center gap-3">
+
+                      {/* Avatar */}
+
+                      <div
+                        className="w-11 h-11 rounded-full
+                        bg-purple-100
+                        flex items-center
+                        justify-center"
+                      >
+                        <UserRound
+                          className="w-5 h-5 text-purple-600"
+                        />
+                      </div>
+
+                      {/* Name */}
+
+                      <div>
+
+                        <h2 className="font-semibold text-gray-900">
+                          {fullName}
+                        </h2>
+
+                        <p className="text-xs text-gray-500">
+                          Real Estate Agent
+                        </p>
+
+                      </div>
+
+                    </div>
+
+                   
+
+                  </div>
+
+                  {/* =================================================
+                      DETAILS
+                  ================================================= */}
+
+                  <div className="mt-4 space-y-2 text-sm">
+
+                    {/* Email */}
+
+                    <p className="text-gray-600">
+                      📧 {agent.email || "N/A"}
+                    </p>
+
+                    {/* Phone */}
+
+                    <p className="text-gray-600">
+                      📞 {agent.phone || "N/A"}
+                    </p>
+
+                    {/* Role */}
+
+                    <div className="flex items-center gap-2 text-gray-600">
+
+                      <Building2 className="w-4 h-4" />
+
+                      Broker / Agent
+
+                    </div>
+
+                  </div>
+
+                  {/* =================================================
+                      BOTTOM SECTION
+                  ================================================= */}
+
+                  <div
+                    className="flex items-center
+                    justify-between mt-4 pt-4
+                    border-t"
+                  >
+
+                    {/* STATUS */}
+
+                    {isActive ? (
+
+                      <span
+                        className="flex items-center gap-1
+                        text-xs font-medium
+                        text-green-600"
+                      >
+
+                        <CheckCircle className="w-4 h-4" />
+
+                        Active
+
+                      </span>
+
+                    ) : (
+
+                      <span
+                        className="flex items-center gap-1
+                        text-xs font-medium
+                        text-red-600"
+                      >
+
+                        <XCircle className="w-4 h-4" />
+
+                        {agent.status || "Inactive"}
+
+                      </span>
+
+                    )}
+
+                    {/* ACTIONS */}
+
+                    <div className="flex gap-2">
+
+                      {/* VIEW */}
+
+                      <button
+                        onClick={() =>
+                          handleViewAgent(agent)
+                        }
+                        className="p-2 rounded-lg
+                        text-gray-600
+                        hover:bg-gray-100"
+                        title="View Agent"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+
+                      {/* ACTIVATE / DEACTIVATE */}
+
+                      <button
+                        onClick={() =>
+                          toggleStatus(agent)
+                        }
+                        className="text-xs px-3 py-2
+                        rounded-lg border
+                        border-gray-300
+                        hover:bg-gray-50"
+                      >
+                        {isActive
+                          ? "Deactivate"
+                          : "Activate"}
+                      </button>
+
+                    </div>
+
+                  </div>
+
+                </div>
+              );
+            })}
+
+          </div>
+        )}
+
+      {/* ======================================================
+          NO AGENTS
+      ====================================================== */}
+
+      {!loading &&
+        !error &&
+        filteredAgents.length === 0 && (
+
+          <div className="bg-white border rounded-xl p-10 text-center">
+
+            <p className="text-gray-500">
+              {search
+                ? "No agents match your search."
+                : "No agents found."}
+            </p>
+
+          </div>
+        )}
 
     </div>
   );

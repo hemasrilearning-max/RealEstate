@@ -1,4 +1,3 @@
-
 import {
   createContext,
   useContext,
@@ -174,15 +173,6 @@ export function DataProvider({ children }) {
    * ============================================================
    * BACKEND PROPERTY IMAGES
    * ============================================================
-   *
-   * Example:
-   *
-   * {
-   *   "28": [
-   *     "http://localhost:8080/uploads/house1.jpg",
-   *     "http://localhost:8080/uploads/house2.jpg"
-   *   ]
-   * }
    */
 
   const [
@@ -261,6 +251,12 @@ export function DataProvider({ children }) {
                 const location =
                   property.location || {};
 
+                /*
+                 * ------------------------------------------------
+                 * LISTING TYPE
+                 * ------------------------------------------------
+                 */
+
                 const listingType =
                   String(
                     property.listingType ||
@@ -276,6 +272,12 @@ export function DataProvider({ children }) {
                     ? "Rent"
                     : property.listingType ||
                       "";
+
+                /*
+                 * ------------------------------------------------
+                 * PROPERTY TYPE
+                 * ------------------------------------------------
+                 */
 
                 const propertyType =
                   String(
@@ -313,6 +315,12 @@ export function DataProvider({ children }) {
                     "Commercial";
                 }
 
+                /*
+                 * ------------------------------------------------
+                 * LOCATION
+                 * ------------------------------------------------
+                 */
+
                 const locationText = [
                   location.locality,
                   location.area,
@@ -321,6 +329,48 @@ export function DataProvider({ children }) {
                 ]
                   .filter(Boolean)
                   .join(", ");
+
+                /*
+                 * ------------------------------------------------
+                 * LOCATION COORDINATES
+                 * ------------------------------------------------
+                 *
+                 * Preserve the complete backend location
+                 * information so PropertyDetail and PropertyMap
+                 * can use it.
+                 *
+                 * Supports both:
+                 *
+                 * property.location.id
+                 * property.locationId
+                 *
+                 * property.location.latitude
+                 * property.latitude
+                 *
+                 * property.location.longitude
+                 * property.longitude
+                 */
+
+                const locationId =
+                  property.locationId ??
+                  location.id ??
+                  null;
+
+                const latitude =
+                  property.latitude ??
+                  location.latitude ??
+                  null;
+
+                const longitude =
+                  property.longitude ??
+                  location.longitude ??
+                  null;
+
+                /*
+                 * ------------------------------------------------
+                 * BASIC PROPERTY VALUES
+                 * ------------------------------------------------
+                 */
 
                 const bedrooms =
                   property.bedrooms ??
@@ -336,9 +386,11 @@ export function DataProvider({ children }) {
                   null;
 
                 /*
-                 * Some backend responses may already
-                 * contain images.
+                 * ------------------------------------------------
+                 * PROPERTY IMAGES
+                 * ------------------------------------------------
                  */
+
                 const images =
                   Array.isArray(
                     property.images
@@ -346,10 +398,148 @@ export function DataProvider({ children }) {
                     ? property.images
                     : [];
 
+                /*
+                 * ------------------------------------------------
+                 * OWNER / SELLER
+                 * ------------------------------------------------
+                 */
+
+                const sellerId =
+                  property.sellerId ??
+                  property.ownerId ??
+                  property.seller?.id ??
+                  property.owner?.id ??
+                  null;
+
+                const sellerName =
+                  property.sellerName ||
+                  property.ownerName ||
+                  property.seller?.name ||
+                  property.seller?.fullName ||
+                  property.owner?.name ||
+                  property.owner?.fullName ||
+                  "";
+
+                /*
+                 * ------------------------------------------------
+                 * BROKER / AGENT
+                 * ------------------------------------------------
+                 *
+                 * IMPORTANT:
+                 *
+                 * Backend property data may expose the broker
+                 * in different ways depending on the response:
+                 *
+                 * brokerId
+                 * broker.id
+                 * agentId
+                 * agent.id
+                 *
+                 * Preserve all of them so Owner Payments can
+                 * correctly determine whether 2% commission
+                 * applies.
+                 */
+
+                const brokerId =
+                  property.brokerId ??
+                  property.broker?.id ??
+                  property.broker?.userId ??
+                  property.agentId ??
+                  property.agent?.id ??
+                  property.agent?.userId ??
+                  null;
+
+                const brokerName =
+                  property.brokerName ||
+                  property.broker?.name ||
+                  property.broker?.fullName ||
+                  property.broker?.username ||
+                  property.agentName ||
+                  property.agent?.name ||
+                  property.agent?.fullName ||
+                  property.agent?.username ||
+                  "";
+
+                const agentId =
+                  property.agentId ??
+                  property.agent?.id ??
+                  property.agent?.userId ??
+                  property.brokerId ??
+                  property.broker?.id ??
+                  property.broker?.userId ??
+                  null;
+
+                const agentName =
+                  property.agentName ||
+                  property.agent?.name ||
+                  property.agent?.fullName ||
+                  property.agent?.username ||
+                  property.brokerName ||
+                  property.broker?.name ||
+                  property.broker?.fullName ||
+                  property.broker?.username ||
+                  "";
+
+                /*
+                 * A property has a broker when one of the
+                 * backend broker/agent identifiers exists.
+                 *
+                 * Also preserve explicit backend boolean
+                 * flags if the backend provides them.
+                 */
+
+                const brokerAssigned =
+                  Boolean(
+                    property.brokerId ??
+                    property.broker?.id ??
+                    property.broker?.userId ??
+                    property.agentId ??
+                    property.agent?.id ??
+                    property.agent?.userId ??
+                    property.brokerAssigned ??
+                    property.hasBroker ??
+                    property.isBrokerAssigned
+                  );
+
+                /*
+                 * ------------------------------------------------
+                 * RETURN NORMALIZED PROPERTY
+                 * ------------------------------------------------
+                 */
+
                 return {
                   ...property,
 
                   id: property.id,
+
+                  /*
+                   * ------------------------------------------------
+                   * LOCATION ID
+                   * ------------------------------------------------
+                   *
+                   * Preserve the location record ID so other
+                   * frontend pages can retrieve the complete
+                   * Location entity if required.
+                   */
+
+                  locationId,
+
+                  /*
+                   * ------------------------------------------------
+                   * LOCATION COORDINATES
+                   * ------------------------------------------------
+                   */
+
+                  latitude,
+
+                  longitude,
+
+                  /*
+                   * Preserve complete backend location object.
+                   */
+
+                  locationDetails:
+                    location || null,
 
                   title:
                     property.title ||
@@ -420,6 +610,7 @@ export function DataProvider({ children }) {
 
                   pincode:
                     location.pincode ||
+                    property.pincode ||
                     "",
 
                   address:
@@ -440,24 +631,38 @@ export function DataProvider({ children }) {
                   leads:
                     property.leads || 0,
 
-                  sellerId:
-                    property.sellerId ||
-                    property.ownerId ||
-                    property.seller?.id ||
-                    property.owner?.id ||
+                  /*
+                   * Owner / seller
+                   */
+                  sellerId,
+
+                  sellerName,
+
+                  ownerId:
+                    property.ownerId ??
+                    sellerId ??
                     null,
 
-                  sellerName:
-                    property.sellerName ||
+                  ownerName:
                     property.ownerName ||
-                    property.seller?.name ||
-                    property.owner?.name ||
+                    sellerName ||
                     "",
 
-                  agentId:
-                    property.agentId ||
-                    property.agent?.id ||
-                    null,
+                  /*
+                   * Agent
+                   */
+                  agentId,
+
+                  agentName,
+
+                  /*
+                   * Broker
+                   */
+                  brokerId,
+
+                  brokerName,
+
+                  brokerAssigned,
                 };
               }
             );
